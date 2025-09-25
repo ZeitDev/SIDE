@@ -1,0 +1,26 @@
+# Lazy workaround to dynamically load classes from strings
+# Recommended to use decorators or registries for larger projects
+
+import importlib
+
+def load(class_string, **kwargs):
+    """
+    Dynamically loads a class from a string.
+    Format: "module_path.ClassName" or just "ClassName" for standard packages
+    
+    Args:
+        class_string: String representation of the class
+        **kwargs: Parameters to pass to the constructor
+        
+    Returns:
+        Instantiated object
+    """
+    
+    if "." in class_string:
+        module_path, class_name = class_string.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        class_obj = getattr(module, class_name)
+    else:
+        class_obj = importlib.import_module(class_string)
+    
+    return class_obj(**kwargs) # type: ignore warning

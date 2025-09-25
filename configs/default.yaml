@@ -1,0 +1,52 @@
+# --- Experiment Tracking ---
+experiment_name: "SIDE_Ablation_Study"
+
+# --- Model Configuration ---
+model:
+  name: "models.simple_unet.SimpleUNet" 
+
+  # Encoder settings
+  encoder:
+    name: "resnet50"
+    pretrained: true
+    out_channels: [64, 128, 256, 512]
+
+  # Decoder settings
+  decoders:
+    segmentation:
+      num_classes: 8 # e.g., 7 instruments + 1 background
+      dropout: 0.2
+
+    disparity:
+      activation: "relu"
+
+# --- Data Configuration ---
+dataset:
+  name: "CholecSeg8k"
+
+# --- Training Configuration ---
+training:
+  epochs: 100
+  batch_size: 8
+  loss_weights:
+    segmentation: 1.0
+    disparity: 0.5
+
+  # Criterion settings
+  criterion:
+    name: "monai.losses.DiceCELoss"
+    params:
+      sigmoid: True
+
+  # Optimizer settings
+  optimizer:
+    lr: 0.0001
+    weight_decay: 0.01
+
+  # Learning rate scheduler settings
+  scheduler:
+    factor: 0.1 # Factor by which the learning rate will be reduced
+    patience: 10 # Number of epochs with no improvement after which learning rate will be reduced
+
+misc:
+  seed: 42
