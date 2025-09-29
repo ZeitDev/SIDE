@@ -16,11 +16,14 @@ def load(class_string, **kwargs):
         Instantiated object
     """
     
-    if "." in class_string:
-        module_path, class_name = class_string.rsplit(".", 1)
-        module = importlib.import_module(module_path)
-        class_obj = getattr(module, class_name)
-    else:
-        class_obj = importlib.import_module(class_string)
+    if '.' not in class_string:
+        raise ValueError('class_string must be in the format "module_path.ClassName"')
+
+    module_path, class_name = class_string.rsplit('.', 1)
+    module = importlib.import_module(module_path)
+    class_obj = getattr(module, class_name)
+        
+    if not kwargs: 
+        return class_obj
     
-    return class_obj(**kwargs) # type: ignore warning
+    return class_obj(**kwargs)

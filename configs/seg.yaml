@@ -1,0 +1,18 @@
+model:
+  encoder:
+    name: "models.simple_unet.Encoder"
+    params: {}
+
+  decoders:
+    segmentation:
+      enabled: true
+      name: "models.simple_unet.SegmentationDecoder"
+      params:
+        num_classes: 2
+
+    disparity: 
+      enabled: false
+
+training:
+  knowledge_distillation:
+    enabled: false
