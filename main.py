@@ -10,11 +10,13 @@ import numpy as np
 from utils.loader import load
 
 # TODO:
-# - Add transforms to datasets
+# - Add transforms to datasets (apply to images and masks )
+# - Dataloaders
 # - Implement training loop
 # - Implement testing loop
 # - Add metrics
 # - Add overlay image logging
+# - Add modular encoder decoder system
 
 class Trainer:
     def __init__(self, config):
@@ -33,8 +35,19 @@ class Trainer:
         torch.manual_seed(self.config['misc']['seed'])
         torch.cuda.manual_seed(self.config['misc']['seed'])
         
-        # Load model and criterion (loss function)
-        self.model = load(self.config['model']['name']).to(self.device)
+        # Load encoder and decoder, combine into model
+        encoder = load(self.config['model']['encoder']['name'], **self.config['model']['encoder'].get('params', {}))
+        decoders = {}
+        for task, decoder_info in self.config['model']['decoders'].items():
+            decoders[task] = load(decoder_info['name'], **decoder_info.get('params', {}))
+            
+        self.model = load(
+            'models.combiner.Combiner', 
+            encoder=encoder, 
+            decoders=decoders
+        ).to(self.device)
+        
+        # Load loss function
         self.criterion = load(
             self.config['training']['criterion']['name'], 
             **self.config['training']['criterion'].get('params', {})
