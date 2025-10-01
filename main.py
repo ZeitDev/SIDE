@@ -1,61 +1,70 @@
 import os
 import yaml
+import logging
 import argparse
-import mlflow
 import datetime
-import torch
 import random
 import numpy as np
+
+from tqdm import tqdm
+import mlflow
+import torch
 from torch.utils.data import DataLoader
 
 from utils.loader import load
+
+from typing import cast
+from utils.logger import setup_logging, CustomLogger
+logger = cast(CustomLogger, logging.getLogger(__name__))
 
 # TODO:
 # - Add transforms to datasets (apply to images and masks )
 # - Implement training loop
 # - Implement testing loop
 # - Add metrics
-# - Add overlay image logging
+# - Add overlay image logger
+# ! check if epoch run is really correct, especially with kd
 
 class Trainer:
     def __init__(self, config):
-        print('\n# Initializing Trainer')
+        logger.header('Initializing Trainer')
         self.config = config
         self._setup()
         self._load_model()
+        self._load_teachers()
         self._load_components()
         self._load_data()
         
-        
     def _setup(self):
-        print('\n## Setup')
+        logger.subheader('Setup')
         # Set device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f'### Using device: {self.device}')
+        logger.info(f'Using device: {self.device}')
         
         # Clear GPU memory and set seeds for reproducibility
         torch.cuda.empty_cache()
-        seed = self.config['misc']['seed']
+        seed = 42
         os.environ['PYTHONHASHSEED'] = str(seed)
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
-        print(f'### Set reproducibility seed to {seed}')
+        logger.info(f'Set reproducibility seed to {seed}')
         
     def _load_model(self):
-        print('\n## Loading Model')
-        # Load encoder and decoder, combine into model, load checkpoint
-        encoder_config = self.config['model']['encoder']
+        logger.subheader('Loading Model')
+        
+        encoder_config = self.config['training']['encoder']
         encoder = load(encoder_config['name'], **encoder_config['params'])
-        print(f'### Loaded encoder: {encoder_config["name"]} with params {encoder_config["params"]}')
+        logger.info(f'Loaded encoder: {encoder_config["name"]} with params {encoder_config["params"]}')
         
         decoders = {}
-        decoder_config = self.config['model']['decoders']
-        for task, task_decoder in decoder_config.items():
-            if task_decoder['enabled']:
-                decoders[task] = load(task_decoder['name'], **task_decoder['params'])
-                print(f'### Loaded decoder for task {task}: {task_decoder["name"]} with params {task_decoder["params"]}')
+        tasks_config = self.config['training']['tasks']
+        for task, task_config in tasks_config.items():
+            if task_config['enabled']:
+                decoder_config = task_config['decoder']
+                decoders[task] = load(decoder_config['name'], **decoder_config['params'])
+                logger.info(f'Loaded decoder for task {task}: {decoder_config["name"]} with params {decoder_config["params"]}')
             
         self.model = load(
             'models.combiner.Combiner', 
@@ -63,68 +72,80 @@ class Trainer:
             decoders=decoders
         ).to(self.device)
         
-        if self.config['model']['checkpoint']:
-            print(f'### Resuming checkpoint {self.config["model"]["checkpoint"]}')
-            state_dict = torch.load(self.config['model']['checkpoint'], map_location=self.device)
+        if self.config['training']['checkpoint']:
+            logger.info(f'Resuming checkpoint {self.config["training"]["checkpoint"]}')
+            state_dict = torch.load(self.config['training']['checkpoint'], map_location=self.device)
             self.model.load_state_dict(state_dict['model_state_dict'])
-        elif self.config['model']['finetune']:
-            print(f'### Finetuning {self.config["model"]["finetune"]} with frozen encoder')
-            state_dict = torch.load(self.config['model']['finetune'], map_location=self.device)
+        elif self.config['training']['finetune']:
+            logger.info(f'Finetuning {self.config["training"]["finetune"]} with frozen encoder')
+            state_dict = torch.load(self.config['training']['finetune'], map_location=self.device)
             self.model.load_state_dict(state_dict['model_state_dict'])
             for param in self.model.encoder.parameters():
                 param.requires_grad = False
-                
-        if self.config['training']['knowledge_distillation']['enabled']: self._load_teachers()
-    
+                    
     def _load_teachers(self):
-        print('\n## Loading Teachers')
-        self.teachers = []
-        kd_config = self.config['training']['knowledge_distillation']
-        for teacher_path in kd_config['teacher_paths']:
-            teacher_encoder = load(kd_config['encoder']['name'], **kd_config['encoder']['params'])
-            print(f'### Loaded teacher encoder: {kd_config["encoder"]["name"]} with params {kd_config["encoder"]["params"]}')
+        logger.subheader('Loading Teachers')
+        self.kd_models = {}
+        self.kd_criterions = {}
+        for task, task_config in self.config['training']['tasks'].items():
+            kd_config = task_config['knowledge_distillation']
+            if kd_config['enabled']:
+                self.kd_models[task] = []
             
-            teacher_decoder = load(kd_config['decoder']['name'], **kd_config['decoder']['params'])
-            print(f'### Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
-            
-            teacher_model = load(
-                'models.combiner.Combiner',
-                encoder=teacher_encoder,
-                decoders={'segmentation': teacher_decoder}
-            ).to(self.device)
-            
-            state_dict = torch.load(teacher_path, map_location=self.device)
-            teacher_model.load_state_dict(state_dict['model_state_dict'])
-            teacher_model.eval()
-            self.teachers.append(teacher_model)
-            print(f'### Loaded teacher {teacher_path}')
+                for state_path in kd_config['states']:
+                    teacher_encoder = load(kd_config['encoder']['name'], **kd_config['encoder']['params'])
+                    logger.info(f'Loaded teacher encoder: {kd_config["encoder"]["name"]} with params {kd_config["encoder"]["params"]}')
+                    
+                    teacher_decoder = load(kd_config['decoder']['name'], **kd_config['decoder']['params'])
+                    logger.info(f'Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
+                    
+                    teacher_model = load(
+                        'models.combiner.Combiner',
+                        encoder=teacher_encoder,
+                        decoders={task: teacher_decoder}
+                    ).to(self.device)
+                    
+                    state_dict = torch.load(state_path, map_location=self.device)
+                    teacher_model.load_state_dict(state_dict['model_state_dict'])
+                    teacher_model.eval()
+                    self.kd_models[task].append(teacher_model)
+                    logger.info(f'Loaded teacher {state_path}')
+                    
+                self.kd_criterions[task] = load(
+                    kd_config['criterion']['name'],
+                    **kd_config['criterion']['params'])
+                logger.info(f'Loaded KD criterion for task {task}: {kd_config["criterion"]["name"]} with params {kd_config["criterion"]["params"]}')
         
     def _load_components(self):
-        print('\n## Loading Components')
-        # Load loss function
-        criterion_config = self.config['training']['criterion']
-        self.criterion = load(
-            criterion_config['name'], 
-            **criterion_config['params'])
-        print(f'### Criterion: {criterion_config["name"]} with params {criterion_config["params"]}')
-        
+        logger.subheader('Loading Components')
+        # Load loss functions
+        self.criterions = {}
+        tasks_config = self.config['training']['tasks']
+        for task, task_config in tasks_config.items():
+            if task_config['enabled']:
+                criterion_config = task_config['criterion']
+                self.criterions[task] = load(
+                    criterion_config['name'], 
+                    **criterion_config['params'])
+                logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
+
         # Setup optimizer and scheduler
         optimizer_config = self.config['training']['optimizer']
         optimizer_class = load(optimizer_config['name'])
         self.optimizer = optimizer_class(
             self.model.parameters(),
             **optimizer_config['params'])
-        print(f'### Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
+        logger.info(f'Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
         
         scheduler_config = self.config['training']['scheduler']
         scheduler_class = load(scheduler_config['name'])
         self.scheduler = scheduler_class(
             self.optimizer,
             **scheduler_config['params'])
-        print(f'### Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
+        logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
         
     def _load_data(self):
-        print('\n## Load Data')
+        logger.subheader('Load Data')
 
         data_config = self.config['data']
         dataset_train = load(data_config['dataset'], mode='train')
@@ -150,11 +171,90 @@ class Trainer:
             num_workers=data_config['num_workers'],
             pin_memory=data_config['pin_memory'])
         
-        print(f'### Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
-        print(f'### Num of Samples: Train: {len(dataset_train)}, Val: {len(dataset_val)}, Test: {len(dataset_test)}')
+        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
+        logger.info(f'Num of Samples: Train: {len(dataset_train)}, Val: {len(dataset_val)}, Test: {len(dataset_test)}')
         
+    def _run_epoch(self, is_training):
+        self.model.train(is_training)
+        total_loss = 0.0
+        
+        dataloader = self.dataloader_train if is_training else self.dataloader_val
+        phase = 'Training' if is_training else 'Validation'
+        
+        batch_tqdm = tqdm(dataloader, desc=phase, position=1, leave=False)
+        for images, targets in batch_tqdm:
+            images = images.to(self.device)
+            targets = {key: value.to(self.device) for key, value in targets.items()}
+            
+            with torch.set_grad_enabled(is_training):
+                total_loss_batch = torch.tensor(0.0, device=self.device)
+                
+                outputs = self.model(images)
+                
+                for task, output in outputs.items():
+                    loss = self.criterions[task](output, targets[task])
+                    weight = self.config['training']['tasks'][task]['criterion']['weight']
+                    total_loss_batch += weight * loss
+                    
+                if is_training and self.kd_models:
+                    for task, kd_teachers in self.kd_models.items():
+                            student_output = outputs[task]
+                            
+                            with torch.no_grad():
+                                teacher_outputs = [teacher(images)[task] for teacher in kd_teachers]
+                                mean_teacher_output = torch.mean(torch.stack(teacher_outputs), dim=0)
+                            
+                            kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
+                            kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
+                            total_loss_batch += kd_weight * kd_loss
+                    
+                if is_training:
+                    self.optimizer.zero_grad()
+                    total_loss_batch.backward()
+                    self.optimizer.step()
+            
+            total_loss += total_loss_batch.item()
+            batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+                
+        return total_loss / len(dataloader)
+    
     def train(self):
-        pass
+        logger.header('Starting Training Loop')
+        
+        best_val_epoch = -1
+        best_val_loss = float('inf')
+        
+        epochs = self.config['training']['epochs']
+        epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
+        for epoch in epochs_tqdm:
+            train_loss = self._run_epoch(is_training=True)
+            mlflow.log_metric('train_loss', train_loss, step=epoch)
+            
+            val_loss = self._run_epoch(is_training=False)
+            mlflow.log_metric('val_loss', val_loss, step=epoch)
+            
+            self.scheduler.step(val_loss)
+            lr = self.optimizer.param_groups[0]['lr']
+            mlflow.log_metric('learning_rate', lr, step=epoch)
+            
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_val_epoch = epoch
+                mlflow.pytorch.log_model(self.model, artifact_path='best_model') # type: ignore
+                mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
+                
+            epochs_tqdm.set_postfix({
+                'lr': f'{lr:.2e}',
+                'train_loss': f'{train_loss:.4f}',
+                'val_loss': f'{val_loss:.4f}',
+                'best_val_epoch': best_val_epoch,
+                'best_val_loss': f'{best_val_loss:.4f}'
+            })
+            
+            
+            
+            
+        
 
 class Tester:
     def __init__(self):
@@ -173,13 +273,18 @@ def main():
     config = deep_merge(experiment_config, base_config)
 
     try:
-        mlflow.set_experiment(os.path.splitext(os.path.basename(args.config))[0])
+        experiment_name = os.path.splitext(os.path.basename(args.config))[0]
+        mlflow.set_experiment(experiment_name)
         run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")
+        log_filepath = os.path.join('logs', f'{run_datetime}_{experiment_name}.log')
+        setup_logging(log_filepath=log_filepath)
+        
         with mlflow.start_run(run_name=run_datetime) as run:
-            print(f'# Starting training run: {run_datetime}')
+            logger.header(f'Starting Run: {run_datetime}')
             
             mlflow.log_params(config)
             mlflow.log_artifact(__file__)
+            mlflow.log_artifact(log_filepath, artifact_path='logs')
             for folder in ['models', 'criterions', 'metrics', 'data']:
                 for file in os.listdir(folder):
                     mlflow.log_artifact(os.path.join(folder, file), artifact_path=folder)
@@ -191,10 +296,13 @@ def main():
             tester.test()
         
     except KeyboardInterrupt:
-        print('# Training interrupted')
+        logger.warning('Training interrupted by user')
+    except Exception as e:
+        logger.error(e)
+        raise e
     finally:
         if mlflow.active_run(): mlflow.end_run()
-        print('# MLflow run cleaned up')
+        logger.single('MLflow run cleaned up')
 
 def deep_merge(source, destination):
     """Recursively merges source dict into destination dict."""

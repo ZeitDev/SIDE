@@ -5,43 +5,14 @@ data:
   num_workers: 4
   pin_memory: true
 
-# --- Model Configuration ---
-model:
-  checkpoint: null # continue training from this checkpoint
-  finetune: null # finetune from this pre-trained model with frozen encoder
-
-  encoder:
-    name: "models.simple_unet.Encoder"
-    params: {}
-
-  decoders:
-    segmentation:
-      enabled: true
-      name: "models.simple_unet.SegmentationDecoder"
-      params:
-        num_classes: 2
-
-    disparity: 
-      enabled: false
-      name: null # TODO: Implement disparity decoder
-      params: 
-        num_classes: 1
-
 # --- Training Configuration ---
 training:
   epochs: 10
-
-  criterion:
-    name: "monai.losses.DiceCELoss"
-    params:
-      sigmoid: True
-
   optimizer:
     name: "torch.optim.AdamW"
     params:
       lr: 0.0001
       weight_decay: 0.01
-
   scheduler:
     name: "torch.optim.lr_scheduler.ReduceLROnPlateau"
     params:
@@ -49,23 +20,58 @@ training:
       factor: 0.1
       patience: 10
 
-  # --- Knowledge Distillation Configuration ---
-  knowledge_distillation:
-    enabled: false
-    weight: 0.5
+  checkpoint: null # continue training from this checkpoint
+  finetune: null # finetune from this pre-trained model with frozen encoder
 
-    teacher_paths:
-      - "path/to/teacher1.pth"
-      - "path/to/teacher2.pth"
+  encoder:
+    name: "models.simple_unet.Encoder"
+    params: {}
 
-    encoder:
-      name: "models.simple_unet.Encoder"
-      params: {}
+  tasks:
+    segmentation:
+      enabled: true
+      criterion:
+        weight: 1.0
+        name: "monai.losses.DiceCELoss"
+        params:
+          sigmoid: True
+      decoder:
+        name: "data.datasets.SegmentationDecoder"
+        params:
+          num_classes: 2
+      knowledge_distillation:
+        enabled: false
+        states: []
+        criterion:
+          weight: 0.5
+          name: "torch.nn.KLDivLoss"
+          params: {}
+        encoder:
+          name: "models.simple_unet.Encoder"
+          params: {}
+        decoder:
+          name: "models.simple_unet.SegmentationDecoder"
+          params: {}
 
-    decoder:
-      name: "models.simple_unet.SegmentationDecoder"
-      params:
-        num_classes: 2
-
-misc:
-  seed: 42
+    disparity: 
+      enabled: false
+      criterion:
+        weight: 1.0
+        name: null
+        params: {}
+      decoder:
+        name: null # TODO: Implement disparity decoder
+        params: {}
+      knowledge_distillation:
+        enabled: false
+        states: []
+        criterion:
+          weight: 0.5
+          name: null # ? L1Loss or MSELoss
+          params: {}
+        encoder:
+          name: null
+          params: {}
+        decoder:
+          name: null
+          params: {}
