@@ -14,6 +14,7 @@ dependencies = [
     "opencv-python>=4.12.0.88",
     "pillow>=11.0.0",
     "plotly>=6.3.0",
+    "pytest>=8.4.2",
     "pyyaml>=6.0.2",
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -23,3 +24,6 @@ dependencies = [
 [[tool.uv.index]]
 url = "https://download.pytorch.org/whl/cu129"
 explicit = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

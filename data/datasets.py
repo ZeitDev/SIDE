@@ -39,4 +39,4 @@ class CholecSeg8k(Dataset):
             image = self.transform(image)
             mask = self.transform(mask)
             
-        return image, mask
+        return image, {'segmentation': mask}

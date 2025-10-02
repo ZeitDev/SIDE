@@ -10,8 +10,10 @@ from tqdm import tqdm
 import mlflow
 import torch
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 from utils.loader import load
+from utils.visualization import image_mask_overlay_figure
 
 from typing import cast
 from utils.logger import setup_logging, CustomLogger
@@ -19,10 +21,8 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 
 # TODO:
 # - Add transforms to datasets (apply to images and masks )
-# - Implement training loop
-# - Implement testing loop
-# - Add metrics
-# - Add overlay image logger
+# - Implement testing loop, Add metrics (maybe also in validation?)
+# - Add semantic test cases for debugging / making sure everything works as intended - Andrew Karpathy style
 # ! check if epoch run is really correct, especially with kd
 
 class Trainer:
@@ -174,6 +174,20 @@ class Trainer:
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         logger.info(f'Num of Samples: Train: {len(dataset_train)}, Val: {len(dataset_val)}, Test: {len(dataset_test)}')
         
+    def _log_visuals(self, epoch, images, targets, outputs):
+        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
+        if log_n_images > 0:
+            if self.config['training']['tasks']['segmentation']['enabled']:
+                for i in range(log_n_images):
+                    figure = image_mask_overlay_figure(
+                        image=images[i].cpu(),
+                        mask=targets['segmentation'][i].cpu(),
+                        output=outputs['segmentation'][i].cpu(),
+                        epoch=epoch
+                    )
+                    mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
+                    plt.close(figure)
+    
     def _run_epoch(self, is_training):
         self.model.train(is_training)
         total_loss = 0.0
@@ -251,11 +265,6 @@ class Trainer:
                 'best_val_loss': f'{best_val_loss:.4f}'
             })
             
-            
-            
-            
-        
-
 class Tester:
     def __init__(self):
         pass
@@ -285,7 +294,7 @@ def main():
             mlflow.log_params(config)
             mlflow.log_artifact(__file__)
             mlflow.log_artifact(log_filepath, artifact_path='logs')
-            for folder in ['models', 'criterions', 'metrics', 'data']:
+            for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
                 for file in os.listdir(folder):
                     mlflow.log_artifact(os.path.join(folder, file), artifact_path=folder)
             

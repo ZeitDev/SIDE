@@ -36,7 +36,7 @@ training:
         params:
           sigmoid: True
       decoder:
-        name: "data.datasets.SegmentationDecoder"
+        name: "models.simple_unet.SegmentationDecoder"
         params:
           num_classes: 2
       knowledge_distillation:
@@ -75,3 +75,6 @@ training:
         decoder:
           name: null
           params: {}
+
+logging:
+  n_validation_images: 4
