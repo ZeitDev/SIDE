@@ -1,42 +1,129 @@
-
 import os
-import re
-
+import numpy as np
+from PIL import Image
 import torch
 from torch.utils.data import Dataset
-from torchvision.io import decode_image
 
-class CholecSeg8k(Dataset):
-    def __init__(self, mode='train', transform=None):
-        self.data_path = os.path.join('/data/Zeitler/segmentation/processed/CholecSeg8k', mode)
-        self.images_path = os.path.join(self.data_path, 'images')
-        self.masks_path = os.path.join(self.data_path, 'masks')
+class BaseDataset(Dataset):
+    def __init__(self, root_path, mode='train', tasks=None, subset_names=None, transform=None):
+        self.root_path = root_path
+        self.mode = mode
+        self.tasks = tasks if tasks is not None else []
+        self.subset_names = subset_names
         self.transform = transform
         
-        self._generate_data_paths()
+        self._load_samples()
         
-    def _generate_data_paths(self):
-        assert len(os.listdir(self.images_path)) == len(os.listdir(self.masks_path))
-        
-        self.image_paths = sorted(os.listdir(self.images_path))
-        self.mask_paths = sorted(os.listdir(self.masks_path))
-        self.data_paths = list(zip(self.image_paths, self.mask_paths))
-        
-        for image_path, mask_path in self.data_paths:
-            assert re.findall(r'\d+', image_path) == re.findall(r'\d+', mask_path)
-        
-    def __len__(self):
-        return len(os.listdir(self.images_path))
+    def get_all_subset_names(self):
+        mode_path = os.path.join(self.root_path, self.mode)
+        subset_names = sorted([d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))])
+        return subset_names
     
-    def __getitem__(self, index):
-        image_path = os.path.join(self.images_path, self.data_paths[index][0])
-        mask_path = os.path.join(self.masks_path, self.data_paths[index][1])
+    def _get_file_names(self, subset_path):
+        """
+        Override function should be implemented by the dataset subclass.
+        Assumes file names are the same across all data types in a subset.
+        Returns a list of file names in the subset.
+        """
+        raise NotImplementedError('Dataset subclass must implement _get_file_names.')
+    
+    def _get_sample_path(self, subset_path, file_name):
+        """
+        Override function should be implemented by the dataset subclass.
+        Returns a dictionary containing paths to the data for a single sample.
+        e.g., {'left_image': path, 'segmentation': path, ...}
+        """
+        raise NotImplementedError('Dataset subclass must implement _get_sample_paths.')
+    
+    def _load_samples(self):
+        mode_path = os.path.join(self.root_path, self.mode)
         
-        image = decode_image(image_path).to(torch.float32) / 255.0
-        mask = decode_image(mask_path).to(torch.float32) / 255.0
-        
-        if self.transform:
-            image = self.transform(image)
-            mask = self.transform(mask)
+        if self.subset_names is None: self.subset_names = self.get_all_subset_names()
             
-        return image, {'segmentation': mask}
+        self.sample_paths = []
+        for subset_name in self.subset_names:
+            subset_path = os.path.join(mode_path, subset_name)
+            file_names = self._get_file_names(subset_path)
+            
+            for file_name in file_names:
+                sample_path = self._get_sample_path(subset_path, file_name)
+                self.sample_paths.append(sample_path)
+                
+    def __len__(self):
+        return len(self.sample_paths)
+    
+    def __getitem__(self, idx):
+        sample_path = self.sample_paths[idx]
+        
+        data = {}
+        if 'left_image' in sample_path:
+            data['left_image'] = np.array(Image.open(sample_path['left_image']).convert('RGB'))
+        if 'right_image' in sample_path:
+            data['right_image'] = np.array(Image.open(sample_path['right_image']).convert('RGB'))
+            
+        if 'segmentation' in sample_path:
+            mask = np.array(Image.open(sample_path['segmentation']))
+            if len(mask.shape) == 2: mask = np.expand_dims(mask, axis=-1)
+            data['segmentation'] = mask
+        if 'disparity' in sample_path:
+            pass # TODO: load disparity map
+        
+        if self.transform: data = self.transform(**data) # ! NOT TESTED
+        else: data = {k: torch.from_numpy(v).permute(2,0,1).float() for k, v in data.items()} # ! NOT TESTED
+        
+        image = data['left_image']
+        if 'right_image' in data:
+            image = torch.cat((data['left_image'], data['right_image']), dim=0)
+            
+        targets = {task: data[task] for task in self.tasks if task in data}
+        
+        return image, targets
+    
+class OverfitDataset(BaseDataset):
+    def __init__(self, mode='train', tasks=None, subset_names=None, transform=None):
+        root_path = '/data/Zeitler/SIDE/OverfitDataset/'
+        super().__init__(root_path, mode, tasks, subset_names, transform)
+        
+    def _get_file_names(self, subset_path):
+        left_images_path = os.path.join(subset_path, 'left_images')
+        return sorted(os.listdir(left_images_path))
+    
+    def _get_sample_path(self, subset_path, file_name):
+        sample_path = {}
+        sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+        
+        if self.mode == 'train':
+            if 'segmentation' in self.tasks:
+                sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+                
+            if 'disparity' in self.tasks:
+                sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+                sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+                
+        return sample_path
+
+class EndoVis17(BaseDataset):
+    def __init__(self, mode='train', tasks=None, subset_names=None, transform=None):
+        root_path = '/data/Zeitler/SIDE/EndoVis17/processed/'
+        super().__init__(root_path, mode, tasks, subset_names, transform)
+        
+    def _get_file_names(self, subset_path):
+        left_images_path = os.path.join(subset_path, 'left_images')
+        return sorted(os.listdir(left_images_path))
+    
+    def _get_sample_path(self, subset_path, file_name):
+        sample_path = {}
+        sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+        
+        if self.mode == 'train':
+            if 'segmentation' in self.tasks:
+                sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+                
+            if 'disparity' in self.tasks:
+                sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+                sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+                
+        return sample_path
+    
+            
+        

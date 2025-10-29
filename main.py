@@ -19,16 +19,21 @@ from typing import cast
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 
+# * TASKS TO DO
 # TODO:
 # - Add transforms to datasets (apply to images and masks )
+
+# TODO: change cross-validation metric comparison to task-specific metrics instead of loss, for that implement metrics first
 # - Implement testing loop, Add metrics (maybe also in validation?)
-# - Add semantic test cases for debugging / making sure everything works as intended - Andrew Karpathy style
-# ! check if epoch run is really correct, especially with kd
+
+# TODO: check if epoch run is really correct, especially with kd, debug line by line
 
 class Trainer:
-    def __init__(self, config):
+    def __init__(self, config, train_subsets, val_subsets=None):
         logger.header('Initializing Trainer')
         self.config = config
+        self.train_subsets = train_subsets
+        self.val_subsets = val_subsets
         self._setup()
         self._load_model()
         self._load_teachers()
@@ -37,11 +42,13 @@ class Trainer:
         
     def _setup(self):
         logger.subheader('Setup')
-        # Set device
+        
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        logger.info(f'Restricting CUDA_VISIBLE_DEVICES = {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f'Using device: {self.device}')
         
-        # Clear GPU memory and set seeds for reproducibility
         torch.cuda.empty_cache()
         seed = 42
         os.environ['PYTHONHASHSEED'] = str(seed)
@@ -148,31 +155,38 @@ class Trainer:
         logger.subheader('Load Data')
 
         data_config = self.config['data']
-        dataset_train = load(data_config['dataset'], mode='train')
-        dataset_val = load(data_config['dataset'], mode='val')
-        dataset_test = load(data_config['dataset'], mode='test')
+        dataset_class = load(data_config['dataset'])
         
+        dataset_train = dataset_class(
+            mode='train',
+            tasks=self.config['training']['tasks'],
+            subset_names=self.train_subsets,
+            transforms=data_config['transforms']
+        )
         self.dataloader_train = DataLoader(
             dataset_train,
             batch_size=data_config['batch_size'],
             shuffle=True,
             num_workers=data_config['num_workers'],
             pin_memory=data_config['pin_memory'])
-        self.dataloader_val = DataLoader(
-            dataset_val,
-            batch_size=data_config['batch_size'],
-            shuffle=False,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'])
-        self.dataloader_test = DataLoader(
-            dataset_test,
-            batch_size=data_config['batch_size'],
-            shuffle=False,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'])
+        
+        dataset_val = dataset_class(
+            mode='train',
+            tasks=self.config['training']['tasks'],
+            subset_names=self.val_subsets,
+            transforms=data_config['transforms']
+        ) if self.val_subsets else None
+        if dataset_val:
+            self.dataloader_val = DataLoader(
+                dataset_val,
+                batch_size=data_config['batch_size'],
+                shuffle=False,
+                num_workers=data_config['num_workers'],
+                pin_memory=data_config['pin_memory'])
         
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
-        logger.info(f'Num of Samples: Train: {len(dataset_train)}, Val: {len(dataset_val)}, Test: {len(dataset_test)}')
+        dataset_val_length = len(dataset_val) if dataset_val else 0
+        logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
         
     def _log_visuals(self, epoch, images, targets, outputs):
         log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
@@ -193,6 +207,8 @@ class Trainer:
         total_loss = 0.0
         
         dataloader = self.dataloader_train if is_training else self.dataloader_val
+        if not dataloader: return float('nan')
+        
         phase = 'Training' if is_training else 'Validation'
         
         batch_tqdm = tqdm(dataloader, desc=phase, position=1, leave=False)
@@ -265,6 +281,8 @@ class Trainer:
                 'best_val_loss': f'{best_val_loss:.4f}'
             })
             
+        return best_val_loss
+            
 class Tester:
     def __init__(self):
         pass
@@ -273,7 +291,7 @@ class Tester:
         pass
     
 def main():
-    parser = argparse.ArgumentParser(description='Train SIDE')
+    parser = argparse.ArgumentParser(description='SIDE Training and Testing')
     parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
     args = parser.parse_args()
     
@@ -285,24 +303,50 @@ def main():
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]
         mlflow.set_experiment(experiment_name)
         run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")
+        
         log_filepath = os.path.join('logs', f'{run_datetime}_{experiment_name}.log')
         setup_logging(log_filepath=log_filepath)
         
-        with mlflow.start_run(run_name=run_datetime) as run:
-            logger.header(f'Starting Run: {run_datetime}')
+        dataset_class = load(config['data']['dataset'])
+        all_train_subsets = dataset_class(mode='train').get_all_subset_names()
+        logger.info(f'Found {len(all_train_subsets)} training subsets: {all_train_subsets}')
+        
+        if config['data']['cross_validation']:
+            with mlflow.start_run(run_name=f'{run_datetime}_cross_validation') as run:
+                logger.header('Starting Cross-Validation Training')
+                mlflow_log_run(config, log_filepath)
+                fold_val_losses = []
+                
+                for i, val_subset in enumerate(all_train_subsets):
+                    with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as sub_run:
+                        logger.info(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
+                        mlflow.log_param('validation_subset', val_subset)
+                        mlflow.log_param('fold', i+1)
+                        
+                        train_subsets = [s for s in all_train_subsets if s != val_subset]
+                        trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
+                        best_val_loss = trainer.train()
+                        fold_val_losses.append(best_val_loss)
+                        
+                mean_val_loss = float(np.mean(fold_val_losses))
+                std_val_loss = float(np.std(fold_val_losses))
+                
+                logger.subheader('Cross-Validation Summary')
+                logger.info(f'Fold Validation Losses: {fold_val_losses}')
+                logger.info(f'Mean Validation Loss: {mean_val_loss:.4f}')
+                logger.info(f'Std Dev Validation Loss: {std_val_loss:.4f}')
+
+                mlflow.log_metric('cv_mean_val_loss', mean_val_loss)
+                mlflow.log_metric('cv_std_val_loss', std_val_loss)
+        else:
+            logger.header(f'Starting Full Training: {run_datetime}')
+            with mlflow.start_run(run_name=run_datetime) as run:
+                mlflow_log_run(config, log_filepath)
+                trainer = Trainer(config, train_subsets=all_train_subsets)
+                trainer.train()
             
-            mlflow.log_params(config)
-            mlflow.log_artifact(__file__)
-            mlflow.log_artifact(log_filepath, artifact_path='logs')
-            for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
-                for file in os.listdir(folder):
-                    mlflow.log_artifact(os.path.join(folder, file), artifact_path=folder)
-            
-            trainer = Trainer(config)
-            trainer.train()
-            
-            tester = Tester()
-            tester.test()
+        #     tester = Tester()
+        #     tester.test()
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')
@@ -312,6 +356,14 @@ def main():
     finally:
         if mlflow.active_run(): mlflow.end_run()
         logger.single('MLflow run cleaned up')
+
+def mlflow_log_run(config, log_filepath):
+    mlflow.log_params(config)
+    mlflow.log_artifact(__file__)
+    mlflow.log_artifact(log_filepath, artifact_path='logs')
+    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
+        if os.path.isdir(folder):
+            mlflow.log_artifacts(folder, artifact_path=folder)
 
 def deep_merge(source, destination):
     """Recursively merges source dict into destination dict."""

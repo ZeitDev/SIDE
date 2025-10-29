@@ -1,6 +1,10 @@
 # --- Data Configuration ---
 data:
-  dataset: "data.datasets.CholecSeg8k"
+  dataset: "data.datasets.EndoVis17"
+  cross_validation: false
+
+  transforms: null
+
   batch_size: 8
   num_workers: 4
   pin_memory: true
