@@ -12,16 +12,18 @@ import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
+from metrics.segmentation import IoU, Dice
+
 from utils.loader import load
 from utils.visualization import image_mask_overlay_figure
 
-from typing import cast
+from typing import cast, Dict, Any, List, Optional, Tuple
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 
 # * TASKS TO DO
-# TODO:
-# - Add transforms to datasets (apply to images and masks )
+# TODO: Add transforms to datasets (apply to images and masks )
+# TODO: Implement MAE metric for disparity task
 
 # TODO: change cross-validation metric comparison to task-specific metrics instead of loss, for that implement metrics first
 # - Implement testing loop, Add metrics (maybe also in validation?)
@@ -29,18 +31,19 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 # TODO: check if epoch run is really correct, especially with kd, debug line by line
 
 class Trainer:
-    def __init__(self, config, train_subsets, val_subsets=None):
+    def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
         logger.header('Initializing Trainer')
         self.config = config
         self.train_subsets = train_subsets
         self.val_subsets = val_subsets
         self._setup()
+        self._load_data()
         self._load_model()
         self._load_teachers()
         self._load_components()
-        self._load_data()
+        self._init_metrics()
         
-    def _setup(self):
+    def _setup(self) -> None:
         logger.subheader('Setup')
         
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -58,7 +61,47 @@ class Trainer:
         torch.cuda.manual_seed(seed)
         logger.info(f'Set reproducibility seed to {seed}')
         
-    def _load_model(self):
+    def _load_data(self) -> None:
+        logger.subheader('Load Data')
+
+        data_config = self.config['data']
+        dataset_class = load(data_config['dataset'])
+        
+        dataset_train = dataset_class(
+            mode='train',
+            tasks=self.config['training']['tasks'],
+            subset_names=self.train_subsets,
+            transforms=data_config['transforms']
+        )
+        self.dataloader_train = DataLoader(
+            dataset_train,
+            batch_size=data_config['batch_size'],
+            shuffle=True,
+            num_workers=data_config['num_workers'],
+            pin_memory=data_config['pin_memory'])
+        
+        dataset_val = dataset_class(
+            mode='train',
+            tasks=self.config['training']['tasks'],
+            subset_names=self.val_subsets,
+            transforms=data_config['transforms']
+        ) if self.val_subsets else None
+        if dataset_val:
+            self.dataloader_val = DataLoader(
+                dataset_val,
+                batch_size=data_config['batch_size'],
+                shuffle=False,
+                num_workers=data_config['num_workers'],
+                pin_memory=data_config['pin_memory'])
+            
+        self.segmentation_class_mappings = dataset_train.class_mappings
+        
+        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
+        dataset_val_length = len(dataset_val) if dataset_val else 0
+        logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
+        logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
+        
+    def _load_model(self) -> None:
         logger.subheader('Loading Model')
         
         encoder_config = self.config['training']['encoder']
@@ -90,7 +133,7 @@ class Trainer:
             for param in self.model.encoder.parameters():
                 param.requires_grad = False
                     
-    def _load_teachers(self):
+    def _load_teachers(self) -> None:
         logger.subheader('Loading Teachers')
         self.kd_models = {}
         self.kd_criterions = {}
@@ -123,7 +166,7 @@ class Trainer:
                     **kd_config['criterion']['params'])
                 logger.info(f'Loaded KD criterion for task {task}: {kd_config["criterion"]["name"]} with params {kd_config["criterion"]["params"]}')
         
-    def _load_components(self):
+    def _load_components(self) -> None:
         logger.subheader('Loading Components')
         # Load loss functions
         self.criterions = {}
@@ -151,44 +194,23 @@ class Trainer:
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
         
-    def _load_data(self):
-        logger.subheader('Load Data')
-
-        data_config = self.config['data']
-        dataset_class = load(data_config['dataset'])
+    def _init_metrics(self) -> None:
+        logger.subheader('Initializing Metrics')
+        self.metrics = {}
+        tasks_config = self.config['training']['tasks']
         
-        dataset_train = dataset_class(
-            mode='train',
-            tasks=self.config['training']['tasks'],
-            subset_names=self.train_subsets,
-            transforms=data_config['transforms']
-        )
-        self.dataloader_train = DataLoader(
-            dataset_train,
-            batch_size=data_config['batch_size'],
-            shuffle=True,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'])
+        if tasks_config['segmentation']['enabled']:
+            self.metrics['segmentation'] = {}
+            
+            num_classes = tasks_config['segmentation']['decoder']['params']['num_classes']
+            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
+            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
+            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
+            
+        if tasks_config['disparity']['enabled']:
+            pass # TODO: implement disparity metrics
         
-        dataset_val = dataset_class(
-            mode='train',
-            tasks=self.config['training']['tasks'],
-            subset_names=self.val_subsets,
-            transforms=data_config['transforms']
-        ) if self.val_subsets else None
-        if dataset_val:
-            self.dataloader_val = DataLoader(
-                dataset_val,
-                batch_size=data_config['batch_size'],
-                shuffle=False,
-                num_workers=data_config['num_workers'],
-                pin_memory=data_config['pin_memory'])
-        
-        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
-        dataset_val_length = len(dataset_val) if dataset_val else 0
-        logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
-        
-    def _log_visuals(self, epoch, images, targets, outputs):
+    def _log_visuals(self, epoch: int, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
         log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
         if log_n_images > 0:
             if self.config['training']['tasks']['segmentation']['enabled']:
@@ -202,9 +224,15 @@ class Trainer:
                     mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
                     plt.close(figure)
     
-    def _run_epoch(self, is_training):
+    def _run_epoch(self, is_training: bool) -> float:
         self.model.train(is_training)
+        is_validation = not is_training
         total_loss = 0.0
+        
+        if is_validation:
+            for task_metrics in self.metrics.values():
+                for metric in task_metrics.values():
+                    metric.reset()
         
         dataloader = self.dataloader_train if is_training else self.dataloader_val
         if not dataloader: return float('nan')
@@ -226,6 +254,10 @@ class Trainer:
                     weight = self.config['training']['tasks'][task]['criterion']['weight']
                     total_loss_batch += weight * loss
                     
+                    if is_validation:
+                        for metric in self.metrics[task].values():
+                            metric.update(output, targets[task])
+                    
                 if is_training and self.kd_models:
                     for task, kd_teachers in self.kd_models.items():
                             student_output = outputs[task]
@@ -245,10 +277,22 @@ class Trainer:
             
             total_loss += total_loss_batch.item()
             batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+             
+        if is_validation:
+            for task, task_metrics in self.metrics.items():
+                for metric_name, metric in task_metrics.items():
+                    metric_results = metric.compute()
+                    
+                    for key, value in metric_results.items():
+                        if isinstance(key, int):
+                            class_name = self.segmentation_class_mappings[key]
+                            mlflow.log_metric(f'{task}_{metric_name}_{class_name}', value)
+                        else:
+                            mlflow.log_metric(f'{task}_{metric_name}_{key}', value)
                 
         return total_loss / len(dataloader)
     
-    def train(self):
+    def train(self) -> float:
         logger.header('Starting Training Loop')
         
         best_val_epoch = -1
@@ -284,10 +328,10 @@ class Trainer:
         return best_val_loss
             
 class Tester:
-    def __init__(self):
+    def __init__(self) -> None:
         pass
     
-    def test(self):
+    def test(self) -> None:
         pass
     
 def main():
