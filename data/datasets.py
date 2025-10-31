@@ -5,18 +5,19 @@ from PIL import Image
 
 import torch
 from torch.utils.data import Dataset
+import albumentations as A
 
 from typing import List, Dict, Any, Optional, Tuple
 
 class BaseDataset(Dataset):
-    def __init__(self, root_path: str, mode: str = 'train', tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[List[str]] = None, transform: Optional[Any] = None):
+    def __init__(self, root_path: str, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[List[str]] = None):
         self.root_path = root_path
         self.mode = mode
-        self.tasks = tasks if tasks is not None else []
+        self.tasks = tasks if tasks is not None else {'segmentation': {'enabled': False}, 'disparity': {'enabled': False}}
         self.subset_names = subset_names
-        self.transform = transform
+        self.transforms = transforms
         
-        self.class_mappings: Optional[Dict[int, str]] = None
+        self.class_mappings = None
         
         self._get_class_mappings()
         self._load_samples()
@@ -71,41 +72,44 @@ class BaseDataset(Dataset):
         
         data = {}
         if 'left_image' in sample_path:
-            data['left_image'] = np.array(Image.open(sample_path['left_image']).convert('RGB'))
+            data['image'] = np.array(Image.open(sample_path['left_image']).convert('RGB'))
         if 'right_image' in sample_path:
             data['right_image'] = np.array(Image.open(sample_path['right_image']).convert('RGB'))
             
         if 'segmentation' in sample_path:
-            mask = np.array(Image.open(sample_path['segmentation']))
-            if len(mask.shape) == 2: mask = np.expand_dims(mask, axis=-1)
-            data['segmentation'] = mask
+            data['segmentation'] = np.array(Image.open(sample_path['segmentation']))
         if 'disparity' in sample_path:
             pass # TODO: load disparity map
         
-        if self.transform: data = self.transform(**data) # ! NOT TESTED
-        else: data = {k: torch.from_numpy(v).permute(2,0,1).float() for k, v in data.items()} # ! NOT TESTED
+        if self.transforms: data = self.transforms(**data)
+        else: raise RuntimeError('Transforms failed to load.')
         
-        image = data['left_image']
+        if 'segmentation' in data:
+            data['segmentation'] = data['segmentation'].unsqueeze(0)
+        if 'disparity' in data:
+            pass # TODO: load disparity map
+        
+        image = data['image']
         if 'right_image' in data:
-            image = torch.cat((data['left_image'], data['right_image']), dim=0)
+            image = torch.cat((data['image'], data['right_image']), dim=0)
             
         targets = {task: data[task] for task in self.tasks if task in data}
         
         return image, targets
     
 class OverfitDataset(BaseDataset):
-    def __init__(self, mode: str = 'train', tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None, transform: Optional[Any] = None):
-        root_path = '/data/Zeitler/SIDE/OverfitDataset/'
-        super().__init__(root_path, mode, tasks, subset_names, transform)
+    def __init__(self, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+        root_path = '/data/Zeitler/SIDED/OverfitDataset/'
+        super().__init__(root_path, mode, transforms, tasks, subset_names)
         
     def _get_class_mappings(self) -> None:
-        if 'segmentation' in self.tasks:
+        if self.tasks['segmentation']['enabled']:
             class_mapping_path = os.path.join(self.root_path, 'instrument_type_mapping.json')
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
                 
             self.class_mappings = {v: k for k, v in name2id.items()}
-            self.class_mappings[0] = 'background'
+            self.class_mappings[0] = 'Background'
         
     def _get_file_names(self, subset_path: str) -> List[str]:
         left_images_path = os.path.join(subset_path, 'left_images')
@@ -116,22 +120,22 @@ class OverfitDataset(BaseDataset):
         sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
         if self.mode == 'train':
-            if 'segmentation' in self.tasks:
+            if self.tasks['segmentation']['enabled']:
                 sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
                 
-            if 'disparity' in self.tasks:
+            if self.tasks['disparity']['enabled']:
                 sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
                 sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 
         return sample_path
 
 class EndoVis17(BaseDataset):
-    def __init__(self, mode: str = 'train', tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None, transform: Optional[Any] = None):
-        root_path = '/data/Zeitler/SIDE/EndoVis17/processed/'
-        super().__init__(root_path, mode, tasks, subset_names, transform)
+    def __init__(self, mode: str = 'train',  transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+        root_path = '/data/Zeitler/SIDED/EndoVis17/processed'
+        super().__init__(root_path, mode, transforms, tasks, subset_names)
         
     def _get_class_mappings(self) -> None:
-        if 'segmentation' in self.tasks:
+        if self.tasks['segmentation']['enabled']:
             class_mapping_path = os.path.join(self.root_path, 'instrument_type_mapping.json')
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
@@ -148,10 +152,10 @@ class EndoVis17(BaseDataset):
         sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
         if self.mode == 'train':
-            if 'segmentation' in self.tasks:
+            if self.tasks['segmentation']['enabled']:
                 sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
                 
-            if 'disparity' in self.tasks:
+            if self.tasks['disparity']['enabled']:
                 sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
                 sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 

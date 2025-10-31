@@ -3,7 +3,25 @@ data:
   dataset: "data.datasets.EndoVis17"
   cross_validation: false
 
-  transforms: null
+  transforms:
+    train:
+      - name: "Resize"
+        params:
+          height: 256
+          width: 256
+      - name: "Normalize"
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+    val:
+      - name: "Resize"
+        params:
+          height: 256
+          width: 256
+      - name: "Normalize"
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
 
   batch_size: 8
   num_workers: 4
@@ -38,11 +56,11 @@ training:
         weight: 1.0
         name: "monai.losses.DiceCELoss"
         params:
-          sigmoid: True
+          softmax: True
+          to_onehot_y: True
       decoder:
         name: "models.simple_unet.SegmentationDecoder"
-        params:
-          num_classes: 2
+        params: {}
       knowledge_distillation:
         enabled: false
         states: []

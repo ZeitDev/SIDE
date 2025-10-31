@@ -1,14 +1,8 @@
 data:
   dataset: data.datasets.OverfitDataset
-  cross_validation: true
 
 training:
-  epochs: 100
-  scheduler:
-    name: torch.optim.lr_scheduler.ConstantLR
-    params:
-      factor: 1.0
-      total_iters: 1
+  epochs: 1
 
   tasks:
     segmentation:
@@ -17,4 +11,5 @@ training:
         enabled: false
     disparity:
       enabled: false
-
+      knowledge_distillation:
+        enabled: false

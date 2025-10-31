@@ -14,18 +14,24 @@ import matplotlib.pyplot as plt
 
 from metrics.segmentation import IoU, Dice
 
+from utils import helpers
 from utils.loader import load
 from utils.visualization import image_mask_overlay_figure
 
-from typing import cast, Dict, Any, List, Optional, Tuple
+from typing import cast, Dict, Any, List, Optional
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 
 # * TASKS TO DO
-# TODO: Add transforms to datasets (apply to images and masks )
+# TODO: FIX model saving, does not work with task dicts
 # TODO: Implement MAE metric for disparity task
 # TODO: Implement testing loop
-# TODO: check if epoch run is really correct, especially with kd, debug line by line
+
+# * Tested so far
+# ! Disparity task not tested yet
+# ! Metrics not tested yet
+# ! Transforms not tested yet
+# ! Knowledge Distillation not tested yet
 
 class Trainer:
     def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
@@ -44,7 +50,7 @@ class Trainer:
         logger.subheader('Setup')
         
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-        logger.info(f'Restricting CUDA_VISIBLE_DEVICES = {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+        logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f'Using device: {self.device}')
@@ -64,11 +70,14 @@ class Trainer:
         data_config = self.config['data']
         dataset_class = load(data_config['dataset'])
         
+        train_transforms = helpers.build_transforms(data_config['transforms']['train'])
+        val_transforms = helpers.build_transforms(data_config['transforms']['val'])
+        
         dataset_train = dataset_class(
             mode='train',
+            transforms=train_transforms,
             tasks=self.config['training']['tasks'],
-            subset_names=self.train_subsets,
-            transforms=data_config['transforms']
+            subset_names=self.train_subsets
         )
         self.dataloader_train = DataLoader(
             dataset_train,
@@ -79,9 +88,9 @@ class Trainer:
         
         dataset_val = dataset_class(
             mode='train',
+            transforms=val_transforms,
             tasks=self.config['training']['tasks'],
-            subset_names=self.val_subsets,
-            transforms=data_config['transforms']
+            subset_names=self.val_subsets
         ) if self.val_subsets else None
         if dataset_val:
             self.dataloader_val = DataLoader(
@@ -91,18 +100,27 @@ class Trainer:
                 num_workers=data_config['num_workers'],
                 pin_memory=data_config['pin_memory'])
             
-        self.segmentation_class_mappings = dataset_train.class_mappings
-        
+        input_example_image, _ = dataset_train[0] 
+        self.input_example = input_example_image.unsqueeze(0)
+            
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         dataset_val_length = len(dataset_val) if dataset_val else 0
         logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
-        logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
+        
+        if self.config['training']['tasks']['segmentation']['enabled']:
+            self.segmentation_class_mappings = dataset_train.class_mappings
+            num_classes = len(self.segmentation_class_mappings)
+            self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
+            self.config['training']['tasks']['segmentation']['knowledge_distillation']['decoder']['params']['num_classes'] = num_classes
+        
+            logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
         
     def _load_model(self) -> None:
         logger.subheader('Loading Model')
         
         encoder_config = self.config['training']['encoder']
-        encoder = load(encoder_config['name'], **encoder_config['params'])
+        EncoderClass = load(encoder_config['name'])
+        encoder = EncoderClass(**encoder_config['params'])
         logger.info(f'Loaded encoder: {encoder_config["name"]} with params {encoder_config["params"]}')
         
         decoders = {}
@@ -110,7 +128,8 @@ class Trainer:
         for task, task_config in tasks_config.items():
             if task_config['enabled']:
                 decoder_config = task_config['decoder']
-                decoders[task] = load(decoder_config['name'], **decoder_config['params'])
+                DecoderClass = load(decoder_config['name'])
+                decoders[task] = DecoderClass(**decoder_config['params'])
                 logger.info(f'Loaded decoder for task {task}: {decoder_config["name"]} with params {decoder_config["params"]}')
             
         self.model = load(
@@ -131,12 +150,12 @@ class Trainer:
                 param.requires_grad = False
                     
     def _load_teachers(self) -> None:
-        logger.subheader('Loading Teachers')
         self.kd_models = {}
         self.kd_criterions = {}
         for task, task_config in self.config['training']['tasks'].items():
             kd_config = task_config['knowledge_distillation']
             if kd_config['enabled']:
+                logger.subheader(f'Loading Teachers for {task}')
                 self.kd_models[task] = []
             
                 for state_path in kd_config['states']:
@@ -315,7 +334,14 @@ class Trainer:
                 best_val_epoch = epoch
                 best_val_loss = val_loss
                 best_val_epoch_metrics = val_epoch_metrics
-                mlflow.pytorch.log_model(self.model, artifact_path='best_model') # type: ignore
+                
+                self.model.to('cpu')
+                mlflow.pytorch.log_model( # type: ignore
+                    pytorch_model=self.model, 
+                    name='best_model', 
+                    input_example=self.input_example.numpy().astype(np.float32)
+                )
+                self.model.to(self.device)
                 mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
@@ -327,7 +353,32 @@ class Trainer:
             })
             
         return best_val_epoch_metrics
+    
+    def train_without_validation(self) -> None:
+        logger.header('Starting Training Loop without Validation')
+        
+        epochs = self.config['training']['epochs']
+        epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
+        for epoch in epochs_tqdm:
+            train_epoch_metrics = self._run_epoch(is_training=True)
+            mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
+            lr = self.optimizer.param_groups[0]['lr']
+            mlflow.log_metric('learning_rate', lr, step=epoch)
+            
+            epochs_tqdm.set_postfix({
+                'lr': f'{lr:.2e}',
+                'train_loss': f'{train_epoch_metrics['loss']:.4f}',
+            })
+        
+        self.model.to('cpu')
+        mlflow.pytorch.log_model( # type: ignore
+            pytorch_model=self.model, 
+            name='final_model', 
+            input_example=self.input_example.numpy().astype(np.float32)
+        )
+        self.model.to(self.device)
+                    
 class Tester:
     def __init__(self) -> None:
         pass
@@ -342,7 +393,7 @@ def main():
     
     with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
     with open(args.config, 'r') as f: experiment_config = yaml.safe_load(f)
-    config = deep_merge(experiment_config, base_config)
+    config = helpers.deep_merge(experiment_config, base_config)
 
     try:
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]
@@ -359,7 +410,7 @@ def main():
         if config['data']['cross_validation']:
             with mlflow.start_run(run_name=f'{run_datetime}_cross_validation') as run:
                 logger.header('Starting Cross-Validation Training')
-                mlflow_log_run(config, log_filepath)
+                helpers.mlflow_log_run(config, log_filepath)
                 
                 fold_val_metrics_summary = {}
                 
@@ -395,9 +446,9 @@ def main():
         else:
             logger.header(f'Starting Full Training: {run_datetime}')
             with mlflow.start_run(run_name=run_datetime) as run:
-                mlflow_log_run(config, log_filepath)
+                helpers.mlflow_log_run(config, log_filepath)
                 trainer = Trainer(config, train_subsets=all_train_subsets)
-                trainer.train()
+                trainer.train_without_validation()
             
         tester = Tester()
         tester.test()
@@ -410,24 +461,6 @@ def main():
     finally:
         if mlflow.active_run(): mlflow.end_run()
         logger.single('MLflow run cleaned up')
-
-def mlflow_log_run(config, log_filepath):
-    mlflow.log_params(config)
-    mlflow.log_artifact(__file__)
-    mlflow.log_artifact(log_filepath, artifact_path='logs')
-    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
-        if os.path.isdir(folder):
-            mlflow.log_artifacts(folder, artifact_path=folder)
-
-def deep_merge(source, destination):
-    """Recursively merges source dict into destination dict."""
-    for key, value in source.items():
-        if isinstance(value, dict):
-            node = destination.setdefault(key, {})
-            deep_merge(value, node)
-        else:
-            destination[key] = value
-    return destination
-
+            
 if __name__ == "__main__":
     main()
