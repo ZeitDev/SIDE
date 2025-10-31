@@ -50,7 +50,7 @@ class IoU(SegmentationMetric):
             
         valid_iou = iou_per_class[~torch.isnan(iou_per_class)]
         mean_iou = valid_iou.mean().item()
-        results['_mean'] = mean_iou
+        results['mIoU'] = mean_iou
         
         return results
 
@@ -67,6 +67,6 @@ class Dice(SegmentationMetric):
 
         valid_dice = dice_per_class[~torch.isnan(dice_per_class)]
         mean_dice = valid_dice.mean().item()
-        results['_mean'] = mean_dice
+        results['mDICE'] = mean_dice
             
         return results

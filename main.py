@@ -24,10 +24,7 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 # * TASKS TO DO
 # TODO: Add transforms to datasets (apply to images and masks )
 # TODO: Implement MAE metric for disparity task
-
-# TODO: change cross-validation metric comparison to task-specific metrics instead of loss, for that implement metrics first
-# - Implement testing loop, Add metrics (maybe also in validation?)
-
+# TODO: Implement testing loop
 # TODO: check if epoch run is really correct, especially with kd, debug line by line
 
 class Trainer:
@@ -224,7 +221,7 @@ class Trainer:
                     mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
                     plt.close(figure)
     
-    def _run_epoch(self, is_training: bool) -> float:
+    def _run_epoch(self, is_training: bool) -> Dict[str, float]:
         self.model.train(is_training)
         is_validation = not is_training
         total_loss = 0.0
@@ -235,7 +232,7 @@ class Trainer:
                     metric.reset()
         
         dataloader = self.dataloader_train if is_training else self.dataloader_val
-        if not dataloader: return float('nan')
+        if not dataloader: return {'loss': float('inf')}
         
         phase = 'Training' if is_training else 'Validation'
         
@@ -277,7 +274,8 @@ class Trainer:
             
             total_loss += total_loss_batch.item()
             batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
-             
+
+        epoch_metrics = {'loss': total_loss / len(dataloader)}
         if is_validation:
             for task, task_metrics in self.metrics.items():
                 for metric_name, metric in task_metrics.items():
@@ -286,46 +284,49 @@ class Trainer:
                     for key, value in metric_results.items():
                         if isinstance(key, int):
                             class_name = self.segmentation_class_mappings[key]
-                            mlflow.log_metric(f'{task}_{metric_name}_{class_name}', value)
+                            epoch_metrics[f'{task}_{metric_name}_{class_name}'] = value
                         else:
-                            mlflow.log_metric(f'{task}_{metric_name}_{key}', value)
+                            epoch_metrics[f'{task}_{metric_name}_{key}'] = value
                 
-        return total_loss / len(dataloader)
+        return epoch_metrics
     
-    def train(self) -> float:
+    def train(self) -> Dict[str, float]:
         logger.header('Starting Training Loop')
         
         best_val_epoch = -1
         best_val_loss = float('inf')
+        best_val_epoch_metrics = {}
         
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_loss = self._run_epoch(is_training=True)
-            mlflow.log_metric('train_loss', train_loss, step=epoch)
+            train_epoch_metrics = self._run_epoch(is_training=True)
+            mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            val_loss = self._run_epoch(is_training=False)
-            mlflow.log_metric('val_loss', val_loss, step=epoch)
+            val_epoch_metrics = self._run_epoch(is_training=False)
+            mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
+            val_loss = val_epoch_metrics['loss']
             self.scheduler.step(val_loss)
             lr = self.optimizer.param_groups[0]['lr']
             mlflow.log_metric('learning_rate', lr, step=epoch)
             
             if val_loss < best_val_loss:
-                best_val_loss = val_loss
                 best_val_epoch = epoch
+                best_val_loss = val_loss
+                best_val_epoch_metrics = val_epoch_metrics
                 mlflow.pytorch.log_model(self.model, artifact_path='best_model') # type: ignore
                 mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_loss:.4f}',
+                'train_loss': f'{train_epoch_metrics['loss']:.4f}',
                 'val_loss': f'{val_loss:.4f}',
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
             })
             
-        return best_val_loss
+        return best_val_epoch_metrics
             
 class Tester:
     def __init__(self) -> None:
@@ -359,7 +360,8 @@ def main():
             with mlflow.start_run(run_name=f'{run_datetime}_cross_validation') as run:
                 logger.header('Starting Cross-Validation Training')
                 mlflow_log_run(config, log_filepath)
-                fold_val_losses = []
+                
+                fold_val_metrics_summary = {}
                 
                 for i, val_subset in enumerate(all_train_subsets):
                     with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as sub_run:
@@ -369,19 +371,27 @@ def main():
                         
                         train_subsets = [s for s in all_train_subsets if s != val_subset]
                         trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
-                        best_val_loss = trainer.train()
-                        fold_val_losses.append(best_val_loss)
+                        best_val_epoch_metrics = trainer.train()
                         
-                mean_val_loss = float(np.mean(fold_val_losses))
-                std_val_loss = float(np.std(fold_val_losses))
+                        for metric_name, metric_value in best_val_epoch_metrics.items():
+                            if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
+                                fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
+                        
                 
                 logger.subheader('Cross-Validation Summary')
-                logger.info(f'Fold Validation Losses: {fold_val_losses}')
-                logger.info(f'Mean Validation Loss: {mean_val_loss:.4f}')
-                logger.info(f'Std Dev Validation Loss: {std_val_loss:.4f}')
-
-                mlflow.log_metric('cv_mean_val_loss', mean_val_loss)
-                mlflow.log_metric('cv_std_val_loss', std_val_loss)
+                for metric_name, metric_values in fold_val_metrics_summary.items():
+                    mean_metric = float(np.mean(metric_values))
+                    std_metric = float(np.std(metric_values))
+                    
+                    logger.info(f'Metric: {metric_name}')
+                    logger.info(f'Mean = {mean_metric:.4f}, Std = {std_metric:.4f}')
+                    
+                    for fold_idx, v in enumerate(metric_values):
+                        logger.info(f'Fold {fold_idx+1} ({all_train_subsets[fold_idx]}): {v:.4f}')
+                        mlflow.log_metric(f'cv_{metric_name}_fold_{fold_idx+1}', v)
+                        
+                    mlflow.log_metric(f'cv_mean_{metric_name}', mean_metric)
+                    mlflow.log_metric(f'cv_std_{metric_name}', std_metric)
         else:
             logger.header(f'Starting Full Training: {run_datetime}')
             with mlflow.start_run(run_name=run_datetime) as run:
@@ -389,8 +399,8 @@ def main():
                 trainer = Trainer(config, train_subsets=all_train_subsets)
                 trainer.train()
             
-        #     tester = Tester()
-        #     tester.test()
+        tester = Tester()
+        tester.test()
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')
