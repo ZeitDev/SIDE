@@ -1,12 +1,13 @@
 import os
 import yaml
+import random
 import logging
 import argparse
 import datetime
-import random
 import numpy as np
-
 from tqdm import tqdm
+from typing import cast, Dict, Any, List, Optional
+
 import mlflow
 import torch
 from torch.utils.data import DataLoader
@@ -15,17 +16,18 @@ import matplotlib.pyplot as plt
 from metrics.segmentation import IoU, Dice
 
 from utils import helpers
-from utils.loader import load
+from utils.helpers import load
+from utils.models import Decombiner
 from utils.visualization import image_mask_overlay_figure
 
-from typing import cast, Dict, Any, List, Optional
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
+logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 
 # * TASKS TO DO
 # TODO: FIX model saving, does not work with task dicts
 # TODO: Implement MAE metric for disparity task
-# TODO: Implement testing loop
+# TODO: move log visuals to helper and implement to tester class
 
 # * Tested so far
 # ! Disparity task not tested yet
@@ -71,7 +73,7 @@ class Trainer:
         dataset_class = load(data_config['dataset'])
         
         train_transforms = helpers.build_transforms(data_config['transforms']['train'])
-        val_transforms = helpers.build_transforms(data_config['transforms']['val'])
+        val_transforms = helpers.build_transforms(data_config['transforms']['test'])
         
         dataset_train = dataset_class(
             mode='train',
@@ -133,7 +135,7 @@ class Trainer:
                 logger.info(f'Loaded decoder for task {task}: {decoder_config["name"]} with params {decoder_config["params"]}')
             
         self.model = load(
-            'models.combiner.Combiner', 
+            'utils.models.Combiner', 
             encoder=encoder, 
             decoders=decoders
         ).to(self.device)
@@ -166,7 +168,7 @@ class Trainer:
                     logger.info(f'Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
                     
                     teacher_model = load(
-                        'models.combiner.Combiner',
+                        'utils.models.Combiner',
                         encoder=teacher_encoder,
                         decoders={task: teacher_decoder}
                     ).to(self.device)
@@ -309,6 +311,21 @@ class Trainer:
                 
         return epoch_metrics
     
+    def _save_model(self, artifact_prefix: str):
+        self.model.to('cpu')
+
+        for task_name, task_config in self.config['training']['tasks'].items():
+            if task_config['enabled']:
+                task_model = Decombiner(self.model, task_name)
+                artifact_path = f'{artifact_prefix}_{task_name}'
+                mlflow.pytorch.log_model( # type: ignore
+                    pytorch_model=task_model,
+                    name=artifact_path,
+                    input_example=self.input_example.cpu().numpy().astype(np.float32)
+                )
+
+        self.model.to(self.device)
+    
     def train(self) -> Dict[str, float]:
         logger.header('Starting Training Loop')
         
@@ -326,7 +343,11 @@ class Trainer:
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
             val_loss = val_epoch_metrics['loss']
-            self.scheduler.step(val_loss)
+            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.scheduler.step(val_loss)
+            else:
+                self.scheduler.step()
+            
             lr = self.optimizer.param_groups[0]['lr']
             mlflow.log_metric('learning_rate', lr, step=epoch)
             
@@ -335,13 +356,7 @@ class Trainer:
                 best_val_loss = val_loss
                 best_val_epoch_metrics = val_epoch_metrics
                 
-                self.model.to('cpu')
-                mlflow.pytorch.log_model( # type: ignore
-                    pytorch_model=self.model, 
-                    name='best_model', 
-                    input_example=self.input_example.numpy().astype(np.float32)
-                )
-                self.model.to(self.device)
+                self._save_model(artifact_prefix='best_model')
                 mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
@@ -363,6 +378,12 @@ class Trainer:
             train_epoch_metrics = self._run_epoch(is_training=True)
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
+            train_loss = train_epoch_metrics['loss']
+            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.scheduler.step(train_loss)
+            else:
+                self.scheduler.step()
+            
             lr = self.optimizer.param_groups[0]['lr']
             mlflow.log_metric('learning_rate', lr, step=epoch)
             
@@ -371,20 +392,126 @@ class Trainer:
                 'train_loss': f'{train_epoch_metrics['loss']:.4f}',
             })
         
-        self.model.to('cpu')
-        mlflow.pytorch.log_model( # type: ignore
-            pytorch_model=self.model, 
-            name='final_model', 
-            input_example=self.input_example.numpy().astype(np.float32)
-        )
-        self.model.to(self.device)
+        self._save_model(artifact_prefix='final_model')
                     
 class Tester:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, config: Dict[str, Any], model_name: str):
+        logger.header('Initializing Tester')
+        self.config = config
+        self.model_name = model_name
+        self._setup()
+        self._load_data()
+        self._load_models()
+        self._init_metrics()
+        
+    def _setup(self) -> None:
+        logger.subheader('Setup')
+        
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+        
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        logger.info(f'Using device: {self.device}')
+        
+        torch.cuda.empty_cache()
+        seed = 42
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        logger.info(f'Set reproducibility seed to {seed}')
+        
+    def _load_data(self) -> None:
+        logger.subheader('Load Data')
+
+        data_config = self.config['data']
+        dataset_class = load(data_config['dataset'])
+        
+        test_transforms = helpers.build_transforms(data_config['transforms']['test'])
+        
+        dataset_test = dataset_class(
+            mode='test',
+            transforms=test_transforms,
+            tasks=self.config['training']['tasks']
+        )
+        self.dataloader_test = DataLoader(
+            dataset_test,
+            batch_size=data_config['batch_size'],
+            shuffle=False,
+            num_workers=data_config['num_workers'],
+            pin_memory=data_config['pin_memory'])
+            
+        logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
+        
+        if self.config['training']['tasks']['segmentation']['enabled']:
+            self.segmentation_class_mappings = dataset_test.class_mappings
+            num_classes = len(self.segmentation_class_mappings)
+            self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
+    
+    def _load_models(self) -> None:
+        logger.subheader('Loading Models')
+        self.models = {}
+        
+        for task_name, task_config in self.config['training']['tasks'].items():
+            if task_config['enabled']:
+                model_path = f'models:/{self.model_name}_{task_name}'
+                self.models[task_name] = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
+                self.models[task_name].eval()
+                logger.info(f'Loaded model for task {task_name} from {model_path}')
+
+    def _init_metrics(self) -> None:
+        logger.subheader('Initializing Metrics')
+        self.metrics = {}
+        tasks_config = self.config['training']['tasks']
+        
+        if tasks_config['segmentation']['enabled']:
+            self.metrics['segmentation'] = {}
+            num_classes = self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes']
+            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
+            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
+            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
+            
+        if tasks_config['disparity']['enabled']:
+            pass # TODO: implement disparity metrics
     
     def test(self) -> None:
-        pass
+        logger.header('Starting Testing')
+        
+        for task_metrics in self.metrics.values():
+            for metric in task_metrics.values():
+                metric.reset()
+        
+        batch_tqdm = tqdm(self.dataloader_test, desc='Testing', position=1, leave=False)
+        with torch.no_grad():
+            for images, targets in batch_tqdm:
+                images = images.to(self.device)
+                targets = {key: value.to(self.device) for key, value in targets.items()}
+                
+                for task_name, model in self.models.items():
+                    output = model(images)
+                    
+                    if task_name in self.metrics:
+                        for metric in self.metrics[task_name].values():
+                            metric.update(output, targets[task_name])
+
+        logger.subheader('Test Results')
+        test_metrics = {}
+        for task, task_metrics in self.metrics.items():
+            for metric_name, metric in task_metrics.items():
+                metric_results = metric.compute()
+                
+                for key, value in metric_results.items():
+                    if isinstance(key, int):
+                        class_name = self.segmentation_class_mappings[key]
+                        metric_key = f'test_{task}_{metric_name}_{class_name}'
+                    else:
+                        metric_key = f'test_{task}_{metric_name}_{key}'
+                    
+                    test_metrics[metric_key] = value
+                    logger.info(f'{metric_key}: {value:.4f}')
+        
+        mlflow.log_metrics(test_metrics)
     
 def main():
     parser = argparse.ArgumentParser(description='SIDE Training and Testing')
@@ -407,51 +534,60 @@ def main():
         all_train_subsets = dataset_class(mode='train').get_all_subset_names()
         logger.info(f'Found {len(all_train_subsets)} training subsets: {all_train_subsets}')
         
-        if config['data']['cross_validation']:
-            with mlflow.start_run(run_name=f'{run_datetime}_cross_validation') as run:
-                logger.header('Starting Cross-Validation Training')
-                helpers.mlflow_log_run(config, log_filepath)
-                
-                fold_val_metrics_summary = {}
-                
-                for i, val_subset in enumerate(all_train_subsets):
-                    with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as sub_run:
-                        logger.info(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
-                        mlflow.log_param('validation_subset', val_subset)
-                        mlflow.log_param('fold', i+1)
-                        
-                        train_subsets = [s for s in all_train_subsets if s != val_subset]
-                        trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
-                        best_val_epoch_metrics = trainer.train()
-                        
-                        for metric_name, metric_value in best_val_epoch_metrics.items():
-                            if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
-                                fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
-                        
-                
-                logger.subheader('Cross-Validation Summary')
-                for metric_name, metric_values in fold_val_metrics_summary.items():
-                    mean_metric = float(np.mean(metric_values))
-                    std_metric = float(np.std(metric_values))
-                    
-                    logger.info(f'Metric: {metric_name}')
-                    logger.info(f'Mean = {mean_metric:.4f}, Std = {std_metric:.4f}')
-                    
-                    for fold_idx, v in enumerate(metric_values):
-                        logger.info(f'Fold {fold_idx+1} ({all_train_subsets[fold_idx]}): {v:.4f}')
-                        mlflow.log_metric(f'cv_{metric_name}_fold_{fold_idx+1}', v)
-                        
-                    mlflow.log_metric(f'cv_mean_{metric_name}', mean_metric)
-                    mlflow.log_metric(f'cv_std_{metric_name}', std_metric)
-        else:
-            logger.header(f'Starting Full Training: {run_datetime}')
-            with mlflow.start_run(run_name=run_datetime) as run:
-                helpers.mlflow_log_run(config, log_filepath)
-                trainer = Trainer(config, train_subsets=all_train_subsets)
-                trainer.train_without_validation()
+        with mlflow.start_run(run_name=run_datetime) as run:
+            helpers.mlflow_log_run(config, log_filepath)
+
+            best_model_run_id = None
             
-        tester = Tester()
-        tester.test()
+            if config['data']['cross_validation']:
+                logger.header('Mode: Cross-Validation Training')
+                with mlflow.start_run(run_name='train', nested=True) as train_run:
+                    fold_val_metrics_summary = {}
+                    best_fold_loss = float('inf')
+                    
+                    for i, val_subset in enumerate(all_train_subsets):
+                        with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as fold_run:
+                            logger.info(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
+                            mlflow.log_param('validation_subset', val_subset)
+                            
+                            train_subsets = [s for s in all_train_subsets if s != val_subset]
+                            trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
+                            best_val_epoch_metrics = trainer.train()
+                            
+                            if best_val_epoch_metrics['loss'] < best_fold_loss:
+                                best_fold_loss = best_val_epoch_metrics['loss']
+                                best_model_run_id = fold_run.info.run_id
+                            
+                            for metric_name, metric_value in best_val_epoch_metrics.items():
+                                if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
+                                    fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
+                    
+                    logger.subheader('Cross-Validation Summary')
+                    for metric_name, metric_values in fold_val_metrics_summary.items():
+                        mean_metric = float(np.mean(metric_values))
+                        std_metric = float(np.std(metric_values))
+                        
+                        logger.info(f'{metric_name}: Mean={mean_metric:.4f}, Std={std_metric:.4f}')
+                        
+                        for fold_idx, v in enumerate(metric_values):
+                            logger.info(f'Fold {fold_idx+1} ({all_train_subsets[fold_idx]}): {v:.4f}')
+                            mlflow.log_metric(f'cv_{metric_name}_fold_{fold_idx+1}', v)
+                            
+                        mlflow.log_metric(f'cv_mean_{metric_name}', mean_metric, run_id=train_run.info.run_id)
+                        mlflow.log_metric(f'cv_std_{metric_name}', std_metric, run_id=train_run.info.run_id)
+            else:
+                logger.header(f'Mode: Full Training')
+                with mlflow.start_run(run_name='train', nested=True) as train_run:
+                    best_model_run_id = train_run.info.run_id
+                    trainer = Trainer(config, train_subsets=all_train_subsets)
+                    trainer.train_without_validation()
+            
+            logger.header('Mode: Testing Best Model')
+            with mlflow.start_run(run_name='test', nested=True) as test_run:
+                model_prefix = 'best_model' if config['data']['cross_validation'] else 'final_model'
+                model_name = f'runs:/{best_model_run_id}/{model_prefix}'
+                tester = Tester(config, model_name=model_name)
+                tester.test()
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')

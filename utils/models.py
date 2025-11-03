@@ -20,3 +20,17 @@ class Combiner(nn.Module):
             outputs[task] = decoder(features)
         
         return outputs
+    
+class Decombiner(nn.Module):
+    """
+    A wrapper model that extracts a specific output from a multi-task model.
+    Needed for saving models with mlflow.
+    """
+    def __init__(self, model, output_task_key):
+        super().__init__()
+        self.model = model
+        self.output_task_key = output_task_key
+
+    def forward(self, x):
+        output_dict = self.model(x)
+        return output_dict[self.output_task_key]

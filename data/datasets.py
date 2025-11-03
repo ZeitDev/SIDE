@@ -2,12 +2,12 @@ import os
 import json
 import numpy as np
 from PIL import Image
+from typing import List, Dict, Any, Optional, Tuple
 
 import torch
 from torch.utils.data import Dataset
 import albumentations as A
 
-from typing import List, Dict, Any, Optional, Tuple
 
 class BaseDataset(Dataset):
     def __init__(self, root_path: str, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[List[str]] = None):
