@@ -10,5 +10,5 @@ wheels/
 .venv
 
 # Custom
-mlruns/
+mlruns/.trash
 logs/

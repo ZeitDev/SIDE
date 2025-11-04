@@ -25,9 +25,7 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 
 # * TASKS TO DO
-# TODO: FIX model saving, does not work with task dicts
 # TODO: Implement MAE metric for disparity task
-# TODO: move log visuals to helper and implement to tester class
 
 # * Tested so far
 # ! Disparity task not tested yet
@@ -35,19 +33,14 @@ logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 # ! Transforms not tested yet
 # ! Knowledge Distillation not tested yet
 
-class Trainer:
-    def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
-        logger.header('Initializing Trainer')
+class BaseProcessor:
+    def __init__(self, config: Dict[str, Any]):
+        logger.header(f'Initializing {self.__class__.__name__}')
         self.config = config
-        self.train_subsets = train_subsets
-        self.val_subsets = val_subsets
+        self.metrics: Dict[str, Any] = {}
+        self.segmentation_class_mappings: Optional[Dict[int, str]] = None
         self._setup()
-        self._load_data()
-        self._load_model()
-        self._load_teachers()
-        self._load_components()
-        self._init_metrics()
-        
+
     def _setup(self) -> None:
         logger.subheader('Setup')
         
@@ -65,6 +58,63 @@ class Trainer:
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         logger.info(f'Set reproducibility seed to {seed}')
+   
+    def _init_metrics(self) -> None:
+        logger.subheader('Initializing Metrics')
+        self.metrics = {}
+        tasks_config = self.config['training']['tasks']
+        
+        if tasks_config['segmentation']['enabled']:
+            self.metrics['segmentation'] = {}
+            
+            num_classes = tasks_config['segmentation']['decoder']['params']['num_classes']
+            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
+            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
+            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
+            
+        if tasks_config['disparity']['enabled']:
+            pass # TODO: implement disparity metrics
+
+    def _log_visuals(self, epoch: int, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
+        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
+        if log_n_images > 0:
+            if self.config['training']['tasks']['segmentation']['enabled']:
+                for i in range(log_n_images):
+                    image = (images[i].cpu() - images[i].cpu().min()) / (images[i].cpu().max() - images[i].cpu().min())
+                    output = torch.argmax(outputs['segmentation'][i], dim=0).cpu()
+                    figure = image_mask_overlay_figure(
+                        image=image,
+                        mask=targets['segmentation'][i].cpu(),
+                        output=output,
+                        epoch=epoch
+                    )
+                    mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
+                    plt.close(figure)
+                    
+    def _compute_metrics(self) -> Dict[str, float]:
+        computed_metrics = {}
+        for task, task_metrics in self.metrics.items():
+            for metric_name, metric in task_metrics.items():
+                metric_results = metric.compute()
+                
+                for key, value in metric_results.items():
+                    if isinstance(key, int) and self.segmentation_class_mappings:
+                        class_name = self.segmentation_class_mappings[key]
+                        computed_metrics[f'{task}_{metric_name}_{class_name}'] = value
+                    else:
+                        computed_metrics[f'{task}_{metric_name}_{key}'] = value
+        return computed_metrics
+
+class Trainer(BaseProcessor):
+    def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
+        super().__init__(config)
+        self.train_subsets = train_subsets
+        self.val_subsets = val_subsets
+        self._load_data()
+        self._load_model()
+        self._load_teachers()
+        self._load_components()
+        self._init_metrics()
         
     def _load_data(self) -> None:
         logger.subheader('Load Data')
@@ -111,7 +161,7 @@ class Trainer:
         
         if self.config['training']['tasks']['segmentation']['enabled']:
             self.segmentation_class_mappings = dataset_train.class_mappings
-            num_classes = len(self.segmentation_class_mappings)
+            num_classes = len(self.segmentation_class_mappings) # type: ignore
             self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
             self.config['training']['tasks']['segmentation']['knowledge_distillation']['decoder']['params']['num_classes'] = num_classes
         
@@ -211,38 +261,8 @@ class Trainer:
             self.optimizer,
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
-        
-    def _init_metrics(self) -> None:
-        logger.subheader('Initializing Metrics')
-        self.metrics = {}
-        tasks_config = self.config['training']['tasks']
-        
-        if tasks_config['segmentation']['enabled']:
-            self.metrics['segmentation'] = {}
-            
-            num_classes = tasks_config['segmentation']['decoder']['params']['num_classes']
-            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
-            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
-            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
-            
-        if tasks_config['disparity']['enabled']:
-            pass # TODO: implement disparity metrics
-        
-    def _log_visuals(self, epoch: int, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
-        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
-        if log_n_images > 0:
-            if self.config['training']['tasks']['segmentation']['enabled']:
-                for i in range(log_n_images):
-                    figure = image_mask_overlay_figure(
-                        image=images[i].cpu(),
-                        mask=targets['segmentation'][i].cpu(),
-                        output=outputs['segmentation'][i].cpu(),
-                        epoch=epoch
-                    )
-                    mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
-                    plt.close(figure)
     
-    def _run_epoch(self, is_training: bool) -> Dict[str, float]:
+    def _run_epoch(self, epoch: int, is_training: bool) -> Dict[str, float]:
         self.model.train(is_training)
         is_validation = not is_training
         total_loss = 0.0
@@ -258,7 +278,7 @@ class Trainer:
         phase = 'Training' if is_training else 'Validation'
         
         batch_tqdm = tqdm(dataloader, desc=phase, position=1, leave=False)
-        for images, targets in batch_tqdm:
+        for i, (images, targets) in enumerate(batch_tqdm):
             images = images.to(self.device)
             targets = {key: value.to(self.device) for key, value in targets.items()}
             
@@ -275,7 +295,9 @@ class Trainer:
                     if is_validation:
                         for metric in self.metrics[task].values():
                             metric.update(output, targets[task])
-                    
+                
+                if is_validation and i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
+                
                 if is_training and self.kd_models:
                     for task, kd_teachers in self.kd_models.items():
                             student_output = outputs[task]
@@ -296,18 +318,8 @@ class Trainer:
             total_loss += total_loss_batch.item()
             batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
 
+        if is_validation: epoch_metrics = self._compute_metrics()
         epoch_metrics = {'loss': total_loss / len(dataloader)}
-        if is_validation:
-            for task, task_metrics in self.metrics.items():
-                for metric_name, metric in task_metrics.items():
-                    metric_results = metric.compute()
-                    
-                    for key, value in metric_results.items():
-                        if isinstance(key, int):
-                            class_name = self.segmentation_class_mappings[key]
-                            epoch_metrics[f'{task}_{metric_name}_{class_name}'] = value
-                        else:
-                            epoch_metrics[f'{task}_{metric_name}_{key}'] = value
                 
         return epoch_metrics
     
@@ -336,10 +348,10 @@ class Trainer:
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_epoch_metrics = self._run_epoch(is_training=True)
+            train_epoch_metrics = self._run_epoch(epoch=epoch, is_training=True)
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            val_epoch_metrics = self._run_epoch(is_training=False)
+            val_epoch_metrics = self._run_epoch(epoch=epoch, is_training=False)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
             val_loss = val_epoch_metrics['loss']
@@ -375,7 +387,7 @@ class Trainer:
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_epoch_metrics = self._run_epoch(is_training=True)
+            train_epoch_metrics = self._run_epoch(epoch=epoch, is_training=True)
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
             train_loss = train_epoch_metrics['loss']
@@ -394,34 +406,14 @@ class Trainer:
         
         self._save_model(artifact_prefix='final_model')
                     
-class Tester:
+class Tester(BaseProcessor):
     def __init__(self, config: Dict[str, Any], model_name: str):
-        logger.header('Initializing Tester')
-        self.config = config
+        super().__init__(config)
         self.model_name = model_name
-        self._setup()
         self._load_data()
         self._load_models()
         self._init_metrics()
-        
-    def _setup(self) -> None:
-        logger.subheader('Setup')
-        
-        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-        logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
-        
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logger.info(f'Using device: {self.device}')
-        
-        torch.cuda.empty_cache()
-        seed = 42
-        os.environ['PYTHONHASHSEED'] = str(seed)
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        logger.info(f'Set reproducibility seed to {seed}')
-        
+
     def _load_data(self) -> None:
         logger.subheader('Load Data')
 
@@ -444,37 +436,25 @@ class Tester:
             
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
-        if self.config['training']['tasks']['segmentation']['enabled']:
+        if self.config['training']['tasks']['segmentation']['enabled'] and hasattr(dataset_test, 'class_mappings'):
             self.segmentation_class_mappings = dataset_test.class_mappings
-            num_classes = len(self.segmentation_class_mappings)
+            num_classes = len(self.segmentation_class_mappings) # type: ignore
             self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
-    
+            self.config['training']['tasks']['segmentation']['knowledge_distillation']['decoder']['params']['num_classes'] = num_classes
+            
+            logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
+            
     def _load_models(self) -> None:
         logger.subheader('Loading Models')
         self.models = {}
         
         for task_name, task_config in self.config['training']['tasks'].items():
             if task_config['enabled']:
-                model_path = f'models:/{self.model_name}_{task_name}'
+                model_path = f'{self.model_name}_{task_name}'
                 self.models[task_name] = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
                 self.models[task_name].eval()
                 logger.info(f'Loaded model for task {task_name} from {model_path}')
-
-    def _init_metrics(self) -> None:
-        logger.subheader('Initializing Metrics')
-        self.metrics = {}
-        tasks_config = self.config['training']['tasks']
-        
-        if tasks_config['segmentation']['enabled']:
-            self.metrics['segmentation'] = {}
-            num_classes = self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes']
-            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
-            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
-            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
-            
-        if tasks_config['disparity']['enabled']:
-            pass # TODO: implement disparity metrics
-    
+ 
     def test(self) -> None:
         logger.header('Starting Testing')
         
@@ -484,32 +464,25 @@ class Tester:
         
         batch_tqdm = tqdm(self.dataloader_test, desc='Testing', position=1, leave=False)
         with torch.no_grad():
-            for images, targets in batch_tqdm:
+            for i, (images, targets) in enumerate(batch_tqdm):
                 images = images.to(self.device)
                 targets = {key: value.to(self.device) for key, value in targets.items()}
                 
+                outputs = {}
                 for task_name, model in self.models.items():
                     output = model(images)
+                    outputs[task_name] = output
                     
                     if task_name in self.metrics:
                         for metric in self.metrics[task_name].values():
                             metric.update(output, targets[task_name])
+                            
+                if i == 0: self._log_visuals(epoch=0, images=images, targets=targets, outputs=outputs)
 
         logger.subheader('Test Results')
-        test_metrics = {}
-        for task, task_metrics in self.metrics.items():
-            for metric_name, metric in task_metrics.items():
-                metric_results = metric.compute()
-                
-                for key, value in metric_results.items():
-                    if isinstance(key, int):
-                        class_name = self.segmentation_class_mappings[key]
-                        metric_key = f'test_{task}_{metric_name}_{class_name}'
-                    else:
-                        metric_key = f'test_{task}_{metric_name}_{key}'
-                    
-                    test_metrics[metric_key] = value
-                    logger.info(f'{metric_key}: {value:.4f}')
+        test_metrics = self._compute_metrics()
+        for metric_key, value in test_metrics.items():
+            logger.info(f'{metric_key}: {value:.4f}')
         
         mlflow.log_metrics(test_metrics)
     

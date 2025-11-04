@@ -99,7 +99,7 @@ class BaseDataset(Dataset):
     
 class OverfitDataset(BaseDataset):
     def __init__(self, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
-        root_path = '/data/Zeitler/SIDED/OverfitDataset/'
+        root_path = '/data/Zeitler/SIDED/OverfitDataset'
         super().__init__(root_path, mode, transforms, tasks, subset_names)
         
     def _get_class_mappings(self) -> None:
@@ -119,13 +119,12 @@ class OverfitDataset(BaseDataset):
         sample_path = {}
         sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
-        if self.mode == 'train':
-            if self.tasks['segmentation']['enabled']:
-                sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
-                
-            if self.tasks['disparity']['enabled']:
-                sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-                sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+        if self.tasks['segmentation']['enabled']:
+            sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            
+        if self.tasks['disparity']['enabled']:
+            sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+            sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 
         return sample_path
 
@@ -151,13 +150,12 @@ class EndoVis17(BaseDataset):
         sample_path = {}
         sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
-        if self.mode == 'train':
-            if self.tasks['segmentation']['enabled']:
-                sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
-                
-            if self.tasks['disparity']['enabled']:
-                sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-                sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+        if self.tasks['segmentation']['enabled']:
+            sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            
+        if self.tasks['disparity']['enabled']:
+            sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+            sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 
         return sample_path
     
