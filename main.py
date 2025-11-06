@@ -26,6 +26,7 @@ logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 
 # * TASKS TO DO
 # TODO: Implement MAE metric for disparity task
+import time
 import monai
 
 # * Tested so far
@@ -264,19 +265,21 @@ class Trainer(BaseProcessor):
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
     
-    def _save_model(self, artifact_prefix: str):
+    def _save_model(self):
+        logger.info(f'Saving final model to mlflow')        
+        
+        state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
+        self.model.load_state_dict(state_dict['model_state_dict'])
         self.model.to('cpu')
-
         for task_name, task_config in self.config['training']['tasks'].items():
             if task_config['enabled']:
                 task_model = Decombiner(self.model, task_name)
-                artifact_path = f'{artifact_prefix}_{task_name}'
+                artifact_path = f'model_{task_name}'
                 mlflow.pytorch.log_model( # type: ignore
                     pytorch_model=task_model,
                     name=artifact_path,
                     input_example=self.input_example.cpu().numpy().astype(np.float32)
                 )
-
         self.model.to(self.device)
 
     def _train_epoch(self) -> Dict[str, float]:
@@ -317,7 +320,7 @@ class Trainer(BaseProcessor):
         
         return {'loss': total_loss / len(self.dataloader_train)}
     
-    def _validate_epochDEP(self, epoch: int) -> Dict[str, float]:
+    def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()
         total_loss = 0.0
         
@@ -331,49 +334,26 @@ class Trainer(BaseProcessor):
             targets = {key: value.to(self.device) for key, value in targets.items()}
             
             with torch.no_grad():
-                total_loss_batch = 0.0#torch.tensor(0.0, device=self.device)
+                total_loss_batch = torch.tensor(0.0, device=self.device)
                 
                 outputs = self.model(images)
                 for task, output in outputs.items():
                     loss = self.criterions[task](output, targets[task])
                     weight = self.config['training']['tasks'][task]['criterion']['weight']
-                    total_loss_batch += (weight * loss).item()
+                    total_loss_batch += (weight * loss)
                     
-                    # for metric in self.metrics[task].values():
-                    #     metric.update(output, targets[task])
+                    for metric in self.metrics[task].values():
+                        metric.update(output, targets[task])
                 
-                #if i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
+                if i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
                 
-                total_loss += total_loss_batch #.item()
-                #batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch:.4f}'})
+                total_loss += total_loss_batch.item()
+                batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
         
         epoch_metrics = self._compute_metrics()
         epoch_metrics['loss'] = total_loss / len(self.dataloader_val)
                 
         return epoch_metrics
-    
-    def _validate_epoch(self, epoch: int) -> Dict[str, float]:
-        self.model.eval()
-        total_loss = 0.0
-        
-        # TODO: test minimal example for slow down
-        criterion = monai.losses.DiceCELoss(softmax=True, to_onehot_y=True)
-        for images, targets in self.dataloader_val:
-            images = images.to(self.device)
-            targets = {key: value.to(self.device) for key, value in targets.items()}
-            
-            target = targets['segmentation']
-            with torch.no_grad():
-                outputs = self.model(images)
-                
-                batch_loss = 0.0
-                for task, output in outputs.items():
-                    loss = criterion(output, target)
-                    batch_loss += loss.item()
-                
-                total_loss += batch_loss
-                
-        return {'loss': total_loss / len(self.dataloader_val)}
     
     def train(self) -> Dict[str, float]:
         logger.header('Starting Training Loop')
@@ -405,7 +385,7 @@ class Trainer(BaseProcessor):
                 best_val_loss = val_loss
                 best_val_epoch_metrics = val_epoch_metrics
                 
-                self._save_model(artifact_prefix='best_model')
+                torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
                 mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
@@ -415,6 +395,8 @@ class Trainer(BaseProcessor):
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
             })
+            
+        self._save_model()
             
         return best_val_epoch_metrics
     
@@ -441,12 +423,13 @@ class Trainer(BaseProcessor):
                 'train_loss': f'{train_epoch_metrics['loss']:.4f}',
             })
         
-        self._save_model(artifact_prefix='final_model')
+        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
+        self._save_model()
                     
 class Tester(BaseProcessor):
-    def __init__(self, config: Dict[str, Any], model_name: str):
+    def __init__(self, config: Dict[str, Any], run_id: str):
         super().__init__(config)
-        self.model_name = model_name
+        self.run_id = run_id
         self._load_data()
         self._load_models()
         self._init_metrics()
@@ -487,7 +470,7 @@ class Tester(BaseProcessor):
         
         for task_name, task_config in self.config['training']['tasks'].items():
             if task_config['enabled']:
-                model_path = f'{self.model_name}_{task_name}'
+                model_path = f'runs:/{self.run_id}/model_{task_name}'
                 self.models[task_name] = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
                 self.models[task_name].eval()
                 logger.info(f'Loaded model for task {task_name} from {model_path}')
@@ -547,7 +530,7 @@ def main():
         with mlflow.start_run(run_name=run_datetime) as run:
             helpers.mlflow_log_run(config, log_filepath)
 
-            best_model_run_id = None
+            best_model_run_id = ''
             
             if config['data']['cross_validation']:
                 logger.header('Mode: Cross-Validation Training')
@@ -557,7 +540,7 @@ def main():
                     
                     for i, val_subset in enumerate(all_train_subsets):
                         with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as fold_run:
-                            logger.info(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
+                            logger.subheader(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
                             mlflow.log_param('validation_subset', val_subset)
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
@@ -594,9 +577,7 @@ def main():
             
             logger.header('Mode: Testing Best Model')
             with mlflow.start_run(run_name='test', nested=True) as test_run:
-                model_prefix = 'best_model' if config['data']['cross_validation'] else 'final_model'
-                model_name = f'runs:/{best_model_run_id}/{model_prefix}'
-                tester = Tester(config, model_name=model_name)
+                tester = Tester(config, run_id=best_model_run_id)
                 tester.test()
         
     except KeyboardInterrupt:
@@ -609,4 +590,4 @@ def main():
         logger.single('MLflow run cleaned up')
             
 if __name__ == "__main__":
-    mai
+    main()

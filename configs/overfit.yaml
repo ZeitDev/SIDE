@@ -3,7 +3,7 @@ data:
   cross_validation: true
 
 training:
-  epochs: 100
+  epochs: 5
   scheduler:
     name: torch.optim.lr_scheduler.ConstantLR
     params:
