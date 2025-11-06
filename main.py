@@ -26,6 +26,7 @@ logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 
 # * TASKS TO DO
 # TODO: Implement MAE metric for disparity task
+import monai
 
 # * Tested so far
 # ! Disparity task not tested yet
@@ -46,6 +47,10 @@ class BaseProcessor:
         
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
         logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+        
+        cpu_cores = list(range(24))
+        os.sched_setaffinity(os.getpid(), cpu_cores)
+        logger.info(f'Set CPU affinity to cores: {cpu_cores}')
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f'Using device: {self.device}')
@@ -80,14 +85,11 @@ class BaseProcessor:
         if log_n_images > 0:
             if self.config['training']['tasks']['segmentation']['enabled']:
                 for i in range(log_n_images):
-                    image = (images[i].cpu() - images[i].cpu().min()) / (images[i].cpu().max() - images[i].cpu().min())
-                    output = torch.argmax(outputs['segmentation'][i], dim=0).cpu()
-                    figure = image_mask_overlay_figure(
-                        image=image,
-                        mask=targets['segmentation'][i].cpu(),
-                        output=output,
-                        epoch=epoch
-                    )
+                    image = images[i].cpu().detach()
+                    image = (image - image.min()) / (image.max() - image.min())
+                    target = targets['segmentation'][i].cpu().detach()
+                    output = torch.argmax(outputs['segmentation'][i], dim=0).cpu().detach()
+                    figure = image_mask_overlay_figure(image=image, mask=target, output=output, epoch=epoch)
                     mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
                     plt.close(figure)
                     
@@ -262,67 +264,6 @@ class Trainer(BaseProcessor):
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
     
-    def _run_epoch(self, epoch: int, is_training: bool) -> Dict[str, float]:
-        self.model.train(is_training)
-        is_validation = not is_training
-        total_loss = 0.0
-        
-        if is_validation:
-            for task_metrics in self.metrics.values():
-                for metric in task_metrics.values():
-                    metric.reset()
-        
-        dataloader = self.dataloader_train if is_training else self.dataloader_val
-        if not dataloader: return {'loss': float('inf')}
-        
-        phase = 'Training' if is_training else 'Validation'
-        
-        batch_tqdm = tqdm(dataloader, desc=phase, position=1, leave=False)
-        for i, (images, targets) in enumerate(batch_tqdm):
-            images = images.to(self.device)
-            targets = {key: value.to(self.device) for key, value in targets.items()}
-            
-            with torch.set_grad_enabled(is_training):
-                total_loss_batch = torch.tensor(0.0, device=self.device)
-                
-                outputs = self.model(images)
-                
-                for task, output in outputs.items():
-                    loss = self.criterions[task](output, targets[task])
-                    weight = self.config['training']['tasks'][task]['criterion']['weight']
-                    total_loss_batch += weight * loss
-                    
-                    if is_validation:
-                        for metric in self.metrics[task].values():
-                            metric.update(output, targets[task])
-                
-                if is_validation and i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
-                
-                if is_training and self.kd_models:
-                    for task, kd_teachers in self.kd_models.items():
-                            student_output = outputs[task]
-                            
-                            with torch.no_grad():
-                                teacher_outputs = [teacher(images)[task] for teacher in kd_teachers]
-                                mean_teacher_output = torch.mean(torch.stack(teacher_outputs), dim=0)
-                            
-                            kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
-                            kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
-                            total_loss_batch += kd_weight * kd_loss
-                    
-                if is_training:
-                    self.optimizer.zero_grad()
-                    total_loss_batch.backward()
-                    self.optimizer.step()
-            
-            total_loss += total_loss_batch.item()
-            batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
-
-        if is_validation: epoch_metrics = self._compute_metrics()
-        epoch_metrics = {'loss': total_loss / len(dataloader)}
-                
-        return epoch_metrics
-    
     def _save_model(self, artifact_prefix: str):
         self.model.to('cpu')
 
@@ -337,6 +278,102 @@ class Trainer(BaseProcessor):
                 )
 
         self.model.to(self.device)
+
+    def _train_epoch(self) -> Dict[str, float]:
+        self.model.train()
+        total_loss = 0
+        
+        batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
+        for images, targets in batch_tqdm:
+            images = images.to(self.device)
+            targets = {key: value.to(self.device) for key, value in targets.items()}
+            
+            with torch.set_grad_enabled(True):
+                total_loss_batch = torch.tensor(0.0, device=self.device)
+
+                outputs = self.model(images)
+                for task, output in outputs.items():
+                    loss = self.criterions[task](output, targets[task])
+                    weight = self.config['training']['tasks'][task]['criterion']['weight']
+                    total_loss_batch += (weight * loss)
+                    
+                if self.kd_models:
+                    for task, kd_teachers in self.kd_models.items():
+                        student_output = outputs[task]
+                        with torch.no_grad():
+                            teacher_outputs = [teacher(images)[task] for teacher in kd_teachers]
+                            mean_teacher_output = torch.mean(torch.stack(teacher_outputs), dim=0)
+                        
+                        kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
+                        kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
+                        total_loss_batch += kd_weight * kd_loss
+                        
+                self.optimizer.zero_grad()
+                total_loss_batch.backward()
+                self.optimizer.step()
+                
+                total_loss += total_loss_batch.item()
+                #batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+        
+        return {'loss': total_loss / len(self.dataloader_train)}
+    
+    def _validate_epochDEP(self, epoch: int) -> Dict[str, float]:
+        self.model.eval()
+        total_loss = 0.0
+        
+        for task_metrics in self.metrics.values():
+            for metric in task_metrics.values():
+                metric.reset()
+        
+        batch_tqdm = tqdm(self.dataloader_val, desc='Validation', position=1, leave=False)
+        for i, (images, targets) in enumerate(batch_tqdm):
+            images = images.to(self.device)
+            targets = {key: value.to(self.device) for key, value in targets.items()}
+            
+            with torch.no_grad():
+                total_loss_batch = 0.0#torch.tensor(0.0, device=self.device)
+                
+                outputs = self.model(images)
+                for task, output in outputs.items():
+                    loss = self.criterions[task](output, targets[task])
+                    weight = self.config['training']['tasks'][task]['criterion']['weight']
+                    total_loss_batch += (weight * loss).item()
+                    
+                    # for metric in self.metrics[task].values():
+                    #     metric.update(output, targets[task])
+                
+                #if i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
+                
+                total_loss += total_loss_batch #.item()
+                #batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch:.4f}'})
+        
+        epoch_metrics = self._compute_metrics()
+        epoch_metrics['loss'] = total_loss / len(self.dataloader_val)
+                
+        return epoch_metrics
+    
+    def _validate_epoch(self, epoch: int) -> Dict[str, float]:
+        self.model.eval()
+        total_loss = 0.0
+        
+        # TODO: test minimal example for slow down
+        criterion = monai.losses.DiceCELoss(softmax=True, to_onehot_y=True)
+        for images, targets in self.dataloader_val:
+            images = images.to(self.device)
+            targets = {key: value.to(self.device) for key, value in targets.items()}
+            
+            target = targets['segmentation']
+            with torch.no_grad():
+                outputs = self.model(images)
+                
+                batch_loss = 0.0
+                for task, output in outputs.items():
+                    loss = criterion(output, target)
+                    batch_loss += loss.item()
+                
+                total_loss += batch_loss
+                
+        return {'loss': total_loss / len(self.dataloader_val)}
     
     def train(self) -> Dict[str, float]:
         logger.header('Starting Training Loop')
@@ -348,10 +385,10 @@ class Trainer(BaseProcessor):
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_epoch_metrics = self._run_epoch(epoch=epoch, is_training=True)
+            train_epoch_metrics = self._train_epoch()
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            val_epoch_metrics = self._run_epoch(epoch=epoch, is_training=False)
+            val_epoch_metrics = self._validate_epoch(epoch=epoch)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
             val_loss = val_epoch_metrics['loss']
@@ -387,7 +424,7 @@ class Trainer(BaseProcessor):
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_epoch_metrics = self._run_epoch(epoch=epoch, is_training=True)
+            train_epoch_metrics = self._train_epoch()
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
             train_loss = train_epoch_metrics['loss']
@@ -572,4 +609,4 @@ def main():
         logger.single('MLflow run cleaned up')
             
 if __name__ == "__main__":
-    main()
+    mai

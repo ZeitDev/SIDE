@@ -13,6 +13,17 @@
                     {"path": "${workspaceFolder}/utils/*.py", "include": false},
                     {"path": "${workspaceFolder}/models/combiner.py", "include": false},
             ]
+        },
+        {
+            "name": "Run start_training.sh",
+            "type": "pwa-node",
+            "request": "launch",
+            "runtimeExecutable": "/bin/bash",
+            "runtimeArgs": [
+                "-c",
+                "./start_training.sh"
+            ],
+            "console": "integratedTerminal"
         }
     ]
 }
