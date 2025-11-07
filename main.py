@@ -26,8 +26,7 @@ logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
 
 # * TASKS TO DO
 # TODO: Implement MAE metric for disparity task
-import time
-import monai
+# TODO: Continue next fold debugging
 
 # * Tested so far
 # ! Disparity task not tested yet
@@ -75,8 +74,8 @@ class BaseProcessor:
             
             num_classes = tasks_config['segmentation']['decoder']['params']['num_classes']
             self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
-            self.metrics['segmentation']['Dice'] = Dice(num_classes=num_classes, device=self.device)
-            logger.info(f'Initialized IoU and Dice metrics for segmentation with {num_classes} classes.')
+            self.metrics['segmentation']['DICE'] = Dice(num_classes=num_classes, device=self.device)
+            logger.info(f'Initialized IoU and DICE metrics for segmentation with {num_classes} classes.')
             
         if tasks_config['disparity']['enabled']:
             pass # TODO: implement disparity metrics
@@ -139,7 +138,8 @@ class Trainer(BaseProcessor):
             batch_size=data_config['batch_size'],
             shuffle=True,
             num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'])
+            pin_memory=data_config['pin_memory']
+        )
         
         dataset_val = dataset_class(
             mode='train',
@@ -153,7 +153,8 @@ class Trainer(BaseProcessor):
                 batch_size=data_config['batch_size'],
                 shuffle=False,
                 num_workers=data_config['num_workers'],
-                pin_memory=data_config['pin_memory'])
+                pin_memory=data_config['pin_memory']
+            )
             
         input_example_image, _ = dataset_train[0] 
         self.input_example = input_example_image.unsqueeze(0)
@@ -239,7 +240,7 @@ class Trainer(BaseProcessor):
         
     def _load_components(self) -> None:
         logger.subheader('Loading Components')
-        # Load loss functions
+
         self.criterions = {}
         tasks_config = self.config['training']['tasks']
         for task, task_config in tasks_config.items():
@@ -250,7 +251,7 @@ class Trainer(BaseProcessor):
                     **criterion_config['params'])
                 logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
 
-        # Setup optimizer and scheduler
+
         optimizer_config = self.config['training']['optimizer']
         optimizer_class = load(optimizer_config['name'])
         self.optimizer = optimizer_class(
@@ -266,7 +267,7 @@ class Trainer(BaseProcessor):
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
     
     def _save_model(self):
-        logger.info(f'Saving final model to mlflow')        
+        logger.info(f'Saving best model to mlflow')        
         
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
         self.model.load_state_dict(state_dict['model_state_dict'])
@@ -289,14 +290,21 @@ class Trainer(BaseProcessor):
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
         for images, targets in batch_tqdm:
             images = images.to(self.device)
-            targets = {key: value.to(self.device) for key, value in targets.items()}
-            
+            targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
+
+
             with torch.set_grad_enabled(True):
                 total_loss_batch = torch.tensor(0.0, device=self.device)
 
                 outputs = self.model(images)
-                for task, output in outputs.items():
-                    loss = self.criterions[task](output, targets[task])
+                
+                # * TEMP for debugging
+                seg_targets = targets.get('segmentation', None)
+                seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                # * TEMP for debugging
+                
+                for task, outputs_task in outputs.items():
+                    loss = self.criterions[task](outputs_task, targets[task])
                     weight = self.config['training']['tasks'][task]['criterion']['weight']
                     total_loss_batch += (weight * loss)
                     
@@ -316,9 +324,9 @@ class Trainer(BaseProcessor):
                 self.optimizer.step()
                 
                 total_loss += total_loss_batch.item()
-                #batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+                batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
         
-        return {'loss': total_loss / len(self.dataloader_train)}
+        return {'loss_training': total_loss / len(self.dataloader_train)}
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()
@@ -331,19 +339,25 @@ class Trainer(BaseProcessor):
         batch_tqdm = tqdm(self.dataloader_val, desc='Validation', position=1, leave=False)
         for i, (images, targets) in enumerate(batch_tqdm):
             images = images.to(self.device)
-            targets = {key: value.to(self.device) for key, value in targets.items()}
+            targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
             
             with torch.no_grad():
                 total_loss_batch = torch.tensor(0.0, device=self.device)
                 
                 outputs = self.model(images)
-                for task, output in outputs.items():
-                    loss = self.criterions[task](output, targets[task])
+                
+                # * TEMP for debugging
+                seg_targets = targets.get('segmentation', None)
+                seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                # * TEMP for debugging
+                
+                for task, outputs_task in outputs.items():
+                    loss = self.criterions[task](outputs_task, targets[task])
                     weight = self.config['training']['tasks'][task]['criterion']['weight']
                     total_loss_batch += (weight * loss)
                     
                     for metric in self.metrics[task].values():
-                        metric.update(output, targets[task])
+                        metric.update(outputs_task, targets[task])
                 
                 if i == 0: self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
                 
@@ -351,7 +365,7 @@ class Trainer(BaseProcessor):
                 batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
         
         epoch_metrics = self._compute_metrics()
-        epoch_metrics['loss'] = total_loss / len(self.dataloader_val)
+        epoch_metrics['loss_validation'] = total_loss / len(self.dataloader_val)
                 
         return epoch_metrics
     
@@ -371,7 +385,7 @@ class Trainer(BaseProcessor):
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
-            val_loss = val_epoch_metrics['loss']
+            val_loss = val_epoch_metrics['loss_validation']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(val_loss)
             else:
@@ -386,11 +400,11 @@ class Trainer(BaseProcessor):
                 best_val_epoch_metrics = val_epoch_metrics
                 
                 torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
-                mlflow.log_metric('best_val_loss', best_val_loss, step=epoch)
+                mlflow.log_metric('loss_validation_best', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['loss']:.4f}',
+                'train_loss': f'{train_epoch_metrics['loss_training']:.4f}',
                 'val_loss': f'{val_loss:.4f}',
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
