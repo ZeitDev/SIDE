@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 from metrics.segmentation import IoU, Dice
 
 from utils import helpers
+from utils import visualization
 from utils.helpers import load
 from utils.models import Decombiner
-from utils.visualization import image_mask_overlay_figure
 
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -80,19 +80,6 @@ class BaseProcessor:
         if tasks_config['disparity']['enabled']:
             pass # TODO: implement disparity metrics
 
-    def _log_visuals(self, epoch: int, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
-        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
-        if log_n_images > 0:
-            if self.config['training']['tasks']['segmentation']['enabled']:
-                for i in range(log_n_images):
-                    image = images[i].cpu().detach()
-                    image = (image - image.min()) / (image.max() - image.min())
-                    target = targets['segmentation'][i].cpu().detach()
-                    output = torch.argmax(outputs['segmentation'][i], dim=0).cpu().detach()
-                    figure = image_mask_overlay_figure(image=image, mask=target, output=output, epoch=epoch)
-                    mlflow.log_figure(figure, artifact_file=f'images/epoch_{epoch}_image_{i}.png')
-                    plt.close(figure)
-                    
     def _compute_metrics(self) -> Dict[str, float]:
         computed_metrics = {}
         for task, task_metrics in self.metrics.items():
@@ -101,11 +88,21 @@ class BaseProcessor:
                 
                 for key, value in metric_results.items():
                     if isinstance(key, int) and self.segmentation_class_mappings:
-                        class_name = self.segmentation_class_mappings[key]
-                        computed_metrics[f'{task}_{metric_name}_{class_name}'] = value
+                        class_name = self.segmentation_class_mappings[key].replace(' ', '_').lower()
+                        computed_metrics[f'performance/{task}/{metric_name}/{key}::{class_name}'] = value
                     else:
-                        computed_metrics[f'{task}_{metric_name}_{key}'] = value
+                        computed_metrics[f'performance/{task}/{metric_name}/{key}'] = value
         return computed_metrics
+    
+    def _log_visuals(self, epoch: Any, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
+        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
+        if log_n_images > 0:
+            if self.config['training']['tasks']['segmentation']['enabled']:
+                for i in range(log_n_images):
+                    num_classes = len(self.segmentation_class_mappings) if self.segmentation_class_mappings else 0
+                    figure = visualization.get_image_target_output_overlay(image=images[i].cpu().detach(), target=targets['segmentation'][i].cpu().detach(), output=outputs['segmentation'][i].cpu().detach(), num_classes=num_classes, epoch=epoch, index=i)
+                    mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch}/index_{i}.png')
+                    plt.close(figure)
 
 class Trainer(BaseProcessor):
     def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
@@ -326,7 +323,7 @@ class Trainer(BaseProcessor):
                 total_loss += total_loss_batch.item()
                 batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
         
-        return {'loss_training': total_loss / len(self.dataloader_train)}
+        return {'optimization/loss_training': total_loss / len(self.dataloader_train)}
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()
@@ -365,7 +362,7 @@ class Trainer(BaseProcessor):
                 batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
         
         epoch_metrics = self._compute_metrics()
-        epoch_metrics['loss_validation'] = total_loss / len(self.dataloader_val)
+        epoch_metrics['optimization/loss_validation'] = total_loss / len(self.dataloader_val)
                 
         return epoch_metrics
     
@@ -385,14 +382,14 @@ class Trainer(BaseProcessor):
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
-            val_loss = val_epoch_metrics['loss_validation']
+            val_loss = val_epoch_metrics['optimization/loss_validation']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(val_loss)
             else:
                 self.scheduler.step()
             
             lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('learning_rate', lr, step=epoch)
+            mlflow.log_metric('optimization/learning_rate', lr, step=epoch)
             
             if val_loss < best_val_loss:
                 best_val_epoch = epoch
@@ -400,11 +397,11 @@ class Trainer(BaseProcessor):
                 best_val_epoch_metrics = val_epoch_metrics
                 
                 torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
-                mlflow.log_metric('loss_validation_best', best_val_loss, step=epoch)
+                mlflow.log_metric('optimization/loss_validation_best', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['loss_training']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/loss_training']:.4f}',
                 'val_loss': f'{val_loss:.4f}',
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
@@ -423,18 +420,18 @@ class Trainer(BaseProcessor):
             train_epoch_metrics = self._train_epoch()
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            train_loss = train_epoch_metrics['loss']
+            train_loss = train_epoch_metrics['optimization/loss_training']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(train_loss)
             else:
                 self.scheduler.step()
             
             lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('learning_rate', lr, step=epoch)
+            mlflow.log_metric('optimization/learning_rate', lr, step=epoch)
             
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['loss']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/loss_training']:.4f}',
             })
         
         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
@@ -504,19 +501,23 @@ class Tester(BaseProcessor):
                 
                 outputs = {}
                 for task_name, model in self.models.items():
-                    output = model(images)
-                    outputs[task_name] = output
+                    outputs[task_name] = model(images)
+                    
+                    # * TEMP for debugging
+                    seg_targets = targets.get('segmentation', None)
+                    seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                    # * TEMP for debugging
                     
                     if task_name in self.metrics:
                         for metric in self.metrics[task_name].values():
-                            metric.update(output, targets[task_name])
+                            metric.update(outputs[task_name], targets[task_name])
                             
-                if i == 0: self._log_visuals(epoch=0, images=images, targets=targets, outputs=outputs)
+                if i == 0: self._log_visuals(epoch='Test', images=images, targets=targets, outputs=outputs)
 
         logger.subheader('Test Results')
         test_metrics = self._compute_metrics()
-        for metric_key, value in test_metrics.items():
-            logger.info(f'{metric_key}: {value:.4f}')
+        for metric_key, metric_value in test_metrics.items():
+            logger.info(f'{metric_key}: {metric_value:.4f}')
         
         mlflow.log_metrics(test_metrics)
     
@@ -550,38 +551,42 @@ def main():
                 logger.header('Mode: Cross-Validation Training')
                 with mlflow.start_run(run_name='train', nested=True) as train_run:
                     fold_val_metrics_summary = {}
+                    best_fold = -1
                     best_fold_loss = float('inf')
                     
                     for i, val_subset in enumerate(all_train_subsets):
                         with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as fold_run:
-                            logger.subheader(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
+                            logger.header(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
                             mlflow.log_param('validation_subset', val_subset)
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
                             trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
                             best_val_epoch_metrics = trainer.train()
                             
-                            if best_val_epoch_metrics['loss'] < best_fold_loss:
-                                best_fold_loss = best_val_epoch_metrics['loss']
+                            if best_val_epoch_metrics['optimization/loss_validation'] < best_fold_loss:
+                                best_fold = i + 1
+                                best_fold_loss = best_val_epoch_metrics['optimization/loss_validation']
                                 best_model_run_id = fold_run.info.run_id
                             
                             for metric_name, metric_value in best_val_epoch_metrics.items():
                                 if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
                                     fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
                     
-                    logger.subheader('Cross-Validation Summary')
+                    
+                    logger.header('Cross-Validation Summary')
                     for metric_name, metric_values in fold_val_metrics_summary.items():
                         mean_metric = float(np.mean(metric_values))
                         std_metric = float(np.std(metric_values))
                         
-                        logger.info(f'{metric_name}: Mean={mean_metric:.4f}, Std={std_metric:.4f}')
+                        logger.subheader(f'Metric: {metric_name}')
+                        logger.info(f'Mean={mean_metric:.4f}, Std={std_metric:.4f}')
+                        mlflow.log_metric(f'cross_validation/{metric_name}/mean', mean_metric, run_id=train_run.info.run_id)
+                        mlflow.log_metric(f'cross_validation/{metric_name}/std', std_metric, run_id=train_run.info.run_id)
                         
                         for fold_idx, v in enumerate(metric_values):
                             logger.info(f'Fold {fold_idx+1} ({all_train_subsets[fold_idx]}): {v:.4f}')
-                            mlflow.log_metric(f'cv_{metric_name}_fold_{fold_idx+1}', v)
+                            mlflow.log_metric(f'cross_validation/{metric_name}/fold_{fold_idx+1}', v)
                             
-                        mlflow.log_metric(f'cv_mean_{metric_name}', mean_metric, run_id=train_run.info.run_id)
-                        mlflow.log_metric(f'cv_std_{metric_name}', std_metric, run_id=train_run.info.run_id)
             else:
                 logger.header(f'Mode: Full Training')
                 with mlflow.start_run(run_name='train', nested=True) as train_run:

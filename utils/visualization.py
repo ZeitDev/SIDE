@@ -3,91 +3,92 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-def _tensor_to_array(tensor):
-    """Convert a PyTorch tensor to a NumPy array for visualization."""
-    # Move tensor to CPU, convert to numpy, and change from (C, H, W) to (H, W, C)
-    return tensor.cpu().numpy().transpose(1, 2, 0)
-
-def _logits_to_binary(logits):
-    """Convert model output logits to a binary mask."""
-    # Apply sigmoid, threshold at 0.5, move to CPU, and remove channel dimension
-    return (torch.sigmoid(logits) > 0.5).cpu().numpy().squeeze()
-
-def get_combined_overlay(image, gt_mask, pred_mask, alpha=0.5):
-    """
-    Generates an overlay combining ground truth and prediction masks on an image.
-    - Green: False Negative (Ground Truth only)
-    - Red: False Positive (Prediction only)
-    - Yellow: True Positive (Overlap)
-    """
-    # Ensure image is in 8-bit format for color operations
+def _get_target_overlay(image, target, num_classes, alpha=0.5):
     if image.max() <= 1.0:
         image = (image * 255).astype(np.uint8)
-    
-    # Ensure masks are boolean
-    gt_mask_bool = gt_mask.astype(bool)
-    pred_mask_bool = pred_mask.astype(bool)
 
-    # Create a color mask
-    color_mask = np.zeros_like(image)
-    color_mask[gt_mask_bool & ~pred_mask_bool] = [0, 255, 0]  # Green for False Negatives
-    color_mask[~gt_mask_bool & pred_mask_bool] = [255, 0, 0]  # Red for False Positives
-    color_mask[gt_mask_bool & pred_mask_bool] = [255, 255, 0] # Yellow for True Positives
-
-    # Create a boolean mask of all areas to be overlayed
-    overlay_region = gt_mask_bool | pred_mask_bool
-    
-    # Blend the original image with the color mask
     overlay = image.copy()
-    overlay[overlay_region] = cv2.addWeighted(
-        src1=image[overlay_region],
-        alpha=1 - alpha,
-        src2=color_mask[overlay_region],
-        beta=alpha,
-        gamma=0
-    )
+    colors = plt.cm.get_cmap('hot')
+    
+    color_mask = np.zeros_like(image)
+    for class_id in range(1, num_classes):
+        class_mask = target == class_id
+        if np.any(class_mask):
+            color = (np.array(colors(class_id / num_classes))[:3] * 255).astype(np.uint8)
+            color_mask[class_mask] = color
+
+    overlay_region = target > 0
+    
+    if np.any(overlay_region):
+        overlay[overlay_region] = cv2.addWeighted(
+            src1=image[overlay_region],
+            alpha=1 - alpha,
+            src2=color_mask[overlay_region],
+            beta=alpha,
+            gamma=0
+        )
+        
     return overlay
 
-def image_mask_overlay_figure(image, mask, output, epoch=None):
-    """
-    Create a matplotlib figure showing the image, ground truth, and a combined overlay.
+def _get_output_overlay(image, target, output, alpha=0.5):
+    if image.max() <= 1.0:
+        image = (image * 255).astype(np.uint8)
 
-    Args:
-        image (torch.Tensor): The input image tensor.
-        mask (torch.Tensor): The ground truth mask tensor.
-        output (torch.Tensor): The model output tensor.
-        epoch (int, optional): The current epoch number for title annotation.
+    true_classifications = (target == output)
+    false_classifications = (target != output)
 
-    Returns:
-        matplotlib.figure.Figure: The created figure.
-    """
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-    if epoch is not None:
-        fig.suptitle(f'Validation Results | Epoch {epoch}', fontsize=16)
+    color_mask = np.zeros_like(image)
+    color_mask[true_classifications] = [0, 255, 0]
+    color_mask[false_classifications] = [255, 0, 0]
+
+    overlay_region = true_classifications | false_classifications
+    overlay = image.copy()
     
-    # Convert tensors to numpy arrays for processing
-    image_arr = _tensor_to_array(image)
-    mask_arr = mask.cpu().numpy().squeeze()
-    output_arr = _logits_to_binary(output)
+    if np.any(overlay_region):
+        overlay[overlay_region] = cv2.addWeighted(
+            src1=image[overlay_region],
+            alpha=1 - alpha,
+            src2=color_mask[overlay_region],
+            beta=alpha,
+            gamma=0
+        )
+        
+    return overlay
+
+def _scale_image(image):
+    return (image - image.min()) / (image.max() - image.min())
+
+def get_image_target_output_overlay(image, target, output, num_classes = 0, epoch=None, index=None):
+    fig, ax = plt.subplots(1, 5, figsize=(25, 5))
+    fig.suptitle(f'Validation Overlay | Epoch {epoch} | Index {index}', fontsize=16)
     
-    # Generate the combined overlay
-    combined_overlay = get_combined_overlay(image_arr, mask_arr, output_arr)
+    image_arr = _scale_image(image).numpy().transpose(1, 2, 0)
+    target_arr = target.numpy().squeeze()
+    output_arr = torch.argmax(output, dim=0).numpy()
     
-    # Plot Image
+    target_overlay = _get_target_overlay(image_arr, target_arr, num_classes)
+    output_overlay = _get_output_overlay(image_arr, target_arr, output_arr)
+    
     ax[0].imshow(image_arr)
     ax[0].set_title('Image')
     ax[0].axis('off')
     
-    # Plot Ground Truth Mask
-    ax[1].imshow(mask_arr, cmap='gray')
+    ax[1].imshow(target_arr, cmap='hot', vmin=0, vmax=num_classes)
     ax[1].set_title('Ground Truth Mask')
     ax[1].axis('off')
     
-    # Plot Combined Overlay
-    ax[2].imshow(combined_overlay)
-    ax[2].set_title('Combined Overlay (TP/FP/FN)')
+    ax[2].imshow(output_arr, cmap='hot', vmin=0, vmax=num_classes)
+    ax[2].set_title('Predicted Mask')
     ax[2].axis('off')
     
-    plt.tight_layout()
+    ax[3].imshow(target_overlay)
+    ax[3].set_title('Ground Truth Overlay')
+    ax[3].axis('off')
+    
+    ax[4].imshow(output_overlay)
+    ax[4].set_title('Predicted Overlay')
+    ax[4].axis('off')
+    
+    plt.tight_layout(rect=(0, 0.03, 1, 0.95))
     
     return fig

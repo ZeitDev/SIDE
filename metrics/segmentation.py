@@ -8,7 +8,6 @@ class SegmentationMetric:
         self.confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=device)
 
     def update(self, output: torch.Tensor, target: torch.Tensor) -> None:
-        # ? output, target = output.detach(), target.detach() - not needed?
         outputs = torch.argmax(output, dim=1)
         
         outputs = outputs.reshape(-1)
