@@ -1,8 +1,8 @@
 import torch
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 class SegmentationMetric:
-    def __init__(self, num_classes: int, device: torch.device, ignore_index: Optional[int] = None):
+    def __init__(self, num_classes: int, device: torch.device = torch.device('cpu'), ignore_index: Optional[int] = None):
         self.num_classes = num_classes
         self.ignore_index = ignore_index
         self.confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=device)
@@ -33,7 +33,7 @@ class SegmentationMetric:
 
 
 class IoU(SegmentationMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> Dict[Any, float]:
         tp = torch.diag(self.confusion_matrix).float()
         fp = (self.confusion_matrix.sum(dim=0) - tp).float()
         fn = (self.confusion_matrix.sum(dim=1) - tp).float()
@@ -50,7 +50,7 @@ class IoU(SegmentationMetric):
         return results
 
 class Dice(SegmentationMetric):
-    def compute(self) -> Dict[str, float]:
+    def compute(self) -> Dict[Any, float]:
         tp = torch.diag(self.confusion_matrix).float()
         fp = (self.confusion_matrix.sum(dim=0) - tp).float()
         fn = (self.confusion_matrix.sum(dim=1) - tp).float()

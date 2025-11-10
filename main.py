@@ -95,7 +95,7 @@ class BaseProcessor:
         return computed_metrics
     
     def _log_visuals(self, epoch: Any, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
-        log_n_images = min(self.config['logging']['n_validation_images'], images.size(0))
+        log_n_images = self.config['logging']['n_validation_images']
         if log_n_images > 0:
             if self.config['training']['tasks']['segmentation']['enabled']:
                 for i in range(log_n_images):
@@ -296,8 +296,8 @@ class Trainer(BaseProcessor):
                 outputs = self.model(images)
                 
                 # * TEMP for debugging
-                seg_targets = targets.get('segmentation', None)
-                seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                # seg_targets = targets.get('segmentation', None)
+                # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
                 # * TEMP for debugging
                 
                 for task, outputs_task in outputs.items():
@@ -344,8 +344,8 @@ class Trainer(BaseProcessor):
                 outputs = self.model(images)
                 
                 # * TEMP for debugging
-                seg_targets = targets.get('segmentation', None)
-                seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                # seg_targets = targets.get('segmentation', None)
+                # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
                 # * TEMP for debugging
                 
                 for task, outputs_task in outputs.items():
@@ -504,8 +504,8 @@ class Tester(BaseProcessor):
                     outputs[task_name] = model(images)
                     
                     # * TEMP for debugging
-                    seg_targets = targets.get('segmentation', None)
-                    seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
+                    # seg_targets = targets.get('segmentation', None)
+                    # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
                     # * TEMP for debugging
                     
                     if task_name in self.metrics:
@@ -518,7 +518,6 @@ class Tester(BaseProcessor):
         test_metrics = self._compute_metrics()
         for metric_key, metric_value in test_metrics.items():
             logger.info(f'{metric_key}: {metric_value:.4f}')
-        
         mlflow.log_metrics(test_metrics)
     
 def main():
@@ -556,7 +555,7 @@ def main():
                     
                     for i, val_subset in enumerate(all_train_subsets):
                         with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as fold_run:
-                            logger.header(f'Starting Fold {i+1}/{len(all_train_subsets)}: Validation Subset: {val_subset}')
+                            logger.header(f'Starting Fold {i+1}/{len(all_train_subsets)} - Validation Subset: {val_subset}')
                             mlflow.log_param('validation_subset', val_subset)
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
@@ -572,8 +571,10 @@ def main():
                                 if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
                                     fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
                     
-                    
                     logger.header('Cross-Validation Summary')
+                    logger.info(f'Best Fold: {best_fold} with Loss: {best_fold_loss:.4f}')
+                    mlflow.log_metric('cross_validation/best_fold', best_fold, run_id=train_run.info.run_id)
+                    mlflow.log_metric('cross_validation/best_fold_loss', best_fold_loss, run_id=train_run.info.run_id)
                     for metric_name, metric_values in fold_val_metrics_summary.items():
                         mean_metric = float(np.mean(metric_values))
                         std_metric = float(np.std(metric_values))

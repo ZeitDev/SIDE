@@ -2,8 +2,11 @@ import cv2
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
-def _get_target_overlay(image, target, num_classes, alpha=0.5):
+from typing import Optional
+
+def _get_target_overlay(image: np.ndarray, target: np.ndarray, num_classes: int, alpha: float = 0.5) -> np.ndarray:
     if image.max() <= 1.0:
         image = (image * 255).astype(np.uint8)
 
@@ -30,7 +33,7 @@ def _get_target_overlay(image, target, num_classes, alpha=0.5):
         
     return overlay
 
-def _get_output_overlay(image, target, output, alpha=0.5):
+def _get_output_overlay(image: np.ndarray, target: np.ndarray, output: np.ndarray, alpha: float = 0.5) -> np.ndarray:
     if image.max() <= 1.0:
         image = (image * 255).astype(np.uint8)
 
@@ -55,10 +58,10 @@ def _get_output_overlay(image, target, output, alpha=0.5):
         
     return overlay
 
-def _scale_image(image):
+def _scale_image(image: torch.Tensor) -> torch.Tensor:
     return (image - image.min()) / (image.max() - image.min())
 
-def get_image_target_output_overlay(image, target, output, num_classes = 0, epoch=None, index=None):
+def get_image_target_output_overlay(image: torch.Tensor, target: torch.Tensor, output: torch.Tensor, num_classes: int = 0, epoch: Optional[int] = None, index: Optional[int] = None) -> Figure:
     fig, ax = plt.subplots(1, 5, figsize=(25, 5))
     fig.suptitle(f'Validation Overlay | Epoch {epoch} | Index {index}', fontsize=16)
     

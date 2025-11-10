@@ -3,7 +3,7 @@ data:
   cross_validation: true
 
 training:
-  epochs: 
+  epochs: 5000
   scheduler:
     name: torch.optim.lr_scheduler.ConstantLR
     params:
@@ -18,3 +18,5 @@ training:
     disparity:
       enabled: false
 
+logging:
+  n_validation_images: 0

@@ -1,10 +1,9 @@
 data:
   dataset: data.datasets.OverfitDataset
   cross_validation: true
-  batch_size: 4
 
 training:
-  epochs: 5
+  epochs: 1
   scheduler:
     name: torch.optim.lr_scheduler.ConstantLR
     params:
@@ -18,3 +17,6 @@ training:
         enabled: false
     disparity:
       enabled: false
+
+logging:
+  n_validation_images: 0
