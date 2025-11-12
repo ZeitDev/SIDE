@@ -1,9 +1,11 @@
 import os
 import mlflow
 import importlib
+import collections.abc
+from typing import Dict, Any, List, Optional
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from typing import Dict, Any, List, Optional
 
 def load(class_string, **kwargs):
     """
@@ -51,14 +53,6 @@ def build_transforms(transform_config: Optional[List[Dict[str, Any]]]) -> A.Comp
 
     return A.Compose(transforms, additional_targets=additional_targets)
 
-def mlflow_log_run(config: Dict[str, Any], log_filepath: str) -> None:
-    mlflow.log_params(config)
-    mlflow.log_artifact(log_filepath, artifact_path='logs')
-    mlflow.log_artifact(os.path.join(os.path.dirname(__file__), '..', 'main.py'))
-    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
-        if os.path.isdir(folder):
-            mlflow.log_artifacts(folder, artifact_path=folder)
-
 def deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively merges source config into destination config."""
     for key, value in source.items():
@@ -68,3 +62,36 @@ def deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str,
         else:
             destination[key] = value
     return destination
+
+def mlflow_log_run(config: Dict[str, Any], log_filepath: str) -> None:
+    flat_config = _flatten_config(config)
+    mlflow.log_params(flat_config)
+    
+    mlflow.log_artifact(log_filepath, artifact_path='logs')
+    mlflow.log_artifact(os.path.join(os.path.dirname(__file__), '..', 'main.py'))
+    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
+        if os.path.isdir(folder):
+            mlflow.log_artifacts(folder, artifact_path=folder)
+            
+def _flatten_config(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, collections.abc.MutableMapping):
+            if not v:
+                items.append((new_key, v))
+            else:
+                items.extend(_flatten_config(v, new_key, sep=sep).items())
+        elif isinstance(v, list):
+            if not v:
+                items.append((new_key, v))
+            else:
+                for i, item in enumerate(v):
+                    list_key = f"{new_key}{sep}{i}"
+                    if isinstance(item, collections.abc.MutableMapping):
+                        items.extend(_flatten_config(item, list_key, sep=sep).items())
+                    else:
+                        items.append((list_key, item))
+        else:
+            items.append((new_key, v))
+    return dict(items)

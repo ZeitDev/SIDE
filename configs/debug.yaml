@@ -1,9 +1,9 @@
 data:
-  dataset: data.datasets.OverfitDataset
+  dataset: "data.datasets.EndoVis17"
   cross_validation: true
 
 training:
-  epochs: 1
+  epochs: 100
   scheduler:
     name: torch.optim.lr_scheduler.ConstantLR
     params:
@@ -19,4 +19,4 @@ training:
       enabled: false
 
 logging:
-  n_validation_images: 0
+  n_validation_images: 4

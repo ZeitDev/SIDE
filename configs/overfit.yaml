@@ -1,6 +1,6 @@
 data:
   dataset: data.datasets.OverfitDataset
-  cross_validation: true
+  cross_validation: false
 
 training:
   epochs: 5000

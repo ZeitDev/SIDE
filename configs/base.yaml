@@ -99,4 +99,5 @@ training:
           params: {}
 
 logging:
+  notebook_mode: false
   n_validation_images: 4
