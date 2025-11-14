@@ -1,9 +1,11 @@
+description: Debug
+
 data:
-  dataset: "data.datasets.EndoVis17"
+  dataset: data.datasets.EndoVis17
   cross_validation: true
 
 training:
-  epochs: 100
+  epochs: 1
   scheduler:
     name: torch.optim.lr_scheduler.ConstantLR
     params:

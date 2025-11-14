@@ -1,24 +1,26 @@
+description: Base configuration
+
 # --- Data Configuration ---
 data:
-  dataset: "data.datasets.EndoVis17"
+  dataset: data.datasets.EndoVis17
   cross_validation: false
 
   transforms:
     train:
-      - name: "Resize"
+      - name: Resize
         params:
           height: 256
           width: 256
-      - name: "Normalize"
+      - name: Normalize
         params:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
     test:
-      - name: "Resize"
+      - name: Resize
         params:
           height: 256
           width: 256
-      - name: "Normalize"
+      - name: Normalize
         params:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
@@ -31,14 +33,14 @@ data:
 training:
   epochs: 10
   optimizer:
-    name: "torch.optim.AdamW"
+    name: torch.optim.AdamW
     params:
       lr: 0.0001
       weight_decay: 0.01
   scheduler:
-    name: "torch.optim.lr_scheduler.ReduceLROnPlateau"
+    name: torch.optim.lr_scheduler.ReduceLROnPlateau
     params:
-      mode: "min"
+      mode: min
       factor: 0.1
       patience: 10
 
@@ -46,7 +48,7 @@ training:
   finetune: null # finetune from this pre-trained model with frozen encoder
 
   encoder:
-    name: "models.simple_unet.Encoder"
+    name: models.simple_unet.Encoder
     params: {}
 
   tasks:
@@ -54,25 +56,25 @@ training:
       enabled: true
       criterion:
         weight: 1.0
-        name: "monai.losses.DiceCELoss"
+        name: monai.losses.DiceCELoss
         params:
           softmax: True
           to_onehot_y: True
       decoder:
-        name: "models.simple_unet.SegmentationDecoder"
+        name: models.simple_unet.SegmentationDecoder
         params: {}
       knowledge_distillation:
         enabled: false
         states: []
         criterion:
           weight: 0.5
-          name: "torch.nn.KLDivLoss"
+          name: torch.nn.KLDivLoss
           params: {}
         encoder:
-          name: "models.simple_unet.Encoder"
+          name: models.simple_unet.Encoder
           params: {}
         decoder:
-          name: "models.simple_unet.SegmentationDecoder"
+          name: models.simple_unet.SegmentationDecoder
           params: {}
 
     disparity: 

@@ -45,21 +45,33 @@ def main():
         logger.info(f'Found {len(all_train_subsets)} training subsets: {all_train_subsets}')
         
         with mlflow.start_run(run_name=run_datetime) as run:
-            helpers.mlflow_log_run(config, log_filepath)
+            helpers.mlflow_log_misc(log_filepath)
+            tags = {}
+            tags['description'] = config['description']
+            tags['parent_name'] = experiment_name
+            tags['run_type'] = 'main'
+            helpers.mlflow_log_run(config, tags=tags)
 
             best_model_run_id = ''
             
             if config['data']['cross_validation']:
                 logger.header('Mode: Cross-Validation Training')
-                with mlflow.start_run(run_name='train', nested=True) as train_run:
+                with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
+                    tags['parent_name'] = run.info.run_name
+                    tags['run_type'] = 'train'
+                    tags['run_mode'] = 'cross_validation'
+                    helpers.mlflow_log_run(config, tags=tags)
+                    
                     fold_val_metrics_summary = {}
                     best_fold = -1
                     best_fold_loss = float('inf')
                     
                     for i, val_subset in enumerate(all_train_subsets):
-                        with mlflow.start_run(run_name=f'fold_{i+1}', nested=True) as fold_run:
+                        with mlflow.start_run(run_name=f'{run.info.run_name}/fold_{i+1}', nested=True) as fold_run:
                             logger.header(f'Starting Fold {i+1}/{len(all_train_subsets)} - Validation Subset: {val_subset}')
-                            mlflow.log_param('validation_subset', val_subset)
+                            tags['fold'] = str(i + 1)
+                            tags['val_subset'] = val_subset
+                            helpers.mlflow_log_run(config, tags=tags)
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
                             trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
@@ -93,13 +105,22 @@ def main():
                             
             else:
                 logger.header(f'Mode: Full Training')
-                with mlflow.start_run(run_name='train', nested=True) as train_run:
+                with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
+                    tags['parent_name'] = run.info.run_name
+                    tags['run_type'] = 'train'
+                    tags['run_mode'] = 'full_training'
+                    helpers.mlflow_log_run(config, tags=tags)
+                    
                     best_model_run_id = train_run.info.run_id
                     trainer = Trainer(config, train_subsets=all_train_subsets)
                     trainer.train_without_validation()
             
             logger.header('Mode: Testing Best Model')
-            with mlflow.start_run(run_name='test', nested=True) as test_run:
+            with mlflow.start_run(run_name=f'{run.info.run_name}/test', nested=True) as test_run:
+                tags['parent_name'] = run.info.run_name
+                tags['run_type'] = 'test'
+                helpers.mlflow_log_run(config, tags=tags)
+                
                 tester = Tester(config, run_id=best_model_run_id)
                 test_metrics = tester.test()
                 mlflow.log_metrics(test_metrics)
@@ -107,9 +128,9 @@ def main():
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')
-    except Exception as e:
-        logger.error(e)
-        raise e
+    except Exception as error:
+        logger.error(error)
+        raise error
     finally:
         if mlflow.active_run(): mlflow.end_run()
         logger.single('MLflow run cleaned up')

@@ -77,6 +77,11 @@ class BaseProcessor:
     
     def _log_visuals(self, epoch: Any, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:
         log_n_images = self.config['logging']['n_validation_images']
+        max_epochs = self.config['training']['epochs']
+        max_indices = self.config['logging']['n_validation_images']
+        epoch_padding = len(str(max_epochs))
+        index_padding = len(str(max_indices))
+        
         if log_n_images > 0:
             n_logged_batch = 0
             for i in range(log_n_images):
@@ -88,6 +93,6 @@ class BaseProcessor:
                         num_classes = len(self.segmentation_class_mappings) if self.segmentation_class_mappings else 0
                         figure = visualization.get_image_target_output_overlay(image=images[i].cpu().detach(), target=targets['segmentation'][i].cpu().detach(), output=outputs['segmentation'][i].cpu().detach(), num_classes=num_classes, epoch=epoch, index=i)
                         
-                        if not self.config['logging']['notebook_mode']: mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch}/index_{i}.png')
+                        if not self.config['logging']['notebook_mode']: mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch:0{epoch_padding}}/index_{i:0{index_padding}}.png')
                         else: plt.show(figure)
                         plt.close(figure)

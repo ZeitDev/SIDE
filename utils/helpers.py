@@ -63,15 +63,17 @@ def deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str,
             destination[key] = value
     return destination
 
-def mlflow_log_run(config: Dict[str, Any], log_filepath: str) -> None:
-    flat_config = _flatten_config(config)
-    mlflow.log_params(flat_config)
-    
+def mlflow_log_misc(log_filepath: str) -> None:    
     mlflow.log_artifact(log_filepath, artifact_path='logs')
     mlflow.log_artifact(os.path.join(os.path.dirname(__file__), '..', 'main.py'))
     for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
         if os.path.isdir(folder):
             mlflow.log_artifacts(folder, artifact_path=folder)
+            
+def mlflow_log_run(config: Dict[str, Any], tags: Dict[str, str]) -> None:
+    flat_config = _flatten_config(config)
+    mlflow.log_params(flat_config)
+    mlflow.set_tags(tags)
             
 def _flatten_config(d, parent_key='', sep='.'):
     items = []
