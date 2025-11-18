@@ -40,3 +40,4 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 * **Multi-Teacher Knowledge Distillation:** Multiple teacher per task for knowledge distillation (not yet verified and tested)
 * **Config:** Comprehensible config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging settings
 * **Evaluation:** Notebooks for evaluation (not fully implemented)
+* **Test Cases:** Test cases for verification of metrics
