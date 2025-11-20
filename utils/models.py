@@ -22,8 +22,7 @@ class Combiner(nn.Module):
         return outputs
     
 class Decombiner(nn.Module):
-    """
-    A wrapper model that extracts a specific output from a multi-task model.
+    """ A wrapper model that extracts a specific output from a multi-task model.
     Needed for saving models with mlflow.
     """
     def __init__(self, model, output_task_key):
