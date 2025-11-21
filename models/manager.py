@@ -15,10 +15,10 @@ class Combiner(nn.Module):
         return outputs
     
 class AttachHead(nn.Module):
-    def __init__(self, decoder_class, num_classes, encoder_channels, encoder_reductions, **kwargs):
+    def __init__(self, decoder_class, n_classes, encoder_channels, encoder_reductions, **kwargs):
         super().__init__()
         self.decoder = decoder_class(encoder_channels, encoder_reductions, **kwargs)
-        self.head = nn.Conv2d(self.decoder.all_n_decoder_channels[-1], num_classes, kernel_size=1)
+        self.head = nn.Conv2d(self.decoder.all_n_decoder_channels[-1], n_classes, kernel_size=1)
     
     def forward(self, features):
         x = self.decoder(features)

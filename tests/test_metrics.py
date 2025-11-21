@@ -3,7 +3,7 @@ import math
 from metrics.segmentation import IoU, Dice
 
 def test_metric_reset():
-    iou_metric = IoU(num_classes=2)
+    iou_metric = IoU(n_classes=2)
     
     output = torch.tensor([[[[0.1, 0.9], [0.8, 0.2]], [[0.9, 0.1], [0.2, 0.8]]]])
     target = torch.tensor([[[1, 0], [0, 1]]])
@@ -16,7 +16,7 @@ def test_metric_reset():
     assert torch.all(iou_metric.confusion_matrix == 0)
 
 def test_iou_metric():
-    iou_metric = IoU(num_classes=2)
+    iou_metric = IoU(n_classes=2)
     iou_metric.reset()
 
     # Predictions (logits)
@@ -73,7 +73,7 @@ def test_iou_metric():
     assert math.isclose(results['mIoU'], 0.5)
     
 def test_dice_metric():
-    dice_metric = Dice(num_classes=2)
+    dice_metric = Dice(n_classes=2)
     dice_metric.reset()
 
     # Predictions (logits)

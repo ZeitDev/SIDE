@@ -43,24 +43,18 @@ class Tester(BaseProcessor):
             
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
-        if self.config['training']['tasks']['segmentation']['enabled'] and hasattr(dataset_test, 'class_mappings'):
+        if self.config['training']['tasks']['segmentation']['enabled']:
             self.segmentation_class_mappings = dataset_test.class_mappings
-            num_classes = len(self.segmentation_class_mappings) # type: ignore
-            self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
-            self.config['training']['tasks']['segmentation']['knowledge_distillation']['decoder']['params']['num_classes'] = num_classes
-            
+            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) # type: ignore
+        
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
             
     def _load_models(self) -> None:
-        logger.subheader('Loading Models')
-        self.models = {}
-        
-        for task_name, task_config in self.config['training']['tasks'].items():
-            if task_config['enabled']:
-                model_path = f'runs:/{self.run_id}/model_{task_name}'
-                self.models[task_name] = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
-                self.models[task_name].eval()
-                logger.info(f'Loaded model for task {task_name} from {model_path}')
+        logger.subheader('Loading Model')
+        model_path = f'runs:/{self.run_id}/best_model'
+        self.model = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
+        self.model.eval()
+        logger.info(f'Loaded best model from {model_path}')
  
     def test(self) -> Dict[str, float]:
         logger.header('Starting Testing')
@@ -75,18 +69,10 @@ class Tester(BaseProcessor):
                 images = images.to(self.device)
                 targets = {key: value.to(self.device) for key, value in targets.items()}
                 
-                outputs = {}
-                for task_name, model in self.models.items():
-                    outputs[task_name] = model(images)
-                    
-                    # * TEMP for debugging
-                    # seg_targets = targets.get('segmentation', None)
-                    # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
-                    # * TEMP for debugging
-                    
-                    if task_name in self.metrics:
-                        for metric in self.metrics[task_name].values():
-                            metric.update(outputs[task_name], targets[task_name])
+                outputs = self.model(images)
+                for task, output in outputs.items():
+                    for metric in self.metrics[task].values():
+                        metric.update(output, targets[task])
                             
                 self._log_visuals(epoch='Test', images=images, targets=targets, outputs=outputs)
 

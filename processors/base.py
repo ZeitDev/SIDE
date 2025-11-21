@@ -18,6 +18,7 @@ class BaseProcessor:
     def __init__(self, config: Dict[str, Any]):
         logger.header(f'Initializing {self.__class__.__name__}')
         self.config = config
+        self.n_classes = {}
         self.metrics: Dict[str, Any] = {}
         self.segmentation_class_mappings: Optional[Dict[int, str]] = None
         self.n_logged_images = 0
@@ -53,10 +54,9 @@ class BaseProcessor:
         if tasks_config['segmentation']['enabled']:
             self.metrics['segmentation'] = {}
             
-            num_classes = tasks_config['segmentation']['decoder']['params']['num_classes']
-            self.metrics['segmentation']['IoU'] = IoU(num_classes=num_classes, device=self.device)
-            self.metrics['segmentation']['DICE'] = Dice(num_classes=num_classes, device=self.device)
-            logger.info(f'Initialized IoU and DICE metrics for segmentation with {num_classes} classes.')
+            self.metrics['segmentation']['IoU'] = IoU(n_classes=self.n_classes['segmentation'], device=self.device)
+            self.metrics['segmentation']['DICE'] = Dice(n_classes=self.n_classes['segmentation'], device=self.device)
+            logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.n_classes['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
             pass # TODO: implement disparity metrics
@@ -90,8 +90,7 @@ class BaseProcessor:
                     n_logged_batch += 1
                     
                     if self.config['training']['tasks']['segmentation']['enabled']:
-                        num_classes = len(self.segmentation_class_mappings) if self.segmentation_class_mappings else 0
-                        figure = visualization.get_image_target_output_overlay(image=images[i].cpu().detach(), target=targets['segmentation'][i].cpu().detach(), output=outputs['segmentation'][i].cpu().detach(), num_classes=num_classes, epoch=epoch, index=i)
+                        figure = visualization.get_image_target_output_overlay(image=images[i].cpu().detach(), target=targets['segmentation'][i].cpu().detach(), output=outputs['segmentation'][i].cpu().detach(), n_classes=self.n_classes['segmentation'], epoch=epoch, index=i)
                         
                         if not self.config['logging']['notebook_mode']: mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch:0{epoch_padding}}/index_{i:0{index_padding}}.png')
                         else: plt.show(figure)

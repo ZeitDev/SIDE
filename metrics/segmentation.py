@@ -2,10 +2,10 @@ import torch
 from typing import Dict, Optional, Any
 
 class SegmentationMetric:
-    def __init__(self, num_classes: int, device: torch.device = torch.device('cpu'), ignore_index: Optional[int] = None):
-        self.num_classes = num_classes
+    def __init__(self, n_classes: int, device: torch.device = torch.device('cpu'), ignore_index: Optional[int] = None):
+        self.n_classes = n_classes
         self.ignore_index = ignore_index
-        self.confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=device)
+        self.confusion_matrix = torch.zeros((n_classes, n_classes), dtype=torch.int64, device=device)
 
     def update(self, output: torch.Tensor, target: torch.Tensor) -> None:
         outputs = torch.argmax(output, dim=1)
@@ -19,9 +19,9 @@ class SegmentationMetric:
             target = target[mask]
             
         _confusion_matrix = torch.bincount(
-            self.num_classes * target + outputs,
-            minlength=self.num_classes**2
-        ).reshape(self.num_classes, self.num_classes)
+            self.n_classes * target + outputs,
+            minlength=self.n_classes**2
+        ).reshape(self.n_classes, self.n_classes)
         
         self.confusion_matrix += _confusion_matrix
 

@@ -37,8 +37,16 @@ def build_transforms(transform_config: Optional[List[Dict[str, Any]]]) -> A.Comp
     additional_targets = {
         'right_image': 'image',
         'segmentation': 'mask',
-        # ! 'disparity': 'mask'  ! ??????????? not tested
+        # ! 'disparity': 'image'  ! ??????????? not tested
     }
+    
+    def _instantiate(config):
+        name = config['name']
+        params = config.get('params', {}).copy() 
+        if 'transforms' in params:
+            params['transforms'] = [_instantiate(c) for c in params['transforms']]
+            
+        return load(f'albumentations.{name}', **params)
     
     transforms = []
     if not transform_config:
@@ -46,9 +54,7 @@ def build_transforms(transform_config: Optional[List[Dict[str, Any]]]) -> A.Comp
         transforms.append(A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)))
     else:
         for _transform_config in transform_config:
-            transform_class = load(f'albumentations.{_transform_config["name"]}')
-            params = _transform_config['params']
-            transforms.append(transform_class(**params))
+            transforms.append(_instantiate(_transform_config))
     transforms.append(ToTensorV2())
 
     return A.Compose(transforms, additional_targets=additional_targets)

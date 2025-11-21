@@ -75,10 +75,7 @@ class Trainer(BaseProcessor):
         
         if self.config['training']['tasks']['segmentation']['enabled']:
             self.segmentation_class_mappings = dataset_train.class_mappings
-            num_classes = len(self.segmentation_class_mappings) # type: ignore
-            self.config['training']['tasks']['segmentation']['decoder']['params']['num_classes'] = num_classes
-            self.config['training']['tasks']['segmentation']['knowledge_distillation']['decoder']['params']['num_classes'] = num_classes
-        
+            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) # type: ignore
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
         
     def _load_model(self) -> None:
@@ -97,7 +94,7 @@ class Trainer(BaseProcessor):
                 DecoderClass = load(decoder_config['name'])
                 decoders[task] = AttachHead(
                     decoder_class=DecoderClass,
-                    num_classes=decoder_config['params']['num_classes'],
+                    n_classes=self.n_classes[task],
                     encoder_channels=encoder.feature_info.channels(), # type: ignore
                     encoder_reductions=encoder.feature_info.reduction(), # type: ignore
                     **decoder_config['params']
@@ -186,7 +183,8 @@ class Trainer(BaseProcessor):
         logger.info(f'Saving best model to mlflow')        
         
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
-        self.model.load_state_dict(state_dict['model_state_dict']).to('cpu')
+        self.model.load_state_dict(state_dict['model_state_dict'])
+        self.model.to('cpu')
         with torch.no_grad():
             signature_output_example = self.model(self.signature_input_example)
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
@@ -194,23 +192,11 @@ class Trainer(BaseProcessor):
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
         mlflow.pytorch.log_model( # type: ignore
             pytorch_model=self.model,
-            artifact_path='model',
+            name='best_model',
             code_paths=['models/'],
             signature=signature
         )
-        self.model.to(self.device) # TODO: TEST IT
-        
-        # self.model.to('cpu')
-        # for task_name, task_config in self.config['training']['tasks'].items():
-        #     if task_config['enabled']:
-        #         task_model = Decombiner(self.model, task_name)
-        #         artifact_path = f'model_{task_name}'
-        #         mlflow.pytorch.log_model( # type: ignore
-        #             pytorch_model=task_model,
-        #             name=artifact_path,
-        #             input_example=self.input_example.cpu().numpy().astype(np.float32)
-        #         )
-        # self.model.to(self.device)
+        self.model.to(self.device)
 
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
@@ -226,11 +212,6 @@ class Trainer(BaseProcessor):
                 total_loss_batch = torch.tensor(0.0, device=self.device)
 
                 outputs = self.model(images)
-                
-                # * TEMP for debugging
-                # seg_targets = targets.get('segmentation', None)
-                # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
-                # * TEMP for debugging
                 
                 for task, outputs_task in outputs.items():
                     loss = self.criterions[task](outputs_task, targets[task])
@@ -274,11 +255,6 @@ class Trainer(BaseProcessor):
                 total_loss_batch = torch.tensor(0.0, device=self.device)
                 
                 outputs = self.model(images)
-                
-                # * TEMP for debugging
-                # seg_targets = targets.get('segmentation', None)
-                # seg_outputs = torch.argmax(outputs['segmentation'], dim=1, keepdim=True)
-                # * TEMP for debugging
                 
                 for task, outputs_task in outputs.items():
                     loss = self.criterions[task](outputs_task, targets[task])
