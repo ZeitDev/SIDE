@@ -1,5 +1,5 @@
 from torch import nn
-
+# ! DEPRECATED FILE ! #
 class Combiner(nn.Module):
     """
     A modular model that combines an encoder with one or more decoders.

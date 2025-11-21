@@ -2,7 +2,7 @@ description: Debug
 
 data:
   dataset: data.datasets.EndoVis17
-  cross_validation: true
+  cross_validation: false
 
 training:
   epochs: 1
@@ -12,9 +12,17 @@ training:
       factor: 1.0
       total_iters: 1
 
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      encoder_name: efficientnet_b0
+      pretrained: true
+
   tasks:
     segmentation:
       enabled: true
+      decoder:
+        name: models.decoders.dynamic_unet.Decoder
       knowledge_distillation:
         enabled: false
     disparity:

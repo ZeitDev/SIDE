@@ -184,7 +184,7 @@ class Combiner(nn.Module):
             
         return outputs
     
-class DecoderWithHead(nn.Module):
+class AttachHead(nn.Module):
     def __init__(self, decoder_class, num_classes, encoder_channels, encoder_reductions, **kwargs):
         super().__init__()
         self.decoder = decoder_class(encoder_channels, encoder_reductions, **kwargs)
@@ -205,13 +205,13 @@ encoder = TimmEncoder(encoder_name='resnet18', pretrained=True)
 model = Combiner(
     encoder=encoder,
     decoders={
-        'segmentation': DecoderWithHead(
+        'segmentation': AttachHead(
             decoder_class=ModularDecoder,
             num_classes=8,
             encoder_channels=encoder.feature_info.channels(), # type: ignore
             encoder_reductions=encoder.feature_info.reduction() # type: ignore
         ),
-        'depth': DecoderWithHead(
+        'depth': AttachHead(
             decoder_class=ModularDecoder,
             num_classes=1,
             encoder_channels=encoder.feature_info.channels(), # type: ignore
@@ -228,3 +228,37 @@ for task, output in outputs.items():
     
 # %%
 # TODO: Do model saving, loading with mlflow
+import mlflow
+from mlflow.models.signature import infer_signature
+
+dummy_input = torch.randn(1, 3, 512, 512) # Convert to numpy for MLflow
+
+# 2. Run a forward pass to get dummy output
+with torch.no_grad():
+    dummy_output = model(dummy_input)
+    # Convert dictionary outputs to numpy for inference
+    dummy_output = {k: v.numpy() for k, v in dummy_output.items()}
+
+# 3. Infer signature
+signature = infer_signature(dummy_input, dummy_output)
+
+with mlflow.start_run() as run:
+    mlflow.pytorch.log_model( # type: ignore
+        pytorch_model=model,
+        name="modular_encoder_decoder_model",
+        code_paths=["modular_encoder_decoder.py"],
+        signature=signature
+    )
+    
+loaded_model = mlflow.pytorch.load_model( # type: ignore
+    model_uri=f"runs:/{run.info.run_id}/modular_encoder_decoder_model"
+)
+loaded_model.eval()
+x = torch.randn(1, 3, 512, 512)
+with torch.no_grad():
+    outputs = loaded_model(x)
+    
+for task, output in outputs.items():
+    print(f"Task: {task}, Output shape: {output.shape}")
+    
+# %%

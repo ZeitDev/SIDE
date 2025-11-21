@@ -7,10 +7,11 @@ from typing import cast, Any, List, Dict, Optional
 import torch
 import mlflow
 from torch.utils.data import DataLoader 
+from mlflow.models.signature import infer_signature
 
 from utils import helpers
 from utils.helpers import load
-from utils.models import Decombiner
+from models.manager import AttachHead
 from processors.base import BaseProcessor
 
 from utils.logger import CustomLogger
@@ -65,8 +66,8 @@ class Trainer(BaseProcessor):
                 pin_memory=data_config['pin_memory']
             )
             
-        input_example_image, _ = dataset_train[0] 
-        self.input_example = input_example_image.unsqueeze(0)
+        signature_input_example, _ = dataset_train[0] 
+        self.signature_input_example = signature_input_example.unsqueeze(0)
             
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         dataset_val_length = len(dataset_val) if dataset_val else 0
@@ -94,11 +95,17 @@ class Trainer(BaseProcessor):
             if task_config['enabled']:
                 decoder_config = task_config['decoder']
                 DecoderClass = load(decoder_config['name'])
-                decoders[task] = DecoderClass(**decoder_config['params'])
+                decoders[task] = AttachHead(
+                    decoder_class=DecoderClass,
+                    num_classes=decoder_config['params']['num_classes'],
+                    encoder_channels=encoder.feature_info.channels(), # type: ignore
+                    encoder_reductions=encoder.feature_info.reduction(), # type: ignore
+                    **decoder_config['params']
+                )
                 logger.info(f'Loaded decoder for task {task}: {decoder_config["name"]} with params {decoder_config["params"]}')
             
         self.model = load(
-            'utils.models.Combiner', 
+            'models.manager.Combiner', 
             encoder=encoder, 
             decoders=decoders
         ).to(self.device)
@@ -179,18 +186,31 @@ class Trainer(BaseProcessor):
         logger.info(f'Saving best model to mlflow')        
         
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
-        self.model.load_state_dict(state_dict['model_state_dict'])
-        self.model.to('cpu')
-        for task_name, task_config in self.config['training']['tasks'].items():
-            if task_config['enabled']:
-                task_model = Decombiner(self.model, task_name)
-                artifact_path = f'model_{task_name}'
-                mlflow.pytorch.log_model( # type: ignore
-                    pytorch_model=task_model,
-                    name=artifact_path,
-                    input_example=self.input_example.cpu().numpy().astype(np.float32)
-                )
-        self.model.to(self.device)
+        self.model.load_state_dict(state_dict['model_state_dict']).to('cpu')
+        with torch.no_grad():
+            signature_output_example = self.model(self.signature_input_example)
+            signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
+            
+        signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
+        mlflow.pytorch.log_model( # type: ignore
+            pytorch_model=self.model,
+            artifact_path='model',
+            code_paths=['models/'],
+            signature=signature
+        )
+        self.model.to(self.device) # TODO: TEST IT
+        
+        # self.model.to('cpu')
+        # for task_name, task_config in self.config['training']['tasks'].items():
+        #     if task_config['enabled']:
+        #         task_model = Decombiner(self.model, task_name)
+        #         artifact_path = f'model_{task_name}'
+        #         mlflow.pytorch.log_model( # type: ignore
+        #             pytorch_model=task_model,
+        #             name=artifact_path,
+        #             input_example=self.input_example.cpu().numpy().astype(np.float32)
+        #         )
+        # self.model.to(self.device)
 
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
