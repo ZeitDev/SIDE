@@ -34,8 +34,9 @@ training:
   epochs: 10
   optimizer:
     name: torch.optim.AdamW
+    base_lr: 0.0001 # decoder and task heads learning rate
+    encoder_lr_mod: 0.1 # dont let pretrained encoder explode
     params:
-      lr: 0.0001
       weight_decay: 0.01
   scheduler:
     name: torch.optim.lr_scheduler.ReduceLROnPlateau

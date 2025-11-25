@@ -19,6 +19,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "scikit-learn>=1.7.2",
     "torch>=2.8.0",
+    "torch-lr-finder>=0.2.2",
     "torchvision>=0.23.0",
     "tqdm>=4.67.1",
 ]

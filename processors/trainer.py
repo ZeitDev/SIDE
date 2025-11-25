@@ -166,9 +166,19 @@ class Trainer(BaseProcessor):
 
 
         optimizer_config = self.config['training']['optimizer']
+        model_parameter_groups = [
+            {
+                'params': [p for n, p in self.model.named_parameters() if 'encoder' in n and p.requires_grad],
+                'lr': optimizer_config['base_lr'] * optimizer_config['encoder_lr_mod']
+            },
+            {
+                'params': [p for n, p in self.model.named_parameters() if 'encoder' not in n and p.requires_grad],
+                'lr': optimizer_config['base_lr']
+            }
+        ]
         optimizer_class = load(optimizer_config['name'])
         self.optimizer = optimizer_class(
-            self.model.parameters(),
+            model_parameter_groups,
             **optimizer_config['params'])
         logger.info(f'Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
         
