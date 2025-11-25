@@ -32,18 +32,20 @@ data:
 # --- Training Configuration ---
 training:
   epochs: 10
+
   optimizer:
     name: torch.optim.AdamW
-    base_lr: 0.0001 # decoder and task heads learning rate
+    base_lr: 1.0e-3 # decoder and task heads learning rate
     encoder_lr_mod: 0.1 # dont let pretrained encoder explode
     params:
       weight_decay: 0.01
+
   scheduler:
-    name: torch.optim.lr_scheduler.ReduceLROnPlateau
+    name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
     params:
-      mode: min
-      factor: 0.1
-      patience: 10
+      T_0: 50
+      T_mult: 1
+      eta_min: 1.0e-7
 
   checkpoint: null # continue training from this checkpoint
   finetune: null # finetune from this pre-trained model with frozen encoder

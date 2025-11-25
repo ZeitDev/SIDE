@@ -10,6 +10,7 @@ from torch_lr_finder import LRFinder, TrainDataLoaderIter, ValDataLoaderIter
 from utils import helpers
 from utils.helpers import load
 from processors.trainer import Trainer
+from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 
 # %% Settings
 EXPERIMENT = 'overfit'
@@ -27,54 +28,9 @@ config = helpers.deep_merge(experiment_config, base_config)
 config['data']['batch_size'] = 8
 
 # %%
-print(f'LR Finder for EXPERIMENT configuration: {EXPERIMENT}')
 
-dataset_class = load(config['data']['dataset'])
-all_train_subsets = dataset_class(mode='train').get_all_subset_names()
-trainer = Trainer(config, train_subsets=all_train_subsets)
-trainloader = trainer.dataloader_train
 
 # %%
-# TODO: Implement multi-TASK loss that can optionally include tasks
-import monai
-import torch.nn as nn
-class FlexibleMultiTaskLoss(nn.Module):
-    def __init__(self, train_disparity=False, seg_weight=1.0, disp_weight=1.0):
-        super().__init__()
-        self.train_disparity = train_disparity
-        
-        # Define Criteria
-        self.seg_criterion = monai.losses.DiceCELoss( # type: ignore
-            to_onehot_y=True,
-            softmax=True,
-            
-        ) 
-        self.disp_criterion = nn.L1Loss() # or whatever you use
-        
-        # Weights (only relevant if both are active)
-        self.w_seg = seg_weight
-        self.w_disp = disp_weight
-
-    def forward(self, outputs, targets):
-        """
-        outputs: Model predictions dictionary
-        targets: Ground truth dictionary
-        """
-        # --- 1. Always Calculate Segmentation ---
-        # We assume 'segmentation' is the primary TASK and always exists
-        loss_seg = self.seg_criterion(outputs['segmentation'], targets['segmentation'])
-        
-        total_loss = self.w_seg * loss_seg
-
-        # --- 2. Optionally Calculate Disparity ---
-        if self.train_disparity:
-            # We only access these keys if the flag is True.
-            # This prevents crashing if targets['disparity'] is None or garbage.
-            loss_disp = self.disp_criterion(outputs['disparity'], targets['disparity'])
-            total_loss += (self.w_disp * loss_disp)
-            
-        return total_loss
-    
 class DictToDevice:
     def __init__(self, data_dict):
         self.data_dict = data_dict
@@ -92,9 +48,14 @@ class MultiTaskIter(TrainDataLoaderIter):
 
 
 # %%
+print(f'LR Finder for configuration: {EXPERIMENT}')
+
+dataset_class = load(config['data']['dataset'])
+trainer = Trainer(config, train_subsets=dataset_class(mode='train').get_all_subset_names())
 model = trainer.model
-criterion = FlexibleMultiTaskLoss(train_disparity=False)
-train_iter = MultiTaskIter(trainloader)
+criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
+train_iter = MultiTaskIter(trainer.dataloader_train)
+
 optimizer_config = config['training']['optimizer']
 optimizer_config['params']['lr'] = START_LR
 optimizer_class = load(optimizer_config['name'])

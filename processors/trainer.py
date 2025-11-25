@@ -13,6 +13,7 @@ from utils import helpers
 from utils.helpers import load
 from models.manager import AttachHead
 from processors.base import BaseProcessor
+from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -33,6 +34,8 @@ class Trainer(BaseProcessor):
 
         data_config = self.config['data']
         dataset_class = load(data_config['dataset'])
+        
+        self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
         train_transforms = helpers.build_transforms(data_config['transforms']['train'])
         val_transforms = helpers.build_transforms(data_config['transforms']['test'])
@@ -73,7 +76,7 @@ class Trainer(BaseProcessor):
         dataset_val_length = len(dataset_val) if dataset_val else 0
         logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
         
-        if self.config['training']['tasks']['segmentation']['enabled']:
+        if 'segmentation' in self.tasks:
             self.segmentation_class_mappings = dataset_train.class_mappings
             self.n_classes['segmentation'] = len(self.segmentation_class_mappings) # type: ignore
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
@@ -122,34 +125,35 @@ class Trainer(BaseProcessor):
         self.kd_models = {}
         self.kd_criterions = {}
         for task, task_config in self.config['training']['tasks'].items():
-            kd_config = task_config['knowledge_distillation']
-            if kd_config['enabled']:
-                logger.subheader(f'Loading Teachers for {task}')
-                self.kd_models[task] = []
-            
-                for state_path in kd_config['states']:
-                    teacher_encoder = load(kd_config['encoder']['name'], **kd_config['encoder']['params'])
-                    logger.info(f'Loaded teacher encoder: {kd_config["encoder"]["name"]} with params {kd_config["encoder"]["params"]}')
-                    
-                    teacher_decoder = load(kd_config['decoder']['name'], **kd_config['decoder']['params'])
-                    logger.info(f'Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
-                    
-                    teacher_model = load(
-                        'utils.models.Combiner',
-                        encoder=teacher_encoder,
-                        decoders={task: teacher_decoder}
-                    ).to(self.device)
-                    
-                    state_dict = torch.load(state_path, map_location=self.device)
-                    teacher_model.load_state_dict(state_dict['model_state_dict'])
-                    teacher_model.eval()
-                    self.kd_models[task].append(teacher_model)
-                    logger.info(f'Loaded teacher {state_path}')
-                    
-                self.kd_criterions[task] = load(
-                    kd_config['criterion']['name'],
-                    **kd_config['criterion']['params'])
-                logger.info(f'Loaded KD criterion for task {task}: {kd_config["criterion"]["name"]} with params {kd_config["criterion"]["params"]}')
+            if task_config['enabled']:
+                kd_config = task_config['knowledge_distillation']
+                if kd_config['enabled']:
+                    logger.subheader(f'Loading Teachers for {task}')
+                    self.kd_models[task] = []
+                
+                    for state_path in kd_config['states']:
+                        teacher_encoder = load(kd_config['encoder']['name'], **kd_config['encoder']['params'])
+                        logger.info(f'Loaded teacher encoder: {kd_config["encoder"]["name"]} with params {kd_config["encoder"]["params"]}')
+                        
+                        teacher_decoder = load(kd_config['decoder']['name'], **kd_config['decoder']['params'])
+                        logger.info(f'Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
+                        
+                        teacher_model = load(
+                            'utils.models.Combiner',
+                            encoder=teacher_encoder,
+                            decoders={task: teacher_decoder}
+                        ).to(self.device)
+                        
+                        state_dict = torch.load(state_path, map_location=self.device)
+                        teacher_model.load_state_dict(state_dict['model_state_dict'])
+                        teacher_model.eval()
+                        self.kd_models[task].append(teacher_model)
+                        logger.info(f'Loaded teacher {state_path}')
+                        
+                    self.kd_criterions[task] = load(
+                        kd_config['criterion']['name'],
+                        **kd_config['criterion']['params'])
+                    logger.info(f'Loaded KD criterion for task {task}: {kd_config["criterion"]["name"]} with params {kd_config["criterion"]["params"]}')
         
     def _load_components(self) -> None:
         logger.subheader('Loading Components')
@@ -164,7 +168,7 @@ class Trainer(BaseProcessor):
                     **criterion_config['params'])
                 logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
 
-
+        self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
         optimizer_config = self.config['training']['optimizer']
         model_parameter_groups = [
             {
@@ -174,6 +178,11 @@ class Trainer(BaseProcessor):
             {
                 'params': [p for n, p in self.model.named_parameters() if 'encoder' not in n and p.requires_grad],
                 'lr': optimizer_config['base_lr']
+            },
+            {
+                'params': self.automatic_weighted_loss.parameters(),
+                'lr': optimizer_config['base_lr'],
+                'weight_decay': 0.0
             }
         ]
         optimizer_class = load(optimizer_config['name'])
@@ -211,6 +220,7 @@ class Trainer(BaseProcessor):
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
         total_loss = 0
+        total_task_weights = {task: 0.0 for task in self.tasks}
         
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
         for images, targets in batch_tqdm:
@@ -219,14 +229,9 @@ class Trainer(BaseProcessor):
 
 
             with torch.set_grad_enabled(True):
-                total_loss_batch = torch.tensor(0.0, device=self.device)
-
                 outputs = self.model(images)
                 
-                for task, outputs_task in outputs.items():
-                    loss = self.criterions[task](outputs_task, targets[task])
-                    weight = self.config['training']['tasks'][task]['criterion']['weight']
-                    total_loss_batch += (weight * loss)
+                total_loss_batch = self.automatic_weighted_loss(outputs, targets)
                     
                 if self.kd_models:
                     for task, kd_teachers in self.kd_models.items():
@@ -237,16 +242,25 @@ class Trainer(BaseProcessor):
                         
                         kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
                         kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
-                        total_loss_batch += kd_weight * kd_loss
+                        total_loss_batch += (kd_weight * kd_loss)
                         
                 self.optimizer.zero_grad()
                 total_loss_batch.backward()
                 self.optimizer.step()
                 
                 total_loss += total_loss_batch.item()
+                
                 batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+                with torch.no_grad():
+                    for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
+                        current_task_weight = torch.exp(-s_param).item()
+                        total_task_weights[task] += current_task_weight
         
-        return {'optimization/loss_training': total_loss / len(self.dataloader_train)}
+        epoch_metrics = {'optimization/loss_training': total_loss / len(self.dataloader_train)}
+        for task, total_task_weight in total_task_weights.items():
+            epoch_metrics[f'optimization/task_weight_{task}'] = total_task_weight / len(self.dataloader_train)
+        
+        return epoch_metrics
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()

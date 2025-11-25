@@ -1,7 +1,6 @@
 data:
   dataset: data.datasets.OverfitDataset
-  cross_validation: true
-  batch_size: 8
+  cross_validation: false
 
   transforms:
     train:
@@ -67,11 +66,8 @@ data:
 
 training:
   epochs: 5000
-  scheduler:
-    name: torch.optim.lr_scheduler.ConstantLR
-    params:
-      factor: 1.0
-      total_iters: 1
+  optimizer:
+    base_lr: 3.0e-4
 
   encoder:
     name: models.encoders.timm.Encoder
