@@ -219,7 +219,8 @@ class Trainer(BaseProcessor):
 
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
-        total_loss = 0
+        total_loss_weighted = 0
+        total_raw_task_losses = {task: 0.0 for task in self.tasks}
         total_task_weights = {task: 0.0 for task in self.tasks}
         
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
@@ -227,11 +228,10 @@ class Trainer(BaseProcessor):
             images = images.to(self.device)
             targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
 
-
             with torch.set_grad_enabled(True):
                 outputs = self.model(images)
                 
-                total_loss_batch = self.automatic_weighted_loss(outputs, targets)
+                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                     
                 if self.kd_models:
                     for task, kd_teachers in self.kd_models.items():
@@ -242,29 +242,32 @@ class Trainer(BaseProcessor):
                         
                         kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
                         kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
-                        total_loss_batch += (kd_weight * kd_loss)
+                        loss += (kd_weight * kd_loss)
                         
                 self.optimizer.zero_grad()
-                total_loss_batch.backward()
+                loss.backward()
                 self.optimizer.step()
                 
-                total_loss += total_loss_batch.item()
+                total_loss_weighted += loss.item()
                 
-                batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+                batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
+                for task, raw_task_loss in raw_task_losses.items():
+                    total_raw_task_losses[task] += raw_task_loss
                 with torch.no_grad():
                     for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
-                        current_task_weight = torch.exp(-s_param).item()
-                        total_task_weights[task] += current_task_weight
+                        total_task_weights[task] += torch.exp(-s_param).item()
         
-        epoch_metrics = {'optimization/loss_training': total_loss / len(self.dataloader_train)}
-        for task, total_task_weight in total_task_weights.items():
-            epoch_metrics[f'optimization/task_weight_{task}'] = total_task_weight / len(self.dataloader_train)
+        epoch_metrics = {'optimization/training/loss/weighted': total_loss_weighted / len(self.dataloader_train)}
+        for task in self.tasks:
+            epoch_metrics[f'optimization/training/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
+            epoch_metrics[f'optimization/training/loss/weight_{task}'] = total_task_weights[task] / len(self.dataloader_train)
         
         return epoch_metrics
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()
-        total_loss = 0.0
+        total_loss_weighted = 0.0
+        total_raw_task_losses = {task: 0.0 for task in self.tasks}
         
         for task_metrics in self.metrics.values():
             for metric in task_metrics.values():
@@ -276,25 +279,24 @@ class Trainer(BaseProcessor):
             targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
             
             with torch.no_grad():
-                total_loss_batch = torch.tensor(0.0, device=self.device)
-                
                 outputs = self.model(images)
                 
-                for task, outputs_task in outputs.items():
-                    loss = self.criterions[task](outputs_task, targets[task])
-                    weight = self.config['training']['tasks'][task]['criterion']['weight']
-                    total_loss_batch += (weight * loss)
-                    
-                    for metric in self.metrics[task].values():
-                        metric.update(outputs_task, targets[task])
+                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
+                total_loss_weighted += loss.item()
                 
                 self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
-                
-                total_loss += total_loss_batch.item()
-                batch_tqdm.set_postfix({'batch_loss': f'{total_loss_batch.item():.4f}'})
+                for task, outputs_task in outputs.items():
+                    for metric in self.metrics[task].values():
+                        metric.update(outputs_task, targets[task])
+                        
+                batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
+                for task, raw_task_loss in raw_task_losses.items():
+                    total_raw_task_losses[task] += raw_task_loss
         
         epoch_metrics = self._compute_metrics()
-        epoch_metrics['optimization/loss_validation'] = total_loss / len(self.dataloader_val)
+        epoch_metrics['optimization/validation/loss/weighted'] = total_loss_weighted / len(self.dataloader_val)
+        for task in self.tasks:
+            epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
                 
         return epoch_metrics
     
@@ -316,14 +318,14 @@ class Trainer(BaseProcessor):
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
-            val_loss = val_epoch_metrics['optimization/loss_validation']
+            val_loss = val_epoch_metrics['optimization/validation/loss/weighted']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(val_loss)
             else:
                 self.scheduler.step()
             
             lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('optimization/learning_rate', lr, step=epoch)
+            mlflow.log_metric('optimization/training/learning_rate', lr, step=epoch)
             
             if val_loss < best_val_loss:
                 best_val_epoch = epoch
@@ -331,11 +333,11 @@ class Trainer(BaseProcessor):
                 best_val_epoch_metrics = val_epoch_metrics
                 
                 torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
-                mlflow.log_metric('optimization/loss_validation_best', best_val_loss, step=epoch)
+                mlflow.log_metric('optimization/validation/loss/best', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/loss_training']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/training/loss/weighted']:.4f}',
                 'val_loss': f'{val_loss:.4f}',
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
@@ -354,18 +356,18 @@ class Trainer(BaseProcessor):
             train_epoch_metrics = self._train_epoch()
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            train_loss = train_epoch_metrics['optimization/loss_training']
+            train_loss = train_epoch_metrics['optimization/training/loss/weighted']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(train_loss)
             else:
                 self.scheduler.step()
             
             lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('optimization/learning_rate', lr, step=epoch)
+            mlflow.log_metric('optimization/training/learning_rate', lr, step=epoch)
             
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/loss_training']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/training/loss/weighted']:.4f}',
             })
         
         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))

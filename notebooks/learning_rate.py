@@ -5,6 +5,8 @@ sys.path.append(os.path.dirname(os.getcwd()))
 
 import yaml
 
+import torch
+import torch.nn as nn
 from torch_lr_finder import LRFinder, TrainDataLoaderIter, ValDataLoaderIter
 
 from utils import helpers
@@ -13,13 +15,10 @@ from processors.trainer import Trainer
 from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 
 # %% Settings
-EXPERIMENT = 'overfit'
-TASK = 'segmentation'
-START_LR = 1e-10
+EXPERIMENT = 'debug'
+START_LR = 1e-7
 END_LR = 10
 NUM_ITER = 100
-
-# TODO: adjust for multi TASK
 
 # %%
 with open('../configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
@@ -28,9 +27,15 @@ config = helpers.deep_merge(experiment_config, base_config)
 config['data']['batch_size'] = 8
 
 # %%
+class AutomaticWeightedLossWraper(nn.Module):
+    def __init__(self, automatic_weighted_loss):
+        super().__init__()
+        self.automatic_weighted_loss = automatic_weighted_loss
+        
+    def forward(self, outputs, targets):
+        total_loss, _ = self.automatic_weighted_loss(outputs, targets)
+        return total_loss
 
-
-# %%
 class DictToDevice:
     def __init__(self, data_dict):
         self.data_dict = data_dict
@@ -53,7 +58,8 @@ print(f'LR Finder for configuration: {EXPERIMENT}')
 dataset_class = load(config['data']['dataset'])
 trainer = Trainer(config, train_subsets=dataset_class(mode='train').get_all_subset_names())
 model = trainer.model
-criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
+raw_criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
+criterion = AutomaticWeightedLossWraper(raw_criterion).to('cuda')
 train_iter = MultiTaskIter(trainer.dataloader_train)
 
 optimizer_config = config['training']['optimizer']

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 '''
-Uses the homoscedastic uncertainty weighting method from: Kendall (2018)
+Uses the homoscedastic uncertainty weighting method by Kendall (2018)
 See page 5, bottom left formula
 '''
 
@@ -19,13 +19,13 @@ class AutomaticWeightedLoss(nn.Module):
 
     def forward(self, outputs, targets):
         total_loss = 0.0
+        raw_task_losses = {}
         
         for task, output in outputs.items():
             if task in self.criterions and task in targets:
                 criterion = self.criterions[task]
-                raw_loss = criterion(output, targets[task])
-                logarithmic_variance = self.logarithmic_variances[task]
-                precision = torch.exp(-logarithmic_variance)
+                raw_task_loss = criterion(output, targets[task])
+                raw_task_losses[task] = raw_task_loss.item()                
                 
                 # Uncertainty Formula from paper:
                 # L_total = sum( (1 / 2*sigma_i^2) * L_i + log(sigma_i) )
@@ -36,6 +36,8 @@ class AutomaticWeightedLoss(nn.Module):
                 # precision = 1/(sigma_i^2) [paper] = exp(-s): confidence in task i, exp conversion to ensure positivity and avoid division by zero
                 # ! Important: Paper uses 1 * precision for classification tasks, and 0.5 * precision for regression tasks. Here we use 0.5 for all tasks for simplicity and because precision is trainable anyways.
                 # ! Important: Weight Decay should not be applied as optimizer wants to force logarithmic_variance to zero otherwise.
-                total_loss += (0.5 * precision * raw_loss) + (0.5 * logarithmic_variance)
+                logarithmic_variance = self.logarithmic_variances[task]
+                precision = torch.exp(-logarithmic_variance)
+                total_loss += (0.5 * precision * raw_task_loss) + (0.5 * logarithmic_variance)
                 
-        return total_loss
+        return total_loss, raw_task_losses

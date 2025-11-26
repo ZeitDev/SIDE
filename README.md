@@ -27,7 +27,7 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 
 1. `source .venv/bin/activate`
 2. `mlflow ui`
-3. open mlflow server website
+3. open mlflow server website (shown in terminal, usually `127.0.0.1:5000`)
 
 ## Features
 
@@ -37,7 +37,50 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 * **Custom Datasets:** Define custom datasets, paths, sequences in ./data/datasets.py
 * **MLflow Logging:** Full experiment tracking, including full repository snapshot, metrics, cross validation summary, best validation or full training model state, segmentation mask validation images, learning rate, loss and all config parameters (extractable as pandas dataframes)
 * **Multi-Task Learning:** Training of a shared-feature encoder + seperate task decoders (not yet tested)
+* **Automatic Weighted Loss:** Uses the homoscedastic uncertainty weighting method by Kendall (2018) for multi-task weight normalization
 * **Multi-Teacher Knowledge Distillation:** Multiple teacher per task for knowledge distillation (not yet verified and tested)
-* **Config:** Comprehensible config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging settings
+* **Config:** Comprehensible settings config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging
 * **Evaluation:** Notebooks for evaluation (not fully implemented)
 * **Test Cases:** Test cases for verification of metrics
+* **LR Finder:** Learning rate finder by fastai exponential (increasing the LR in an exponential manner)
+
+## MLflow Logging Intervals
+
+* Experiment Run *(e.g. 251125:1636)*
+    * Complete config *(saved in Parameters, propagated to subruns)*
+    * Snapshot of all relevant files in repository *(saved in Artifacts)*
+    * Parent name, run type, description *(saved in Tags)*
+* Full/CV Training Subrun *(e.g. 251125:1636/train)*
+    * Parent name, run mode
+    * *Each Epoch (saved in Model Metrics)*
+        * Learning Rate
+        * Automatic Task Weights
+        * Training Weighted Loss 
+        * Training Raw Task Loss 
+        * Validation Weighted Loss *(only CV)*
+        * Validation Raw Loss *(only CV)*
+        * Best Validation Loss *(only CV)*
+        * Segmentation Overlay Images *(only CV and if set by config)*
+    * *Each Run (saved in Models)*
+        * Best model determined by lowest validation loss *(CV)* or after all epochs *(Full) [better approach for Full Training?]*
+* Test Subrun *(e.g. 211125:1636/test)*
+    * Performance Metrics *(saved in Model Metrics)*
+        * Mean and per class
+            * IoU, DICE
+
+## Notes
+
+### Negative Overall Loss
+When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, so the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
+
+### Encoder LR Mod
+As the encoder is already pretrained, we lower the corresponding learning rate to a more conversative value to preserver the pretrained knowledge.
+
+### Cosine Annealing with Warmup
+TODO: read paper
+Can escape saddle points. SOTA for transformers, but also applicable to CNNs?
+
+### LRFinder
+Automatic Weighted Loss needs to have frozen uncertainty weights, because when the exponential learning rate explodes the Automatic Weights will fight against it, preventing the loss moutain we want to see at the end of the graph.
+
+Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
