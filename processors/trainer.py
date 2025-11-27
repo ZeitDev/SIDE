@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from mlflow.models.signature import infer_signature
 
 from utils import helpers
-from utils.helpers import load
+from utils.helpers import load, log_vram
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from criterions.automatic_weighted_loss import AutomaticWeightedLoss
@@ -28,6 +28,7 @@ class Trainer(BaseProcessor):
         self._load_teachers()
         self._load_components()
         self._init_metrics()
+        log_vram('Trainer Initialized')
         
     def _load_data(self) -> None:
         logger.subheader('Load Data')
@@ -233,7 +234,6 @@ class Trainer(BaseProcessor):
 
             with torch.set_grad_enabled(True):
                 outputs = self.model(images)
-                
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                     
                 if self.kd_models:
@@ -259,7 +259,7 @@ class Trainer(BaseProcessor):
                 with torch.no_grad():
                     for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
                         total_task_weights[task] += torch.exp(-s_param).item()
-        
+                        
         epoch_metrics = {'optimization/training/loss/weighted': total_loss_weighted / len(self.dataloader_train)}
         for task in self.tasks:
             epoch_metrics[f'optimization/training/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
@@ -343,6 +343,7 @@ class Trainer(BaseProcessor):
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
             })
+            log_vram(f'Trainer Epoch {epoch}')
             
         self._save_model()
         del self.model
@@ -373,6 +374,8 @@ class Trainer(BaseProcessor):
                 'lr': f'{lr:.2e}',
                 'train_loss': f'{train_epoch_metrics['optimization/training/loss/weighted']:.4f}',
             })
+            log_vram(f'Full Trainer Epoch {epoch}')
+            
         
         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
         self._save_model()
