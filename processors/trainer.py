@@ -1,6 +1,6 @@
 import os
+import gc
 import logging
-import numpy as np
 from tqdm import tqdm
 from typing import cast, Any, List, Dict, Optional
 
@@ -51,7 +51,8 @@ class Trainer(BaseProcessor):
             batch_size=data_config['batch_size'],
             shuffle=True,
             num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory']
+            pin_memory=data_config['pin_memory'],
+            persistent_workers=False
         )
         
         dataset_val = dataset_class(
@@ -66,7 +67,8 @@ class Trainer(BaseProcessor):
                 batch_size=data_config['batch_size'],
                 shuffle=False,
                 num_workers=data_config['num_workers'],
-                pin_memory=data_config['pin_memory']
+                pin_memory=data_config['pin_memory'],
+                persistent_workers=False
             )
             
         signature_input_example, _ = dataset_train[0] 
@@ -204,6 +206,8 @@ class Trainer(BaseProcessor):
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
         self.model.load_state_dict(state_dict['model_state_dict'])
         self.model.to('cpu')
+        self.model.eval()
+        
         with torch.no_grad():
             signature_output_example = self.model(self.signature_input_example)
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
@@ -215,7 +219,6 @@ class Trainer(BaseProcessor):
             code_paths=['models/'],
             signature=signature
         )
-        self.model.to(self.device)
 
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
@@ -319,10 +322,8 @@ class Trainer(BaseProcessor):
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
             val_loss = val_epoch_metrics['optimization/validation/loss/weighted']
-            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                self.scheduler.step(val_loss)
-            else:
-                self.scheduler.step()
+            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau): self.scheduler.step(val_loss)
+            else: self.scheduler.step()
             
             lr = self.optimizer.param_groups[0]['lr']
             mlflow.log_metric('optimization/training/learning_rate', lr, step=epoch)
@@ -344,6 +345,9 @@ class Trainer(BaseProcessor):
             })
             
         self._save_model()
+        del self.model
+        del self.optimizer
+        del self.scheduler
             
         return best_val_epoch_metrics
     
@@ -372,4 +376,7 @@ class Trainer(BaseProcessor):
         
         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
         self._save_model()
- 
+        del self.model
+        del self.optimizer
+        del self.scheduler
+

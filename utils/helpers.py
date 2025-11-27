@@ -1,11 +1,16 @@
 import os
 import mlflow
+import logging
 import importlib
 import collections.abc
-from typing import Dict, Any, List, Optional
+from typing import cast, Dict, Any, List, Optional
 
+import torch
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+
+from utils.logger import CustomLogger
+logger = cast(CustomLogger, logging.getLogger(__name__))
 
 def load(class_string, **kwargs):
     """
@@ -95,7 +100,7 @@ def _flatten_config(d, parent_key='', sep='.'):
                 items.append((new_key, v))
             else:
                 for i, item in enumerate(v):
-                    list_key = f"{new_key}{sep}{i}"
+                    list_key = f'{new_key}{sep}{i}'
                     if isinstance(item, collections.abc.MutableMapping):
                         items.extend(_flatten_config(item, list_key, sep=sep).items())
                     else:
@@ -103,3 +108,10 @@ def _flatten_config(d, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
+
+def log_vram(stage: str = ''):
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
+        reserved = torch.cuda.memory_reserved(0) / 1024**3  # GB
+        total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+        logger.vram(f'[{stage}] Allocated: {allocated:.2f}GB | Reserved: {reserved:.2f}GB | Total: {total:.2f}GB')

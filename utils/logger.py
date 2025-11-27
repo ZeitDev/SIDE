@@ -1,6 +1,10 @@
+import sys
+import torch
 import logging
 import logging.config
-import sys
+
+VRAM_LEVEL = 25  # Between INFO (20) and WARNING (30)
+logging.addLevelName(VRAM_LEVEL, "VRAM")
 
 class CustomLogger(logging.Logger):
     """A custom logger class with a 'header' method."""
@@ -27,9 +31,13 @@ class CustomLogger(logging.Logger):
         print()
         self.info(message, *args, **kwargs)
         
+    def vram(self, message, *args, **kwargs):
+        if self.isEnabledFor(VRAM_LEVEL):
+            self._log(VRAM_LEVEL, message, args, **kwargs)
+        
 logging.setLoggerClass(CustomLogger)
   
-def setup_logging(log_filepath):
+def setup_logging(log_filepath, vram_only=False):
     """
     Configures logging to save to a custom file in the 'logs' directory.
     """
@@ -50,6 +58,7 @@ def setup_logging(log_filepath):
                     'WARNING': 'yellow',
                     'ERROR': 'red',
                     'CRITICAL': 'red,bg_white',
+                    'VRAM': 'purple',
                 },
                 'datefmt': '%H:%M:%S'
             },
@@ -57,7 +66,7 @@ def setup_logging(log_filepath):
         'handlers': {
             'console': {
                 'class': 'logging.StreamHandler',
-                'level': 'INFO',
+                'level': VRAM_LEVEL if vram_only else 'INFO',
                 'formatter': 'colored',
                 'stream': sys.stdout,
             },

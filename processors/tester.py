@@ -39,8 +39,9 @@ class Tester(BaseProcessor):
             batch_size=data_config['batch_size'],
             shuffle=False,
             num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'])
-            
+            pin_memory=data_config['pin_memory'],
+            persistent_workers=False
+        )
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
         if self.config['training']['tasks']['segmentation']['enabled']:
@@ -80,5 +81,7 @@ class Tester(BaseProcessor):
         test_metrics = self._compute_metrics()
         for metric_key, metric_value in test_metrics.items():
             logger.info(f'{metric_key}: {metric_value:.4f}')
+            
+        del self.model
             
         return test_metrics    

@@ -1,5 +1,6 @@
 import os
 import yaml
+import copy
 import logging
 import argparse
 import datetime
@@ -12,11 +13,11 @@ from processors.trainer import Trainer
 from processors.tester import Tester
 
 from utils import helpers
-from utils.helpers import load
+from utils.helpers import load, log_vram
 
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
-logging.getLogger("mlflow.utils.environment").setLevel(logging.ERROR)
+logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
 # TODO: Implement MAE metric for disparity task
@@ -38,7 +39,8 @@ def main():
         run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")
         
         log_filepath = os.path.join('logs', f'{run_datetime}_{experiment_name}.log')
-        setup_logging(log_filepath=log_filepath)
+        setup_logging(log_filepath=log_filepath, vram_only=config['logging']['vram'])
+        log_vram('Start')
         
         dataset_class = load(config['data']['dataset'])
         all_train_subsets = dataset_class(mode='train').get_all_subset_names()
@@ -72,9 +74,10 @@ def main():
                             tags['fold'] = str(i + 1)
                             tags['val_subset'] = val_subset
                             helpers.mlflow_log_run(config, tags=tags)
+                            log_vram(f'Fold {i+1} Start')
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
-                            trainer = Trainer(config, train_subsets=train_subsets, val_subsets=[val_subset])
+                            trainer = Trainer(copy.deepcopy(config), train_subsets=train_subsets, val_subsets=[val_subset])
                             best_val_epoch_metrics = trainer.train()
                             
                             if best_val_epoch_metrics['optimization/validation/loss/weighted'] < best_fold_loss:
@@ -85,6 +88,8 @@ def main():
                             for metric_name, metric_value in best_val_epoch_metrics.items():
                                 if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
                                     fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
+                                    
+                            log_vram(f'Fold {i+1} End')
                     
                     logger.header('Cross-Validation Summary')
                     logger.info(f'Best Fold: {best_fold} with Loss: {best_fold_loss:.4f}')
@@ -110,21 +115,24 @@ def main():
                     tags['run_type'] = 'train'
                     tags['run_mode'] = 'full_training'
                     helpers.mlflow_log_run(config, tags=tags)
+                    log_vram('Full Training Start')
                     
                     best_model_run_id = train_run.info.run_id
                     trainer = Trainer(config, train_subsets=all_train_subsets)
                     trainer.train_without_validation()
+                    log_vram('Full Training End')
             
             logger.header('Mode: Testing Best Model')
             with mlflow.start_run(run_name=f'{run.info.run_name}/test', nested=True) as test_run:
                 tags['parent_name'] = run.info.run_name
                 tags['run_type'] = 'test'
                 helpers.mlflow_log_run(config, tags=tags)
+                log_vram('Testing Start')
                 
                 tester = Tester(config, run_id=best_model_run_id)
                 test_metrics = tester.test()
                 mlflow.log_metrics(test_metrics)
-                
+                log_vram('Testing End')
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')
@@ -133,6 +141,7 @@ def main():
         raise error
     finally:
         if mlflow.active_run(): mlflow.end_run()
+        log_vram('End')
         logger.single('MLflow run cleaned up')
             
 if __name__ == "__main__":

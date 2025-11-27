@@ -1,5 +1,5 @@
 data:
-  dataset: data.datasets.EndoVis17
+  dataset: data.datasets.OverfitDataset
   cross_validation: true
 
   transforms:
@@ -86,4 +86,5 @@ training:
       enabled: false
 
 logging:
+  vram: true
   n_validation_images: 4
