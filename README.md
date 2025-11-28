@@ -41,7 +41,7 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 * **Multi-Teacher Knowledge Distillation:** Multiple teacher per task for knowledge distillation (not yet verified and tested)
 * **Config:** Comprehensible settings config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging
 * **Evaluation:** Notebooks for evaluation (not fully implemented)
-* **Test Cases:** Test cases for verification of metrics
+* **Test Cases:** Test cases for verification of central components `uv run pytest` (tests every file that starts with 'test*')
 * **LR Finder:** Learning rate finder by fastai exponential (increasing the LR in an exponential manner)
 
 ## MLflow Logging Intervals
@@ -70,11 +70,18 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 
 ## Notes
 
-### Negative Overall Loss
-When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, so the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
+### Modular Encoder + Decoder
+* Encoder needs to return feature map
+* Standard Decoder resembles mostly a U-Net with custom Heads for each task. Can adjust dynamically to corresponding feature maps provided by different encoders.
+
+### Test Cases
+* Verification of correct IoU and DICE calculation
+
+### Negative Weighted Loss
+When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, such that the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
 
 ### Encoder LR Mod
-As the encoder is already pretrained, we lower the corresponding learning rate to a more conversative value to preserver the pretrained knowledge.
+As the encoder is already pretrained, we lower the corresponding learning rate to a more conversative value to preserve the pretrained knowledge.
 
 ### Cosine Annealing with Warmup
 TODO: read paper
@@ -84,3 +91,5 @@ Can escape saddle points. SOTA for transformers, but also applicable to CNNs?
 Automatic Weighted Loss needs to have frozen uncertainty weights, because when the exponential learning rate explodes the Automatic Weights will fight against it, preventing the loss moutain we want to see at the end of the graph.
 
 Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
+
+

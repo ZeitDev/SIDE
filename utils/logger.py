@@ -3,7 +3,7 @@ import torch
 import logging
 import logging.config
 
-VRAM_LEVEL = 25  # Between INFO (20) and WARNING (30)
+VRAM_LEVEL = 25
 logging.addLevelName(VRAM_LEVEL, "VRAM")
 
 class CustomLogger(logging.Logger):
@@ -88,3 +88,8 @@ def setup_logging(log_filepath, vram_only=False):
     }
 
     logging.config.dictConfig(LOGGING_CONFIG)
+    if not vram_only:
+        root_logger = logging.getLogger('')
+        for handler in root_logger.handlers:
+            if getattr(handler, 'name', None) == 'console':
+                handler.addFilter(lambda record: record.levelno != VRAM_LEVEL)

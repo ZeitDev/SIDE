@@ -78,7 +78,7 @@ class Tester(BaseProcessor):
                 self._log_visuals(epoch='Test', images=images, targets=targets, outputs=outputs)
 
         logger.subheader('Test Results')
-        test_metrics = self._compute_metrics()
+        test_metrics = self._compute_metrics(mode='testing')
         for metric_key, metric_value in test_metrics.items():
             logger.info(f'{metric_key}: {metric_value:.4f}')
             

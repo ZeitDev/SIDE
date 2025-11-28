@@ -61,7 +61,7 @@ class BaseProcessor:
         if tasks_config['disparity']['enabled']:
             pass # TODO: implement disparity metrics
 
-    def _compute_metrics(self) -> Dict[str, float]:
+    def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:
         computed_metrics = {}
         for task, task_metrics in self.metrics.items():
             for metric_name, metric in task_metrics.items():
@@ -70,9 +70,9 @@ class BaseProcessor:
                 for key, value in metric_results.items():
                     if isinstance(key, int) and self.segmentation_class_mappings:
                         class_name = self.segmentation_class_mappings[key].replace(' ', '_').lower()
-                        computed_metrics[f'performance/{task}/{metric_name}/{key}::{class_name}'] = value
+                        computed_metrics[f'performance/{mode}/{task}/{metric_name}/{key}::{class_name}'] = value
                     else:
-                        computed_metrics[f'performance/{task}/{metric_name}/{key}'] = value
+                        computed_metrics[f'performance/{mode}/{task}/{metric_name}/{key}'] = value
         return computed_metrics
     
     def _log_visuals(self, epoch: Any, images: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]) -> None:

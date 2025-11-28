@@ -111,7 +111,8 @@ def _flatten_config(d, parent_key='', sep='.'):
 
 def log_vram(stage: str = ''):
     if torch.cuda.is_available():
-        allocated = torch.cuda.memory_allocated(0) / 1024**3  # GB
-        reserved = torch.cuda.memory_reserved(0) / 1024**3  # GB
-        total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+        device = torch.cuda.current_device()
+        allocated = torch.cuda.memory_allocated(device) / 1024**3
+        reserved = torch.cuda.memory_reserved(device) / 1024**3
+        total = torch.cuda.get_device_properties(device).total_memory / 1024**3
         logger.vram(f'[{stage}] Allocated: {allocated:.2f}GB | Reserved: {reserved:.2f}GB | Total: {total:.2f}GB')

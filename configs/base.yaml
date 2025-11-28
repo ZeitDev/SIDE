@@ -63,6 +63,7 @@ training:
         params:
           softmax: True
           to_onehot_y: True
+          include_background: False
       decoder:
         name: models.simple_unet.SegmentationDecoder
         params: {}
@@ -104,5 +105,6 @@ training:
           params: {}
 
 logging:
+  vram: false
   notebook_mode: false
   n_validation_images: 4

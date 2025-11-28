@@ -40,7 +40,6 @@ def main():
         
         log_filepath = os.path.join('logs', f'{run_datetime}_{experiment_name}.log')
         setup_logging(log_filepath=log_filepath, vram_only=config['logging']['vram'])
-        log_vram('Start')
         
         dataset_class = load(config['data']['dataset'])
         all_train_subsets = dataset_class(mode='train').get_all_subset_names()
@@ -74,7 +73,6 @@ def main():
                             tags['fold'] = str(i + 1)
                             tags['val_subset'] = val_subset
                             helpers.mlflow_log_run(config, tags=tags)
-                            log_vram(f'Fold {i+1} Start')
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
                             trainer = Trainer(copy.deepcopy(config), train_subsets=train_subsets, val_subsets=[val_subset])
@@ -89,7 +87,7 @@ def main():
                                 if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
                                     fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
                                     
-                            log_vram(f'Fold {i+1} End')
+                            log_vram(f'Fold {i+1}')
                     
                     logger.header('Cross-Validation Summary')
                     logger.info(f'Best Fold: {best_fold} with Loss: {best_fold_loss:.4f}')

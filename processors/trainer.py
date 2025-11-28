@@ -296,7 +296,7 @@ class Trainer(BaseProcessor):
                 for task, raw_task_loss in raw_task_losses.items():
                     total_raw_task_losses[task] += raw_task_loss
         
-        epoch_metrics = self._compute_metrics()
+        epoch_metrics = self._compute_metrics(mode='validation')
         epoch_metrics['optimization/validation/loss/weighted'] = total_loss_weighted / len(self.dataloader_val)
         for task in self.tasks:
             epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)

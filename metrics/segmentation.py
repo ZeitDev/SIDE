@@ -42,8 +42,9 @@ class IoU(SegmentationMetric):
         
         results = {}
         for i, iou in enumerate(iou_per_class): results[i] = iou.item()
+        present_classes = self.confusion_matrix.sum(dim=1) > 0
             
-        valid_iou = iou_per_class[~torch.isnan(iou_per_class)]
+        valid_iou = iou_per_class[present_classes & ~torch.isnan(iou_per_class)]
         mean_iou = valid_iou.mean().item()
         results['mIoU'] = mean_iou
         
@@ -59,8 +60,9 @@ class Dice(SegmentationMetric):
 
         results = {}
         for i, dice in enumerate(dice_per_class): results[i] = dice.item()
+        present_classes = self.confusion_matrix.sum(dim=1) > 0
 
-        valid_dice = dice_per_class[~torch.isnan(dice_per_class)]
+        valid_dice = dice_per_class[present_classes & ~torch.isnan(dice_per_class)]
         mean_dice = valid_dice.mean().item()
         results['mDICE'] = mean_dice
             
