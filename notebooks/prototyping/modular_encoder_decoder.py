@@ -124,11 +124,11 @@ class UniversalFramework(nn.Module):
         # pretrained=True for transfer learning from ImageNet
         self.encoder = timm.create_model(encoder_name, features_only=True, pretrained=True)
         
-        all_encoder_reductions = self.encoder.feature_info.reduction() # type: ignore
+        all_encoder_reductions = self.encoder.feature_info.reduction() 
         print("Encoder reductions:", all_encoder_reductions)
         
         # Encoder: [16, 24, 40, 112, 320] (Top -> Bottom)
-        all_n_encoder_channels = self.encoder.feature_info.channels() # type: ignore
+        all_n_encoder_channels = self.encoder.feature_info.channels() 
         print("Encoder channels:", all_n_encoder_channels)
         
         # Decoder: [320, 112, 40, 24, 16] (Bottom -> Top)
@@ -208,14 +208,14 @@ model = Combiner(
         'segmentation': AttachHead(
             decoder_class=ModularDecoder,
             num_classes=8,
-            encoder_channels=encoder.feature_info.channels(), # type: ignore
-            encoder_reductions=encoder.feature_info.reduction() # type: ignore
+            encoder_channels=encoder.feature_info.channels(), 
+            encoder_reductions=encoder.feature_info.reduction() 
         ),
         'depth': AttachHead(
             decoder_class=ModularDecoder,
             num_classes=1,
-            encoder_channels=encoder.feature_info.channels(), # type: ignore
-            encoder_reductions=encoder.feature_info.reduction() # type: ignore
+            encoder_channels=encoder.feature_info.channels(), 
+            encoder_reductions=encoder.feature_info.reduction() 
         )
     }
 )
@@ -243,14 +243,14 @@ with torch.no_grad():
 signature = infer_signature(dummy_input, dummy_output)
 
 with mlflow.start_run() as run:
-    mlflow.pytorch.log_model( # type: ignore
+    mlflow.pytorch.log_model( 
         pytorch_model=model,
         name="modular_encoder_decoder_model",
         code_paths=["modular_encoder_decoder.py"],
         signature=signature
     )
     
-loaded_model = mlflow.pytorch.load_model( # type: ignore
+loaded_model = mlflow.pytorch.load_model( 
     model_uri=f"runs:/{run.info.run_id}/modular_encoder_decoder_model"
 )
 loaded_model.eval()

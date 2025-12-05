@@ -81,7 +81,7 @@ class Trainer(BaseProcessor):
         
         if 'segmentation' in self.tasks:
             self.segmentation_class_mappings = dataset_train.class_mappings
-            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) # type: ignore
+            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
         
     def _load_model(self) -> None:
@@ -101,8 +101,8 @@ class Trainer(BaseProcessor):
                 decoders[task] = AttachHead(
                     decoder_class=DecoderClass,
                     n_classes=self.n_classes[task],
-                    encoder_channels=encoder.feature_info.channels(), # type: ignore
-                    encoder_reductions=encoder.feature_info.reduction(), # type: ignore
+                    encoder_channels=encoder.feature_info.channels(), 
+                    encoder_reductions=encoder.feature_info.reduction(), 
                     **decoder_config['params']
                 )
                 logger.info(f'Loaded decoder for task {task}: {decoder_config["name"]} with params {decoder_config["params"]}')
@@ -214,7 +214,7 @@ class Trainer(BaseProcessor):
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
             
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
-        mlflow.pytorch.log_model( # type: ignore
+        mlflow.pytorch.log_model( 
             pytorch_model=self.model,
             name='best_model',
             code_paths=['models/'],

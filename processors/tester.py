@@ -46,14 +46,14 @@ class Tester(BaseProcessor):
         
         if self.config['training']['tasks']['segmentation']['enabled']:
             self.segmentation_class_mappings = dataset_test.class_mappings
-            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) # type: ignore
+            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
         
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
             
     def _load_models(self) -> None:
         logger.subheader('Loading Model')
         model_path = f'runs:/{self.run_id}/best_model'
-        self.model = mlflow.pytorch.load_model(model_path, map_location=self.device) # type: ignore
+        self.model = mlflow.pytorch.load_model(model_path, map_location=self.device) 
         self.model.eval()
         logger.info(f'Loaded best model from {model_path}')
  

@@ -22,8 +22,8 @@ show_n_images = 10 # None for all images
 # %% Load mlflow data
 # Load mlflow data
 mlflow.set_tracking_uri('../mlruns')
-mlflow_experiment = mlflow.get_experiment_by_name(experiment) # type: ignore
-mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f"run_name = '{run}'").iloc[0] # type: ignore
+mlflow_experiment = mlflow.get_experiment_by_name(experiment) 
+mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f"run_name = '{run}'").iloc[0] 
 model_path = f'{run}/{model_path}'
 
 base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../cache')
@@ -41,43 +41,43 @@ path_depth = len(run_parts)
 model_run_id = ''
 
 run_id = mlflow.search_runs(
-    experiment_ids=[mlflow_experiment.experiment_id], # type: ignore
+    experiment_ids=[mlflow_experiment.experiment_id], 
     filter_string=f"tags.mlflow.runName = '{run}'",
     order_by=["attributes.start_time DESC"],
     max_results=1
-).iloc[0].run_id # type: ignore
+).iloc[0].run_id 
 if path_depth == 2:
     sub_run_name = f'{run_parts[0]}/{run_parts[1]}'
     model_run_id = mlflow.search_runs(
-        experiment_ids=[mlflow_experiment.experiment_id], # type: ignore
+        experiment_ids=[mlflow_experiment.experiment_id], 
         filter_string=f"tags.mlflow.runName = '{sub_run_name}' and tags.mlflow.parentRunId = '{run_id}'",
         order_by=["attributes.start_time DESC"],
         max_results=1
-    ).iloc[0].run_id # type: ignore
+    ).iloc[0].run_id 
     
 elif path_depth == 3:
     sub_run_name = f'{run_parts[0]}/{run_parts[1]}'
     sub_run_id = mlflow.search_runs(
-        experiment_ids=[mlflow_experiment.experiment_id], # type: ignore
+        experiment_ids=[mlflow_experiment.experiment_id], 
         filter_string=f"tags.mlflow.runName = '{sub_run_name}' and tags.mlflow.parentRunId = '{run_id}'",
         order_by=["attributes.start_time DESC"],
         max_results=1
-    ).iloc[0].run_id # type: ignore
+    ).iloc[0].run_id 
 
     subsub_run_name = f'{run_parts[0]}/{run_parts[2]}'
     model_run_id = mlflow.search_runs(
-        experiment_ids=[mlflow_experiment.experiment_id], # type: ignore
+        experiment_ids=[mlflow_experiment.experiment_id], 
         filter_string=f"tags.mlflow.runName = '{subsub_run_name}' and tags.mlflow.parentRunId = '{sub_run_id}'",
         order_by=["attributes.start_time DESC"],
         max_results=1
-    ).iloc[0].run_id # type: ignore
+    ).iloc[0].run_id 
 
 # %%
 print(f'Testing Model \nExperiment: {experiment} \nRun: {run} \nModel Path: {model_path} \nID: {model_run_id}\n')
 tester = Tester(config, run_id=model_run_id)
 
 if show_n_images: config['logging']['n_validation_images'] = show_n_images
-else: config['logging']['n_validation_images'] = len(tester.dataloader_test.dataset) # type: ignore
+else: config['logging']['n_validation_images'] = len(tester.dataloader_test.dataset) 
 
 test_metrics = tester.test()
 [print(f'{k}: {v}') for k, v in test_metrics.items()];
