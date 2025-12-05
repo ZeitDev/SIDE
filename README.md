@@ -92,4 +92,8 @@ Automatic Weighted Loss needs to have frozen uncertainty weights, because when t
 
 Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
 
+### DimitrisPs/ris2017_toolkit problems
+* The toolkit uses INTER_LINEAR to resize masks, that creates classes that did not exist before. Thats fine for them, cause they only generate binary masks. Masks should always be interpolated with INTER_NEAREST.
+* The toolkit does not deinterlace the masks like they do with the RGB images, is that intended? TODO: check that
 
+### 
