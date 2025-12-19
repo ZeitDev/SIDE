@@ -4,11 +4,12 @@ from typing import cast, Any, Dict
 
 import torch
 import mlflow
+import mlflow.pytorch
 from torch.utils.data import DataLoader 
 
-from utils import helpers
 from utils.helpers import load
 from processors.base import BaseProcessor
+from data.transforms import build_transforms
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -27,7 +28,9 @@ class Tester(BaseProcessor):
         data_config = self.config['data']
         dataset_class = load(data_config['dataset'])
         
-        test_transforms = helpers.build_transforms(data_config['transforms']['test'])
+        self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
+        
+        test_transforms = build_transforms(data_config['transforms']['test'])
         
         dataset_test = dataset_class(
             mode='test',
@@ -44,11 +47,12 @@ class Tester(BaseProcessor):
         )
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
-        if self.config['training']['tasks']['segmentation']['enabled']:
+        if 'segmentation' in self.tasks:
             self.segmentation_class_mappings = dataset_test.class_mappings
             self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
-        
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
+        if 'disparity' in self.tasks:
+            self.n_classes['disparity'] = 1
             
     def _load_models(self) -> None:
         logger.subheader('Loading Model')
@@ -66,16 +70,18 @@ class Tester(BaseProcessor):
         
         batch_tqdm = tqdm(self.dataloader_test, desc='Testing', position=1, leave=False)
         with torch.no_grad():
-            for images, targets in batch_tqdm:
-                images = images.to(self.device)
-                targets = {key: value.to(self.device) for key, value in targets.items()}
+            for data in batch_tqdm:
+                left_images = data['image'].to(self.device)
+                if 'right_image' in data: right_images = data['right_image'].to(self.device)
+                targets = {task: data[task].to(self.device) for task in self.tasks}
                 
-                outputs = self.model(images)
+                outputs = self.model(left_images, right_images)
                 for task, output in outputs.items():
                     for metric in self.metrics[task].values():
                         metric.update(output, targets[task])
                             
-                self._log_visuals(epoch='Test', images=images, targets=targets, outputs=outputs)
+                if 'segmentation' in outputs:
+                    self._log_visuals(epoch='Test', images=left_images, targets=targets, outputs=outputs)
 
         logger.subheader('Test Results')
         test_metrics = self._compute_metrics(mode='testing')

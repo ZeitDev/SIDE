@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 from utils import visualization
 from metrics.segmentation import IoU, Dice
+from metrics.disparity import MAE
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -18,6 +19,7 @@ class BaseProcessor:
     def __init__(self, config: Dict[str, Any]):
         logger.header(f'Initializing {self.__class__.__name__}')
         self.config = config
+        self.tasks = []
         self.n_classes = {}
         self.metrics: Dict[str, Any] = {}
         self.segmentation_class_mappings: Optional[Dict[int, str]] = None
@@ -59,7 +61,10 @@ class BaseProcessor:
             logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.n_classes['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
-            pass # TODO: implement disparity metrics
+            self.metrics['disparity'] = {}
+            
+            self.metrics['disparity']['MAE'] = MAE(device=self.device)
+            logger.info('Initialized MAE metric for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:
         computed_metrics = {}

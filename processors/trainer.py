@@ -1,5 +1,4 @@
 import os
-import gc
 import logging
 from tqdm import tqdm
 from typing import cast, Any, List, Dict, Optional
@@ -9,10 +8,10 @@ import mlflow
 from torch.utils.data import DataLoader 
 from mlflow.models.signature import infer_signature
 
-from utils import helpers
 from utils.helpers import load, log_vram
 from models.manager import AttachHead
 from processors.base import BaseProcessor
+from data.transforms import build_transforms
 from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 
 from utils.logger import CustomLogger
@@ -38,8 +37,8 @@ class Trainer(BaseProcessor):
         
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
-        train_transforms = helpers.build_transforms(data_config['transforms']['train'])
-        val_transforms = helpers.build_transforms(data_config['transforms']['test'])
+        train_transforms = build_transforms(data_config['transforms']['train'])
+        val_transforms = build_transforms(data_config['transforms']['test'])
         
         dataset_train = dataset_class(
             mode='train',
@@ -83,6 +82,8 @@ class Trainer(BaseProcessor):
             self.segmentation_class_mappings = dataset_train.class_mappings
             self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
+        if 'disparity' in self.tasks: 
+            self.n_classes['disparity'] = 1
         
     def _load_model(self) -> None:
         logger.subheader('Loading Model')
@@ -202,7 +203,7 @@ class Trainer(BaseProcessor):
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
     
     def _save_model(self):
-        logger.info(f'Saving best model to mlflow')        
+        logger.info('Saving best model to mlflow')        
         
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
         self.model.load_state_dict(state_dict['model_state_dict'])
@@ -228,19 +229,22 @@ class Trainer(BaseProcessor):
         total_task_weights = {task: 0.0 for task in self.tasks}
         
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
-        for images, targets in batch_tqdm:
-            images = images.to(self.device)
-            targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
+        for data in batch_tqdm:
+            left_images = data['image'].to(self.device)
+            if 'right_image' in data: right_images = data['right_image'].to(self.device)
+            targets = {task: data[task].to(self.device) for task in self.tasks}
+            
 
             with torch.set_grad_enabled(True):
-                outputs = self.model(images)
+                outputs = self.model(left_images, right_images)
+                
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                     
                 if self.kd_models:
                     for task, kd_teachers in self.kd_models.items():
                         student_output = outputs[task]
                         with torch.no_grad():
-                            teacher_outputs = [teacher(images)[task] for teacher in kd_teachers]
+                            teacher_outputs = [teacher(left_images, right_images)[task] for teacher in kd_teachers]
                             mean_teacher_output = torch.mean(torch.stack(teacher_outputs), dim=0)
                         
                         kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
@@ -277,17 +281,19 @@ class Trainer(BaseProcessor):
                 metric.reset()
         
         batch_tqdm = tqdm(self.dataloader_val, desc='Validation', position=1, leave=False)
-        for images, targets in batch_tqdm:
-            images = images.to(self.device)
-            targets = {task: targets_task.to(self.device) for task, targets_task in targets.items()}
+        for data in batch_tqdm:
+            left_images = data['image'].to(self.device)
+            if 'right_image' in data: right_images = data['right_image'].to(self.device)
+            targets = {task: data[task].to(self.device) for task in self.tasks}
             
             with torch.no_grad():
-                outputs = self.model(images)
+                outputs = self.model(left_images, right_images)
                 
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                 total_loss_weighted += loss.item()
                 
-                self._log_visuals(epoch=epoch, images=images, targets=targets, outputs=outputs)
+                if 'segmentation' in outputs:
+                    self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
                 for task, outputs_task in outputs.items():
                     for metric in self.metrics[task].values():
                         metric.update(outputs_task, targets[task])

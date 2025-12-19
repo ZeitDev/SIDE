@@ -6,8 +6,6 @@ import collections.abc
 from typing import cast, Dict, Any, List, Optional
 
 import torch
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -37,32 +35,6 @@ def load(class_string, **kwargs):
         return class_obj
     
     return class_obj(**kwargs)
-
-def build_transforms(transform_config: Optional[List[Dict[str, Any]]]) -> A.Compose:
-    additional_targets = {
-        'right_image': 'image',
-        'segmentation': 'mask',
-        # ! 'disparity': 'image'  ! ??????????? not tested
-    }
-    
-    def _instantiate(config):
-        name = config['name']
-        params = config.get('params', {}).copy() 
-        if 'transforms' in params:
-            params['transforms'] = [_instantiate(c) for c in params['transforms']]
-            
-        return load(f'albumentations.{name}', **params)
-    
-    transforms = []
-    if not transform_config:
-        transforms.append(A.Resize(height=256, width=256))
-        transforms.append(A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)))
-    else:
-        for _transform_config in transform_config:
-            transforms.append(_instantiate(_transform_config))
-    transforms.append(ToTensorV2())
-
-    return A.Compose(transforms, additional_targets=additional_targets)
 
 def deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively merges source config into destination config."""

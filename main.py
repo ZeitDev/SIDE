@@ -21,19 +21,26 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
 # TODO: Implement MAE metric for disparity task
-# ! Disparity task not tested yet
+# TODO: Implement MAE Decoder
+# TODO: Test Disparity Task end-to-end
+
 # ! Knowledge Distillation not tested yet
 
 def main():
     parser = argparse.ArgumentParser(description='SIDE Training and Testing')
     parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
     args = parser.parse_args()
-    
+
     with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
     with open(args.config, 'r') as f: experiment_config = yaml.safe_load(f)
     config = helpers.deep_merge(experiment_config, base_config)
+    
+    if not os.path.exists('cache'): os.makedirs('cache')
+    if not os.path.exists('logs'): os.makedirs('logs')
 
     try:
+        mlflow.set_tracking_uri('/data/Zeitler/mlruns')
+        
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]
         mlflow.set_experiment(experiment_name)
         run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")
@@ -107,7 +114,7 @@ def main():
                             mlflow.log_metric(f'cross_validation/{metric_name}/fold_{fold_idx+1}', v)
                             
             else:
-                logger.header(f'Mode: Full Training')
+                logger.header('Mode: Full Training')
                 with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
                     tags['parent_name'] = run.info.run_name
                     tags['run_type'] = 'train'

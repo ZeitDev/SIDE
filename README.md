@@ -29,6 +29,10 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 2. `mlflow ui`
 3. open mlflow server website (shown in terminal, usually `127.0.0.1:5000`)
 
+## Ongoing
+* Implementing disparity task
+* Dataset evaluation
+
 ## Features
 
 * **Tasks:** Surgical Instrument Segmentation and Full Scene Disparity Estimation (not yet implemented)
@@ -78,19 +82,19 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 * Verification of correct IoU and DICE calculation
 
 ### Negative Weighted Loss
-When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, such that the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
+* When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, such that the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
 
 ### Encoder LR Mod
-As the encoder is already pretrained, we lower the corresponding learning rate to a more conversative value to preserve the pretrained knowledge.
+* As the encoder is already pretrained, we lower the corresponding learning rate to a more conversative value to preserve the pretrained knowledge.
 
 ### Cosine Annealing with Warmup
-TODO: read paper
-Can escape saddle points. SOTA for transformers, but also applicable to CNNs?
+* TODO: read paper
+* Can escape saddle points. SOTA for transformers, but also applicable to CNNs?
 
 ### LRFinder
-Automatic Weighted Loss needs to have frozen uncertainty weights, because when the exponential learning rate explodes the Automatic Weights will fight against it, preventing the loss moutain we want to see at the end of the graph.
+* Automatic Weighted Loss needs to have frozen uncertainty weights, because when the exponential learning rate explodes the Automatic Weights will fight against it, preventing the loss moutain we want to see at the end of the graph.
 
-Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
+* Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
 
 ### DimitrisPs/ris2017_toolkit problems
 * The toolkit uses INTER_LINEAR to resize masks, that creates classes that did not exist before. Thats fine for them, cause they only generate binary masks. Masks should always be interpolated with INTER_NEAREST.

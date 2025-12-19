@@ -8,7 +8,6 @@ import torch
 from torch.utils.data import Dataset
 import albumentations as A
 
-
 class BaseDataset(Dataset):
     def __init__(self, root_path: str, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[List[str]] = None):
         self.root_path = root_path
@@ -42,7 +41,7 @@ class BaseDataset(Dataset):
         """
         raise NotImplementedError('Dataset subclass must implement _get_file_names.')
     
-    def _get_sample_path(self, subset_path: str, file_name: str) -> Dict[str, str]:
+    def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
         """
         Override function should be implemented by the dataset subclass.
         Returns a dictionary containing paths to the data for a single sample.
@@ -61,41 +60,39 @@ class BaseDataset(Dataset):
             file_names = self._get_file_names(subset_path)
             
             for file_name in file_names:
-                sample_path = self._get_sample_path(subset_path, file_name)
-                self.sample_paths.append(sample_path)
+                sample_paths = self._get_sample_paths(subset_path, file_name)
+                self.sample_paths.append(sample_paths)
                 
     def __len__(self) -> int:
         return len(self.sample_paths)
     
     def __getitem__(self, idx) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        sample_path = self.sample_paths[idx]
+        sample_paths = self.sample_paths[idx]
         
         data = {}
-        if 'left_image' in sample_path:
-            data['image'] = np.array(Image.open(sample_path['left_image']).convert('RGB'))
-        if 'right_image' in sample_path:
-            data['right_image'] = np.array(Image.open(sample_path['right_image']).convert('RGB'))
+        if 'left_image' in sample_paths:
+            data['image'] = np.array(Image.open(sample_paths['left_image']).convert('RGB'))
+        if 'right_image' in sample_paths:
+            data['right_image'] = np.array(Image.open(sample_paths['right_image']).convert('RGB'))
             
-        if 'segmentation' in sample_path:
-            data['segmentation'] = np.array(Image.open(sample_path['segmentation']))
-        if 'disparity' in sample_path:
-            pass # TODO: load disparity map
+        if 'segmentation' in sample_paths:
+            data['segmentation'] = np.array(Image.open(sample_paths['segmentation']))
+        if 'disparity' in sample_paths:
+            disparity_map = np.array(Image.open(sample_paths['disparity'])).astype(np.float32)
+            
+            valid_mask = disparity_map > 0
+            disparity_map[valid_mask] = disparity_map[valid_mask] / 128.0
+            disparity_map[~valid_mask] = np.nan
+            
+            data['disparity'] = disparity_map
         
         if self.transforms: data = self.transforms(**data)
         else: raise RuntimeError('Transforms failed to load.')
         
-        if 'segmentation' in data:
-            data['segmentation'] = data['segmentation'].unsqueeze(0)
-        if 'disparity' in data:
-            pass # TODO: load disparity map
+        if 'segmentation' in data: data['segmentation'] = data['segmentation'].unsqueeze(0)
+        if 'disparity' in data: data['disparity'] = data['disparity'].unsqueeze(0)
         
-        image = data['image']
-        if 'right_image' in data:
-            image = torch.cat((data['image'], data['right_image']), dim=0)
-            
-        targets = {task: data[task] for task in self.tasks if task in data}
-        
-        return image, targets
+        return data
     
 class OverfitDataset(BaseDataset):
     def __init__(self, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
@@ -115,18 +112,18 @@ class OverfitDataset(BaseDataset):
         left_images_path = os.path.join(subset_path, 'left_images')
         return sorted(os.listdir(left_images_path))
     
-    def _get_sample_path(self, subset_path: str, file_name: str) -> Dict[str, str]:
-        sample_path = {}
-        sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+    def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
+        sample_paths = {}
+        sample_paths['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
         if self.tasks['segmentation']['enabled']:
-            sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
             
         if self.tasks['disparity']['enabled']:
-            sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-            sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+            sample_paths['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 
-        return sample_path
+        return sample_paths
 
 class EndoVis17(BaseDataset):
     def __init__(self, mode: str = 'train',  transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
@@ -146,18 +143,35 @@ class EndoVis17(BaseDataset):
         left_images_path = os.path.join(subset_path, 'left_images')
         return sorted(os.listdir(left_images_path))
     
-    def _get_sample_path(self, subset_path: str, file_name: str) -> Dict[str, str]:
-        sample_path = {}
-        sample_path['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+    def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
+        sample_paths = {}
+        sample_paths['left_image'] = os.path.join(subset_path, 'left_images', file_name)
         
         if self.tasks['segmentation']['enabled']:
-            sample_path['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
             
         if self.tasks['disparity']['enabled']:
-            sample_path['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-            sample_path['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+            sample_paths['right_image'] = os.path.join(subset_path, 'right_images', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
                 
-        return sample_path
+        return sample_paths
+    
+class Scared(BaseDataset):
+    def __init__(self, mode: str = 'train',  transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+        root_path = '/data/Zeitler/SIDED/SCARED/processed'
+        super().__init__(root_path, mode, transforms, tasks, subset_names)
+        
+    def _get_file_names(self, subset_path: str) -> List[str]:
+        return sorted(os.listdir(subset_path))
+    
+    def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
+        sample_paths = {}
+        sample_paths['left_image'] = os.path.join(subset_path, file_name, 'left_rectified.png')
+        sample_paths['right_image'] = os.path.join(subset_path, file_name, 'right_rectified.png')
+        sample_paths['disparity'] = os.path.join(subset_path, file_name, 'disparity.png')
+        
+        return sample_paths
+    
     
             
         

@@ -51,21 +51,20 @@ training:
   finetune: null # finetune from this pre-trained model with frozen encoder
 
   encoder:
-    name: models.simple_unet.Encoder
+    name: models.encoders.timm.Encoder
     params: {}
 
   tasks:
     segmentation:
       enabled: true
       criterion:
-        weight: 1.0
         name: monai.losses.DiceCELoss
         params:
           softmax: True
           to_onehot_y: True
           include_background: False
       decoder:
-        name: models.simple_unet.SegmentationDecoder
+        name: models.decoders.dynamic_unet.Decoder
         params: {}
       knowledge_distillation:
         enabled: false
@@ -75,10 +74,10 @@ training:
           name: torch.nn.KLDivLoss
           params: {}
         encoder:
-          name: models.simple_unet.Encoder
+          name: models.encoders.timm.Encoder
           params: {}
         decoder:
-          name: models.simple_unet.SegmentationDecoder
+          name: models.decoders.dynamic_unet.Decoder
           params: {}
 
     disparity: 
