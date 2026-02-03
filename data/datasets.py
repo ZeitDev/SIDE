@@ -22,6 +22,17 @@ class BaseDataset(Dataset):
         self._load_samples()
         
     def get_all_subset_names(self) -> List[str]:
+        """
+        Expects the following dataset directory structure:
+        root_path/
+            train/
+                subset_1/
+                subset_2/
+                ...
+            test/
+                subset_1/
+                ...
+        """
         mode_path = os.path.join(self.root_path, self.mode)
         subset_names = sorted([d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))])
         return subset_names
@@ -45,7 +56,7 @@ class BaseDataset(Dataset):
         """
         Override function should be implemented by the dataset subclass.
         Returns a dictionary containing paths to the data for a single sample.
-        Strcuture: {'left_image': path, 'segmentation': path, ...}
+        Structure: {'left_image': path, 'segmentation': path, ...}
         """
         raise NotImplementedError('Dataset subclass must implement _get_sample_paths.')
     
@@ -63,6 +74,14 @@ class BaseDataset(Dataset):
                 sample_paths = self._get_sample_paths(subset_path, file_name)
                 self.sample_paths.append(sample_paths)
                 
+    def _extract_intrinsics(self, intrinsics_path: str) -> Tuple[float, float]:
+        with open(intrinsics_path, 'r') as f:
+            intrinsics = json.load(f)
+            Q = intrinsics['Q']
+            focal_length = Q[2][3]
+            baseline = abs(1.0 / Q[3][2])
+        return baseline, focal_length
+    
     def __len__(self) -> int:
         return len(self.sample_paths)
     
@@ -82,15 +101,30 @@ class BaseDataset(Dataset):
             
             valid_mask = disparity_map > 0
             disparity_map[valid_mask] = disparity_map[valid_mask] / 128.0
-            disparity_map[~valid_mask] = np.nan
+            disparity_map[~valid_mask] = 0.0
             
-            data['disparity'] = disparity_map
+            data['disparity'] = np.expand_dims(disparity_map, axis=-1)
+            
+        # * TEMP
+        left_image = data['image']
+        right_image = data.get('right_image', None)
+        segmentation = data.get('segmentation', None)
+        disparity = data.get('disparity', None)
         
         if self.transforms: data = self.transforms(**data)
-        else: raise RuntimeError('Transforms failed to load.')
         
-        if 'segmentation' in data: data['segmentation'] = data['segmentation'].unsqueeze(0)
-        if 'disparity' in data: data['disparity'] = data['disparity'].unsqueeze(0)
+        # * TEMP
+        left_image = data['image']
+        right_image = data.get('right_image', None)
+        segmentation = data.get('segmentation', None)
+        disparity = data.get('disparity', None)
+        
+        if 'segmentation' in data: 
+            data['segmentation'] = data['segmentation'].unsqueeze(0)
+        if 'disparity' in data:
+            baseline, focal_length = self._extract_intrinsics(sample_paths['intrinsics'])
+            data['baseline'] = torch.tensor(baseline).view(1, 1, 1)
+            data['focal_length'] = torch.tensor(focal_length).view(1, 1, 1)
         
         return data
     
@@ -140,19 +174,20 @@ class EndoVis17(BaseDataset):
             self.class_mappings[0] = 'background'
         
     def _get_file_names(self, subset_path: str) -> List[str]:
-        left_images_path = os.path.join(subset_path, 'left_images')
+        left_images_path = os.path.join(subset_path, 'input', 'left_images')
         return sorted(os.listdir(left_images_path))
     
     def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
         sample_paths = {}
-        sample_paths['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+        sample_paths['left_image'] = os.path.join(subset_path, 'input', 'left_images', file_name)
         
         if self.tasks['segmentation']['enabled']:
-            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation', file_name)
             
         if self.tasks['disparity']['enabled']:
-            sample_paths['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
+            sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
+            sample_paths['intrinsics'] = os.path.join(subset_path, 'input', 'rectified_calibration.json')
                 
         return sample_paths
     

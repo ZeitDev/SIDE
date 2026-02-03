@@ -81,20 +81,19 @@ training:
           params: {}
 
     disparity: 
-      enabled: false
+      enabled: True
       criterion:
-        weight: 1.0
-        name: null
+        name: criterions.disparity.MaskedSmoothL1Loss
         params: {}
       decoder:
-        name: null # TODO: Implement disparity decoder
+        name: models.decoders.dynamic_unet.Decoder
         params: {}
       knowledge_distillation:
         enabled: false
         states: []
         criterion:
           weight: 0.5
-          name: null # ? L1Loss or MSELoss
+          name: null # ? 
           params: {}
         encoder:
           name: null
@@ -106,4 +105,4 @@ training:
 logging:
   vram: false
   notebook_mode: false
-  n_validation_images: 4
+  n_validation_images: 0

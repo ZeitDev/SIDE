@@ -8,22 +8,23 @@ class SegmentationMetric:
         self.confusion_matrix = torch.zeros((n_classes, n_classes), dtype=torch.int64, device=device)
 
     def update(self, output: torch.Tensor, target: torch.Tensor) -> None:
-        outputs = torch.argmax(output, dim=1)
-        
-        outputs = outputs.reshape(-1)
-        target = target.reshape(-1)
-        
-        if self.ignore_index is not None:
-            mask = target != self.ignore_index
-            outputs = outputs[mask]
-            target = target[mask]
+        with torch.no_grad():
+            outputs = torch.argmax(output, dim=1)
             
-        _confusion_matrix = torch.bincount(
-            self.n_classes * target + outputs,
-            minlength=self.n_classes**2
-        ).reshape(self.n_classes, self.n_classes)
-        
-        self.confusion_matrix += _confusion_matrix
+            outputs = outputs.reshape(-1)
+            target = target.reshape(-1)
+            
+            if self.ignore_index is not None:
+                mask = target != self.ignore_index
+                outputs = outputs[mask]
+                target = target[mask]
+                
+            _confusion_matrix = torch.bincount(
+                self.n_classes * target + outputs,
+                minlength=self.n_classes**2
+            ).reshape(self.n_classes, self.n_classes)
+            
+            self.confusion_matrix += _confusion_matrix
 
     def compute(self) -> Dict[str, float]:
         raise NotImplementedError

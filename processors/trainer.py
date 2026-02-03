@@ -71,8 +71,7 @@ class Trainer(BaseProcessor):
                 persistent_workers=False
             )
             
-        signature_input_example, _ = dataset_train[0] 
-        self.signature_input_example = signature_input_example.unsqueeze(0)
+        self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
             
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         dataset_val_length = len(dataset_val) if dataset_val else 0
@@ -234,6 +233,9 @@ class Trainer(BaseProcessor):
             if 'right_image' in data: right_images = data['right_image'].to(self.device)
             targets = {task: data[task].to(self.device) for task in self.tasks}
             
+            # * temp
+            segmentation = targets.get('segmentation', None)
+            disparity = targets.get('disparity', None)
 
             with torch.set_grad_enabled(True):
                 outputs = self.model(left_images, right_images)

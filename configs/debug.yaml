@@ -65,26 +65,4 @@ data:
           std: [0.229, 0.224, 0.225]
 
 training:
-  epochs: 100
-  optimizer:
-    base_lr: 3.0e-4
-
-  encoder:
-    name: models.encoders.timm.Encoder
-    params:
-      model_name: convnextv2_base
-      pretrained: true
-
-  tasks:
-    segmentation:
-      enabled: true
-      decoder:
-        name: models.decoders.dynamic_unet.Decoder
-      knowledge_distillation:
-        enabled: false
-    disparity:
-      enabled: false
-
-logging:
-  vram: false
-  n_validation_images: 1
+  epochs: 1

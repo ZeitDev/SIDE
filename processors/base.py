@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from utils import visualization
 from metrics.segmentation import IoU, Dice
-from metrics.disparity import MAE
+from metrics.disparity import PixelEPE, PixelBad3, DepthMAE
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -63,7 +63,9 @@ class BaseProcessor:
         if tasks_config['disparity']['enabled']:
             self.metrics['disparity'] = {}
             
-            self.metrics['disparity']['MAE'] = MAE(device=self.device)
+            self.metrics['disparity']['PixelEPE'] = PixelEPE(device=self.device)
+            self.metrics['disparity']['PixelBad3'] = PixelBad3(device=self.device)
+            self.metrics['disparity']['DepthMAE'] = DepthMAE(device=self.device)
             logger.info('Initialized MAE metric for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:

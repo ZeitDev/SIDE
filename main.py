@@ -9,8 +9,8 @@ from typing import cast
 
 import mlflow
 
-from processors.trainer import Trainer
 from processors.tester import Tester
+from processors.trainer import Trainer
 
 from utils import helpers
 from utils.helpers import load, log_vram
@@ -20,11 +20,9 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
-# TODO: Implement MAE metric for disparity task
-# TODO: Implement MAE Decoder
+# TODO: Custom dynamic decoder for disparity task
 # TODO: Test Disparity Task end-to-end
-
-# ! Knowledge Distillation not tested yet
+# TODO: Test Knowledge Distillation end-to-end
 
 def main():
     parser = argparse.ArgumentParser(description='SIDE Training and Testing')
@@ -39,8 +37,6 @@ def main():
     if not os.path.exists('logs'): os.makedirs('logs')
 
     try:
-        mlflow.set_tracking_uri('/data/Zeitler/mlruns')
-        
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]
         mlflow.set_experiment(experiment_name)
         run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")

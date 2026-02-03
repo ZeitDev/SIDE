@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip concatenation
+class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip connections
     def __init__(self, n_input_channels, n_skip_channels, n_output_channels):
         super().__init__()
         
@@ -75,7 +75,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             upsample_layers = []
             while current_stride > 1:
                 # Each upsampling step doubles the spatial dimensions
-                upsample_layers.append(nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True))
+                upsample_layers.append(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True))
                 # Sharpens features after upsampling
                 upsample_layers.append(nn.Conv2d(self.all_n_decoder_channels[-1], self.all_n_decoder_channels[-1], kernel_size=3, padding=1))
                 upsample_layers.append(nn.ReLU(inplace=True))
