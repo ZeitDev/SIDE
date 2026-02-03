@@ -18,6 +18,10 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 
 ## Usage
 
+### Test Cases
+
+Run `pytest` in environment.
+
 ### Training
 
 1. Set parameters in /configs/experiment_name.yaml
@@ -98,6 +102,6 @@ Repository for the Masterthesis of Léon Zeitler with Lennart Maack as a supervi
 
 ### DimitrisPs/ris2017_toolkit problems
 * The toolkit uses INTER_LINEAR to resize masks, that creates classes that did not exist before. Thats fine for them, cause they only generate binary masks. Masks should always be interpolated with INTER_NEAREST.
-* The toolkit does not deinterlace the masks like they do with the RGB images, is that intended? TODO: check that
+* The toolkit does not deinterlace the masks like they do with the RGB images, as the masks appear to be clean already. If zoomed on the edge of an instrument, there is a step pattern present. Segmentation on interlaced rgb images would result in comb like structures in the mask.
 
 ### 
