@@ -1,6 +1,7 @@
 import math
 import torch
 from metrics.segmentation import IoU, Dice
+from metrics.disparity import DisparityEPE, DisparityBad3, DepthMAE
 
 def test_metric_reset():
     iou_metric = IoU(n_classes=2)
@@ -38,7 +39,7 @@ def test_iou_metric():
     # Output Argmax: [0, 0, 0]
     #                [1, 1, 1]
 
-    # Ground truth
+    # Target
     # Shape: (N, H, W) -> (1, 2, 3)
     target = torch.tensor(
         [
@@ -55,7 +56,7 @@ def test_iou_metric():
     # Prediction:
     # [0, 0, 0]
     # [1, 1, 1]
-    # Ground Truth:
+    # Target:
     # [0, 0, 1]
     # [1, 1, 0]
     #
@@ -92,7 +93,7 @@ def test_dice_metric():
         ]
     )
 
-    # Ground truth
+    # Target
     target = torch.tensor(
         [
             [
@@ -108,7 +109,7 @@ def test_dice_metric():
     # Prediction:
     # [0, 0]
     # [1, 1]
-    # Ground Truth:
+    # Target:
     # [1, 0]
     # [1, 0]
     #
@@ -132,6 +133,7 @@ def test_missing_class():
     dice_metric.reset()
     
     # Prediction (logits)
+    # Shape: (N, C, H, W) -> (1, 3, 2, 2)
     output = torch.tensor(
         [
             [
@@ -151,7 +153,7 @@ def test_missing_class():
         ]
     )
     
-    # Ground truth
+    # Target
     target = torch.tensor(
         [
             [
@@ -169,7 +171,7 @@ def test_missing_class():
     # Prediction:
     # [0, 0]
     # [1, 2]
-    # Ground Truth:
+    # Target:
     # [0, 0]
     # [1, 1]
     #
@@ -198,4 +200,92 @@ def test_missing_class():
     assert math.isclose(dice_results[1], 2/3, rel_tol=1e-4)
     assert math.isclose(dice_results[2], 0.0)
     assert math.isclose(dice_results['mDICE'], (1.0 + 2/3) / 2, rel_tol=1e-4)
+
+def test_disparity_metrics():
+    epe_metric = DisparityEPE()
+    bad3_metric = DisparityBad3()
+    mae_metric = DepthMAE()
     
+    epe_metric.reset()
+    bad3_metric.reset()
+    mae_metric.reset()
+    
+    # Predictions
+    # Shape: (N, C, H, W) -> (1, 1, 2, 2)
+    output = torch.tensor(
+        [
+            [
+                [
+                    [10.0, 5.0], 
+                    [20.0, 0.0]
+                ]
+            ]
+        ]
+    )
+    
+    # Target
+    target = torch.tensor(
+        [
+            [
+                [
+                    [12.0, 5.0], 
+                    [24.0, 0.0]
+                ]
+            ]
+        ]
+    )
+                             
+    # Instrinsic Parameters
+    baseline = torch.tensor(6.0)       # e.g. 6.0 mm
+    focal_length = torch.tensor(1000.0) # e.g. 1000.0 pixels
+    
+    epe_metric.update(output, target, baseline, focal_length)
+    bad3_metric.update(output, target, baseline, focal_length)
+    mae_metric.update(output, target, baseline, focal_length)
+    
+    res_epe = epe_metric.compute()
+    res_bad3 = bad3_metric.compute()
+    res_mae = mae_metric.compute()
+    
+    # Prediction:
+    # [10.0, 5.0]
+    # [20.0, 0.0]
+    # Target:
+    # [12.0, 5.0]
+    # [24.0, 0.0 (ignored)]
+    #
+    # Valid Mask (GT > 0):
+    # [1, 1]
+    # [1, 0] -> N_valid = 3
+    #
+    # EPE (End Point Error):
+    # Diff = |Pred - GT|
+    # [|10-12|=2.0, |5-5|=0.0]
+    # [|20-24|=4.0, 0.0]
+    # Sum = 2.0 + 0.0 + 4.0 = 6.0
+    # EPE = Sum / N_valid = 6.0 / 3 = 2.0
+    #
+    # Bad3 (> 3px Error):
+    # mask = Diff > 3.0
+    # [2.0>3 (0), 0.0>3 (0)]
+    # [4.0>3 (1), 0.0]
+    # Sum Bad = 0 + 0 + 1
+    # Bad3 = Sum Bad / N_valid = 1 / 3 = 0.3333
+    #
+    # Depth MAE (Mean Absolute Error):
+    # Depth = (Baseline * Focal Length) / Disparity = 6000 / Disparity
+    # Predicted Depth:
+    # [6000/10=600.0, 6000/5=1200.0]
+    # [6000/20=300.0, 0.0]
+    # Target Depth:
+    # [6000/12=500.0, 6000/5=1200.0]
+    # [6000/24=250.0, 0.0)]
+    # Depth Diff = |Pred - Target|
+    # [|600-500|=100.0, |1200-1200|=0.0]
+    # [|300-250|=50.0, 0.0]
+    # Sum = 100.0 + 0.0 + 50.0 = 150.0
+    # MAE = Sum / N_valid = 150.0 / 3 = 50.0
+    
+    assert math.isclose(res_epe['EPE'], 2.0)
+    assert math.isclose(res_bad3['Bad3'], 1/3, rel_tol=1e-4)
+    assert math.isclose(res_mae['MAE'], 50.0)

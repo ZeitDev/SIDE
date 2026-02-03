@@ -1,0 +1,66 @@
+import torch
+from typing import Dict
+
+class DisparityMetric:
+    def __init__(self, device: torch.device = torch.device('cpu')):
+        self.device = device
+        
+        self.total_error = torch.tensor(0.0, device=self.device)
+        self.total_valid_pixels = torch.tensor(0.0, device=self.device)
+
+    def update(self, output: torch.Tensor, target: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
+        """
+        output: Predicted disparity in [px].
+        target: Ground truth disparity in [px].
+        baseline: Stereo baseline. The unit used here millimeters defines the unit of the calculated depth.
+        focal_length: Focal length in [px].
+        """
+        with torch.no_grad():
+            valid_mask = target > 0
+
+            batch_error_sum = self.get_batch_error_sum(output, target, valid_mask, baseline, focal_length)
+
+            self.total_error += batch_error_sum
+            self.total_valid_pixels += valid_mask.sum()
+
+    def compute(self) -> Dict[str, float]:
+        raise NotImplementedError
+
+    def reset(self) -> None:
+        self.total_error.fill_(0)
+        self.total_valid_pixels.fill_(0)
+
+    def get_batch_error_sum(self, output: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class PixelEPE(DisparityMetric):
+    def get_batch_error_sum(self, output: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
+        diff = torch.abs(output - target)
+        return diff[valid_mask].sum()
+
+    def compute(self) -> Dict[str, float]:
+        return {'EPE': (self.total_error / self.total_valid_pixels).item()}
+
+
+class PixelBad3(DisparityMetric):
+    def get_batch_error_sum(self, output: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
+        diff = torch.abs(output - target)
+        bad_pixels = (diff > 3) & valid_mask
+        return bad_pixels.float().sum()
+
+    def compute(self) -> Dict[str, float]:
+        return {'Bad3': (self.total_error / self.total_valid_pixels).item()}
+
+
+class DepthMAE(DisparityMetric):
+    def get_batch_error_sum(self, output: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
+        depth_pred = (focal_length * baseline) / output
+        depth_gt = (focal_length * baseline) / target
+
+        abs_diff = torch.abs(depth_pred - depth_gt)
+        
+        return abs_diff[valid_mask].sum() 
+
+    def compute(self) -> Dict[str, float]:
+        return {'MAE': (self.total_error / self.total_valid_pixels).item()}
