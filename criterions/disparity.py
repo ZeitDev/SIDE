@@ -9,7 +9,7 @@ class MaskedSmoothL1Loss(nn.Module):
         self.beta = beta
         
     def forward(self, prediction, target):
-        valid_mask = target != self.ignore_value
+        valid_mask = (target != self.ignore_value).float()
         loss = F.smooth_l1_loss(prediction, target, reduction='none', beta=self.beta)
         loss = loss * valid_mask
         

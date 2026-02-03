@@ -76,12 +76,15 @@ class Tester(BaseProcessor):
                 targets = {task: data[task].to(self.device) for task in self.tasks}
                 
                 outputs = self.model(left_images, right_images)
-                for task, output in outputs.items():
-                    for metric in self.metrics[task].values():
-                        metric.update(output, targets[task])
                             
                 if 'segmentation' in outputs:
                     self._log_visuals(epoch='Test', images=left_images, targets=targets, outputs=outputs)
+                    for metric in self.metrics['segmentation'].values():
+                        metric.update(outputs['segmentation'], targets['segmentation'])
+                if 'disparity' in outputs:
+                    baseline, focal_length = data['baseline'].to(self.device), data['focal_length'].to(self.device)
+                    for metric in self.metrics['disparity'].values():
+                        metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
 
         logger.subheader('Test Results')
         test_metrics = self._compute_metrics(mode='testing')

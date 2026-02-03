@@ -27,8 +27,8 @@ class AttachHead(nn.Module):
         self.decoder = decoder_class(encoder_channels, encoder_reductions, **kwargs)
         self.head = nn.Conv2d(self.decoder.all_n_decoder_channels[-1], n_classes, kernel_size=1)
     
-    def forward(self, features) -> torch.Tensor:
-        x = self.decoder(features)
+    def forward(self, features, feature_right=None) -> torch.Tensor:
+        x = self.decoder(features, feature_right)
         x = self.head(x)
         
         return x

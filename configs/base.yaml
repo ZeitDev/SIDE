@@ -84,22 +84,26 @@ training:
       enabled: True
       criterion:
         name: criterions.disparity.MaskedSmoothL1Loss
-        params: {}
+        params:
+          ignore_value: 0
+          reduction: mean
+          beta: 1.0
       decoder:
         name: models.decoders.dynamic_unet.Decoder
-        params: {}
+        params:
+          is_stereo: true
       knowledge_distillation:
         enabled: false
         states: []
         criterion:
           weight: 0.5
-          name: null # ? 
+          name: torch.nn.KLDivLoss
           params: {}
         encoder:
-          name: null
+          name: models.encoders.timm.Encoder
           params: {}
         decoder:
-          name: null
+          name: models.decoders.dynamic_unet.Decoder
           params: {}
 
 logging:

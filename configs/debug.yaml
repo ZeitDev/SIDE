@@ -1,6 +1,6 @@
 data:
   dataset: data.datasets.EndoVis17
-  cross_validation: true
+  cross_validation: false
 
   transforms:
     train:

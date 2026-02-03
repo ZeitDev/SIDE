@@ -72,6 +72,7 @@ class Trainer(BaseProcessor):
             )
             
         self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
+        if 'disparity' in self.tasks: self.signature_input_example_right = dataset_train[0]['right_image'].unsqueeze(0)
             
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         dataset_val_length = len(dataset_val) if dataset_val else 0
@@ -166,9 +167,8 @@ class Trainer(BaseProcessor):
         for task, task_config in tasks_config.items():
             if task_config['enabled']:
                 criterion_config = task_config['criterion']
-                self.criterions[task] = load(
-                    criterion_config['name'], 
-                    **criterion_config['params'])
+                CriterionClass = load(criterion_config['name'])
+                self.criterions[task] = CriterionClass(**criterion_config['params'])
                 logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
 
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
@@ -210,7 +210,9 @@ class Trainer(BaseProcessor):
         self.model.eval()
         
         with torch.no_grad():
-            signature_output_example = self.model(self.signature_input_example)
+            if 'disparity' not in self.tasks: signature_output_example = self.model(self.signature_input_example)
+            else: signature_output_example = self.model(self.signature_input_example, self.signature_input_example_right)
+            
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
             
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
@@ -232,10 +234,6 @@ class Trainer(BaseProcessor):
             left_images = data['image'].to(self.device)
             if 'right_image' in data: right_images = data['right_image'].to(self.device)
             targets = {task: data[task].to(self.device) for task in self.tasks}
-            
-            # * temp
-            segmentation = targets.get('segmentation', None)
-            disparity = targets.get('disparity', None)
 
             with torch.set_grad_enabled(True):
                 outputs = self.model(left_images, right_images)
@@ -296,9 +294,12 @@ class Trainer(BaseProcessor):
                 
                 if 'segmentation' in outputs:
                     self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
-                for task, outputs_task in outputs.items():
-                    for metric in self.metrics[task].values():
-                        metric.update(outputs_task, targets[task])
+                    for metric in self.metrics['segmentation'].values():
+                        metric.update(outputs['segmentation'], targets['segmentation'])
+                if 'disparity' in outputs:
+                    baseline, focal_length = data['baseline'].to(self.device), data['focal_length'].to(self.device)
+                    for metric in self.metrics['disparity'].values():
+                        metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
                         
                 batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
                 for task, raw_task_loss in raw_task_losses.items():

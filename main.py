@@ -20,8 +20,7 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
-# TODO: Custom dynamic decoder for disparity task
-# TODO: Test Disparity Task end-to-end
+# TODO: Test Segmentation only vs. Disparity only vs. Multi-Task with MLflow logging
 # TODO: Test Knowledge Distillation end-to-end
 
 def main():
