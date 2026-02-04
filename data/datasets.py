@@ -104,20 +104,8 @@ class BaseDataset(Dataset):
             disparity_map[~valid_mask] = 0
             
             data['disparity'] = np.expand_dims(disparity_map, axis=-1)
-            
-        # * TEMP
-        left_image = data['image']
-        right_image = data['right_image']
-        segmentation = data['segmentation']
-        disparity = data['disparity']
         
         if self.transforms: data = self.transforms(**data)
-        
-        # * TEMP
-        left_image = data['image']
-        right_image = data['right_image']
-        segmentation = data['segmentation']
-        disparity = data['disparity']
         
         if 'segmentation' in data: 
             data['segmentation'] = data['segmentation'].unsqueeze(0)
