@@ -61,11 +61,11 @@ class BaseProcessor:
             logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.n_classes['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
+            max_disparity = self.config['data']['max_disparity']
             self.metrics['disparity'] = {}
-            
-            self.metrics['disparity']['PixelEPE'] = PixelEPE(device=self.device)
-            self.metrics['disparity']['PixelBad3'] = PixelBad3(device=self.device)
-            self.metrics['disparity']['DepthMAE'] = DepthMAE(device=self.device)
+            self.metrics['disparity']['PixelEPE'] = PixelEPE(max_disparity=max_disparity, device=self.device)
+            self.metrics['disparity']['PixelBad3'] = PixelBad3(max_disparity=max_disparity, device=self.device)
+            self.metrics['disparity']['DepthMAE'] = DepthMAE(max_disparity=max_disparity, device=self.device)
             logger.info('Initialized MAE metric for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:

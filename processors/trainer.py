@@ -37,8 +37,8 @@ class Trainer(BaseProcessor):
         
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
-        train_transforms = build_transforms(data_config['transforms']['train'])
-        val_transforms = build_transforms(data_config['transforms']['test'])
+        train_transforms = build_transforms(self.config, mode='train')
+        val_transforms = build_transforms(self.config, mode='test')
         
         dataset_train = dataset_class(
             mode='train',
@@ -232,7 +232,7 @@ class Trainer(BaseProcessor):
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
         for data in batch_tqdm:
             left_images = data['image'].to(self.device)
-            if 'right_image' in data: right_images = data['right_image'].to(self.device)
+            right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
 
             with torch.set_grad_enabled(True):
@@ -283,7 +283,7 @@ class Trainer(BaseProcessor):
         batch_tqdm = tqdm(self.dataloader_val, desc='Validation', position=1, leave=False)
         for data in batch_tqdm:
             left_images = data['image'].to(self.device)
-            if 'right_image' in data: right_images = data['right_image'].to(self.device)
+            right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
             
             with torch.no_grad():

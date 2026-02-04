@@ -90,34 +90,34 @@ class BaseDataset(Dataset):
         
         data = {}
         if 'left_image' in sample_paths:
-            data['image'] = np.array(Image.open(sample_paths['left_image']).convert('RGB'))
+            data['image'] = np.array(Image.open(sample_paths['left_image']))
         if 'right_image' in sample_paths:
-            data['right_image'] = np.array(Image.open(sample_paths['right_image']).convert('RGB'))
+            data['right_image'] = np.array(Image.open(sample_paths['right_image']))
             
         if 'segmentation' in sample_paths:
             data['segmentation'] = np.array(Image.open(sample_paths['segmentation']))
         if 'disparity' in sample_paths:
-            disparity_map = np.array(Image.open(sample_paths['disparity'])).astype(np.float32)
+            disparity_map = np.array(Image.open(sample_paths['disparity']))
             
             valid_mask = disparity_map > 0
-            disparity_map[valid_mask] = disparity_map[valid_mask] / 128.0
-            disparity_map[~valid_mask] = 0.0
+            disparity_map[valid_mask] = disparity_map[valid_mask] / 128
+            disparity_map[~valid_mask] = 0
             
             data['disparity'] = np.expand_dims(disparity_map, axis=-1)
             
         # * TEMP
         left_image = data['image']
-        right_image = data.get('right_image', None)
-        segmentation = data.get('segmentation', None)
-        disparity = data.get('disparity', None)
+        right_image = data['right_image']
+        segmentation = data['segmentation']
+        disparity = data['disparity']
         
         if self.transforms: data = self.transforms(**data)
         
         # * TEMP
         left_image = data['image']
-        right_image = data.get('right_image', None)
-        segmentation = data.get('segmentation', None)
-        disparity = data.get('disparity', None)
+        right_image = data['right_image']
+        segmentation = data['segmentation']
+        disparity = data['disparity']
         
         if 'segmentation' in data: 
             data['segmentation'] = data['segmentation'].unsqueeze(0)
@@ -143,20 +143,21 @@ class OverfitDataset(BaseDataset):
             self.class_mappings[0] = 'Background'
         
     def _get_file_names(self, subset_path: str) -> List[str]:
-        left_images_path = os.path.join(subset_path, 'left_images')
+        left_images_path = os.path.join(subset_path, 'input', 'left_images')
         return sorted(os.listdir(left_images_path))
     
     def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
         sample_paths = {}
-        sample_paths['left_image'] = os.path.join(subset_path, 'left_images', file_name)
+        sample_paths['left_image'] = os.path.join(subset_path, 'input', 'left_images', file_name)
         
         if self.tasks['segmentation']['enabled']:
-            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation_masks_instrument_type', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation', file_name)
             
         if self.tasks['disparity']['enabled']:
-            sample_paths['right_image'] = os.path.join(subset_path, 'right_images', file_name)
-            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity_maps', file_name)
-                
+            sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
+            sample_paths['intrinsics'] = os.path.join(subset_path, 'input', 'rectified_calibration.json')
+            
         return sample_paths
 
 class EndoVis17(BaseDataset):

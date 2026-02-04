@@ -1,6 +1,6 @@
 data:
-  dataset: data.datasets.EndoVis17
-  cross_validation: false
+  dataset: data.datasets.OverfitDataset
+  cross_validation: true
 
   transforms:
     train:
@@ -65,4 +65,9 @@ data:
           std: [0.229, 0.224, 0.225]
 
 training:
-  epochs: 1
+  epochs: 2
+  tasks:
+    segmentation:
+      enabled: true
+    disparity:
+      enabled: true

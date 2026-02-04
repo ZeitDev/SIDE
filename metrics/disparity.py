@@ -2,8 +2,9 @@ import torch
 from typing import Dict
 
 class DisparityMetric:
-    def __init__(self, device: torch.device = torch.device('cpu')):
+    def __init__(self, max_disparity: float = 320, device: torch.device = torch.device('cpu')):
         self.device = device
+        self.max_disparity = max_disparity
         
         self.total_error = torch.tensor(0.0, device=self.device)
         self.total_valid_pixels = torch.tensor(0.0, device=self.device)
@@ -16,6 +17,9 @@ class DisparityMetric:
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
+            output = output * self.max_disparity
+            target = target * self.max_disparity
+            
             valid_mask = target > 0
 
             batch_error_sum = self.get_batch_error_sum(output, target, valid_mask, baseline, focal_length)

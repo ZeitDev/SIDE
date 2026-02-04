@@ -3,7 +3,7 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
-  cross_validation: false
+  max_disparity: 320.0
 
   transforms:
     train:
@@ -32,6 +32,7 @@ data:
 # --- Training Configuration ---
 training:
   epochs: 10
+  cross_validation: false
 
   optimizer:
     name: torch.optim.AdamW
@@ -60,9 +61,9 @@ training:
       criterion:
         name: monai.losses.DiceCELoss
         params:
-          softmax: True
-          to_onehot_y: True
-          include_background: False
+          softmax: true
+          to_onehot_y: true
+          include_background: false
       decoder:
         name: models.decoders.dynamic_unet.Decoder
         params: {}
@@ -81,7 +82,7 @@ training:
           params: {}
 
     disparity: 
-      enabled: True
+      enabled: true
       criterion:
         name: criterions.disparity.MaskedSmoothL1Loss
         params:
@@ -109,4 +110,4 @@ training:
 logging:
   vram: false
   notebook_mode: false
-  n_validation_images: 0
+  n_validation_images: 4

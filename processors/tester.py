@@ -30,7 +30,7 @@ class Tester(BaseProcessor):
         
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
-        test_transforms = build_transforms(data_config['transforms']['test'])
+        test_transforms = build_transforms(self.config, mode='test')
         
         dataset_test = dataset_class(
             mode='test',
@@ -72,7 +72,7 @@ class Tester(BaseProcessor):
         with torch.no_grad():
             for data in batch_tqdm:
                 left_images = data['image'].to(self.device)
-                if 'right_image' in data: right_images = data['right_image'].to(self.device)
+                right_images = data['right_image'].to(self.device) if 'right_image' in data else None
                 targets = {task: data[task].to(self.device) for task in self.tasks}
                 
                 outputs = self.model(left_images, right_images)

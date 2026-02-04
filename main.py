@@ -20,10 +20,21 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
+# ! CRITICAL BUG: Disparity task needs a Fixed Global Scalar so that outputs are scaled properly for loss and metrics, 1.0 == 320 pixels (MSDESIS)
 # TODO: Test Segmentation only vs. Disparity only vs. Multi-Task with MLflow logging
 # TODO: Test Knowledge Distillation end-to-end
 
+def _setup_environment():
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+        
+    cpu_cores = list(range(24))
+    os.sched_setaffinity(os.getpid(), cpu_cores)
+    logger.info(f'Set CPU affinity to cores: {cpu_cores}')
+
+
 def main():
+    _setup_environment()
     parser = argparse.ArgumentParser(description='SIDE Training and Testing')
     parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
     args = parser.parse_args()
@@ -57,7 +68,7 @@ def main():
 
             best_model_run_id = ''
             
-            if config['data']['cross_validation']:
+            if config['training']['cross_validation']:
                 logger.header('Mode: Cross-Validation Training')
                 with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
                     tags['parent_name'] = run.info.run_name
