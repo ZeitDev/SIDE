@@ -49,7 +49,7 @@ def deep_merge(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str,
 def mlflow_log_misc(log_filepath: str) -> None:    
     mlflow.log_artifact(log_filepath, artifact_path='logs')
     mlflow.log_artifact(os.path.join(os.path.dirname(__file__), '..', 'main.py'))
-    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'utils']:
+    for folder in ['configs', 'criterions', 'data', 'metrics', 'models', 'processors', 'utils']:
         if os.path.isdir(folder):
             mlflow.log_artifacts(folder, artifact_path=folder)
             

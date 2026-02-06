@@ -22,7 +22,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Test Segmentation only vs. Disparity only vs. Multi-Task with MLflow logging
+# TODO: Disparity Overlay
 # TODO: Test Knowledge Distillation end-to-end
 
 def main():
@@ -53,10 +53,10 @@ def main():
         with mlflow.start_run(run_name=run_datetime) as run:
             helpers.mlflow_log_misc(log_filepath)
             tags = {}
-            tags['description'] = config['description']
             tags['parent_name'] = experiment_name
-            tags['run_type'] = 'main'
+            tags['run_type'] = 'root'
             helpers.mlflow_log_run(config, tags=tags)
+            mlflow.set_tag('mlflow.note.content', config['description'])
 
             best_model_run_id = ''
             
@@ -67,6 +67,7 @@ def main():
                     tags['run_type'] = 'train'
                     tags['run_mode'] = 'cross_validation'
                     helpers.mlflow_log_run(config, tags=tags)
+                    mlflow.set_tag('mlflow.note.content', config['description'])
                     
                     fold_val_metrics_summary = {}
                     best_fold = -1
@@ -78,6 +79,7 @@ def main():
                             tags['fold'] = str(i + 1)
                             tags['val_subset'] = val_subset
                             helpers.mlflow_log_run(config, tags=tags)
+                            mlflow.set_tag('mlflow.note.content', config['description'])
                             
                             train_subsets = [s for s in all_train_subsets if s != val_subset]
                             trainer = Trainer(copy.deepcopy(config), train_subsets=train_subsets, val_subsets=[val_subset])
@@ -118,8 +120,9 @@ def main():
                     tags['run_type'] = 'train'
                     tags['run_mode'] = 'full_training'
                     helpers.mlflow_log_run(config, tags=tags)
-                    log_vram('Full Training Start')
+                    mlflow.set_tag('mlflow.note.content', config['description'])
                     
+                    log_vram('Full Training Start')
                     best_model_run_id = train_run.info.run_id
                     trainer = Trainer(config, train_subsets=all_train_subsets)
                     trainer.train_without_validation()
@@ -130,8 +133,9 @@ def main():
                 tags['parent_name'] = run.info.run_name
                 tags['run_type'] = 'test'
                 helpers.mlflow_log_run(config, tags=tags)
-                log_vram('Testing Start')
+                mlflow.set_tag('mlflow.note.content', config['description'])
                 
+                log_vram('Testing Start')
                 tester = Tester(config, run_id=best_model_run_id)
                 test_metrics = tester.test()
                 mlflow.log_metrics(test_metrics)

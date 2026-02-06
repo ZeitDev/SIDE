@@ -53,7 +53,9 @@ training:
 
   encoder:
     name: models.encoders.timm.Encoder
-    params: {}
+    params:
+      model_name: convnextv2_base
+      pretrained: true
 
   tasks:
     segmentation:
@@ -110,4 +112,4 @@ training:
 logging:
   vram: false
   notebook_mode: false
-  n_validation_images: 4
+  n_validation_images: 0

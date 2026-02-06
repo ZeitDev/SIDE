@@ -275,6 +275,7 @@ class Trainer(BaseProcessor):
         self.model.eval()
         total_loss_weighted = 0.0
         total_raw_task_losses = {task: 0.0 for task in self.tasks}
+        total_task_weights = {task: 0.0 for task in self.tasks}
         
         for task_metrics in self.metrics.values():
             for metric in task_metrics.values():
@@ -304,11 +305,15 @@ class Trainer(BaseProcessor):
                 batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
                 for task, raw_task_loss in raw_task_losses.items():
                     total_raw_task_losses[task] += raw_task_loss
+                with torch.no_grad():
+                    for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
+                        total_task_weights[task] += torch.exp(-s_param).item()
         
         epoch_metrics = self._compute_metrics(mode='validation')
         epoch_metrics['optimization/validation/loss/weighted'] = total_loss_weighted / len(self.dataloader_val)
         for task in self.tasks:
             epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/weight_{task}'] = total_task_weights[task] / len(self.dataloader_val)
                 
         return epoch_metrics
     
