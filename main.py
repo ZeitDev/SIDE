@@ -60,7 +60,7 @@ def main():
 
             best_model_run_id = ''
             
-            if config['training']['cross_validation']:
+            if config['data']['cross_validation']:
                 logger.header('Mode: Cross-Validation Training')
                 with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
                     tags['parent_name'] = run.info.run_name
@@ -89,7 +89,7 @@ def main():
                                 best_model_run_id = fold_run.info.run_id
                             
                             for metric_name, metric_value in best_val_epoch_metrics.items():
-                                if any(m in metric_name for m in ['mIoU', 'mDICE', 'mMAE']):
+                                if not metric_name.rsplit('/', 1)[-1][0].isdigit():
                                     fold_val_metrics_summary.setdefault(metric_name, []).append(metric_value)
                                     
                             log_vram(f'Fold {i+1}')

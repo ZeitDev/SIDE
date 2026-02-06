@@ -90,9 +90,9 @@ class BaseDataset(Dataset):
         
         data = {}
         if 'left_image' in sample_paths:
-            data['image'] = np.array(Image.open(sample_paths['left_image']))
+            data['image'] = np.array(Image.open(sample_paths['left_image']).convert('RGB'))
         if 'right_image' in sample_paths:
-            data['right_image'] = np.array(Image.open(sample_paths['right_image']))
+            data['right_image'] = np.array(Image.open(sample_paths['right_image']).convert('RGB'))
             
         if 'segmentation' in sample_paths:
             data['segmentation'] = np.array(Image.open(sample_paths['segmentation']))

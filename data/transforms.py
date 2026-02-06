@@ -39,7 +39,6 @@ class IsolationCompose(A.Compose):
 
     def __call__(self, **data):
         held_data = {k: data.pop(k) for k in self.excluded_keys if k in data}
-        print('transforms', self.transforms, 'data', data.keys(), 'held_data', held_data.keys())
         
         if data:
             for old_key, new_key in self.renaming.items():

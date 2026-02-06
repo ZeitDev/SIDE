@@ -17,10 +17,10 @@ setup_environment()
 
 # %% Settings
 # Settings
-experiment = 'overfit'
-run = '251121:1437'
+experiment = 'debug'
+run = '260206:1457'
 model_path = 'train/fold_2'
-show_n_images = 10 # None for all images
+show_n_images = None # None for all images
 
 # %% Load mlflow data
 # Load mlflow data

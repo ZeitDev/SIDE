@@ -44,7 +44,7 @@ class PixelEPE(DisparityMetric):
         return diff[valid_mask].sum()
 
     def compute(self) -> Dict[str, float]:
-        return {'EPE': (self.total_error / self.total_valid_pixels).item()}
+        return {'PixelEPE': (self.total_error / self.total_valid_pixels).item()}
 
 
 class PixelBad3(DisparityMetric):
@@ -54,7 +54,7 @@ class PixelBad3(DisparityMetric):
         return bad_pixels.float().sum()
 
     def compute(self) -> Dict[str, float]:
-        return {'Bad3': (self.total_error / self.total_valid_pixels).item()}
+        return {'PixelBad3': (self.total_error / self.total_valid_pixels).item()}
 
 
 class DepthMAE(DisparityMetric):
@@ -67,4 +67,4 @@ class DepthMAE(DisparityMetric):
         return abs_diff[valid_mask].sum() 
 
     def compute(self) -> Dict[str, float]:
-        return {'MAE': (self.total_error / self.total_valid_pixels).item()}
+        return {'DepthMAE': (self.total_error / self.total_valid_pixels).item()}

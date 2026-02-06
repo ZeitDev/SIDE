@@ -59,7 +59,7 @@ class BaseProcessor:
             self.metrics['disparity']['PixelEPE'] = PixelEPE(max_disparity=max_disparity, device=self.device)
             self.metrics['disparity']['PixelBad3'] = PixelBad3(max_disparity=max_disparity, device=self.device)
             self.metrics['disparity']['DepthMAE'] = DepthMAE(max_disparity=max_disparity, device=self.device)
-            logger.info('Initialized MAE metric for disparity.')
+            logger.info('Initialized PixelEPE, PixelBad3, and DepthMAE metrics for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:
         computed_metrics = {}
@@ -71,6 +71,8 @@ class BaseProcessor:
                     if isinstance(key, int) and self.segmentation_class_mappings:
                         class_name = self.segmentation_class_mappings[key].replace(' ', '_').lower()
                         computed_metrics[f'performance/{mode}/{task}/{metric_name}/{key}::{class_name}'] = value
+                    elif metric_name == key:
+                        computed_metrics[f'performance/{mode}/{task}/{metric_name}'] = value
                     else:
                         computed_metrics[f'performance/{mode}/{task}/{metric_name}/{key}'] = value
         return computed_metrics
