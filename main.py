@@ -22,7 +22,6 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# ! CRITICAL BUG: Disparity task needs a Fixed Global Scalar so that outputs are scaled properly for loss and metrics, 1.0 == 320 pixels (MSDESIS)
 # TODO: Test Segmentation only vs. Disparity only vs. Multi-Task with MLflow logging
 # TODO: Test Knowledge Distillation end-to-end
 

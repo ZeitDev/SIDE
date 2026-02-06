@@ -204,6 +204,8 @@ class Trainer(BaseProcessor):
     def _save_model(self):
         logger.info('Saving best model to mlflow')        
         
+        mlflow.log_artifact(os.path.join('cache', 'model_state.pth'), artifact_path='best_model_state')
+        
         state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
         self.model.load_state_dict(state_dict['model_state_dict'])
         self.model.to('cpu')

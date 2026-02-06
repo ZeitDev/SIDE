@@ -59,10 +59,10 @@ class PixelBad3(DisparityMetric):
 
 class DepthMAE(DisparityMetric):
     def get_batch_error_sum(self, output: torch.Tensor, target: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
-        depth_pred = (focal_length * baseline) / output
-        depth_gt = (focal_length * baseline) / target
+        depth_output = (focal_length * baseline) / output
+        depth_target = (focal_length * baseline) / target
 
-        abs_diff = torch.abs(depth_pred - depth_gt)
+        abs_diff = torch.abs(depth_output - depth_target)
         
         return abs_diff[valid_mask].sum() 
 
