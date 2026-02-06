@@ -13,28 +13,21 @@ from processors.tester import Tester
 from processors.trainer import Trainer
 
 from utils import helpers
+from setup import setup_environment
 from utils.helpers import load, log_vram
 
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
+
 # * TASKS
 # ! CRITICAL BUG: Disparity task needs a Fixed Global Scalar so that outputs are scaled properly for loss and metrics, 1.0 == 320 pixels (MSDESIS)
 # TODO: Test Segmentation only vs. Disparity only vs. Multi-Task with MLflow logging
 # TODO: Test Knowledge Distillation end-to-end
 
-def _setup_environment():
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-    logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
-        
-    cpu_cores = list(range(24))
-    os.sched_setaffinity(os.getpid(), cpu_cores)
-    logger.info(f'Set CPU affinity to cores: {cpu_cores}')
-
-
 def main():
-    _setup_environment()
+    setup_environment()
     parser = argparse.ArgumentParser(description='SIDE Training and Testing')
     parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
     args = parser.parse_args()

@@ -2,7 +2,7 @@ import torch
 from typing import Dict
 
 class DisparityMetric:
-    def __init__(self, max_disparity: float = 320, device: torch.device = torch.device('cpu')):
+    def __init__(self, max_disparity: float = 512, device: torch.device = torch.device('cpu')):
         self.device = device
         self.max_disparity = max_disparity
         

@@ -1,5 +1,8 @@
 # %% Imports
 # Imports
+import os, sys
+sys.path.append(os.path.dirname(os.getcwd()))
+
 import os
 import cv2
 import imageio
@@ -9,9 +12,8 @@ import open3d as o3d
 import pyvista as pv
 from tqdm import tqdm
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-cpu_cores = list(range(24))
-os.sched_setaffinity(os.getpid(), cpu_cores)
+from setup import setup_environment
+setup_environment()
 
 # %% Settings
 # Settings

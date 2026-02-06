@@ -14,6 +14,9 @@ from utils.helpers import load
 from processors.trainer import Trainer
 from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 
+from setup import setup_environment
+setup_environment()
+
 # %% Settings
 EXPERIMENT = 'debug'
 START_LR = 1e-7

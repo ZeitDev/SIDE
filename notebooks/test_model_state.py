@@ -12,6 +12,9 @@ from processors.tester import Tester
 
 from utils import helpers
 
+from setup import setup_environment
+setup_environment()
+
 # %% Settings
 # Settings
 experiment = 'overfit'

@@ -3,7 +3,7 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
-  max_disparity: 320.0
+  max_disparity: 512
 
   transforms:
     train:

@@ -1,6 +1,11 @@
 # %%
+import os, sys
+sys.path.append(os.path.dirname(os.getcwd()))
+
 import json
 from pathlib import Path
+from setup import setup_environment
+setup_environment()
 
 # %%
 dataset_path = Path('/data/Zeitler/SIDED/EndoVis17/processed')
@@ -15,7 +20,7 @@ for mode in ['train', 'test']:
             original_calibrations.append(sequence / 'original_calibration.txt')
             rectified_calibrations.append(sequence / 'input' / 'rectified_calibration.json')
             foundation_stereo_calibrations.append(sequence / 'input' / 'foundation_stereo_calibration.txt')
-            
+       
 # %% Compare if diffs exist
 def get_normalized_content(file_path):
     try:

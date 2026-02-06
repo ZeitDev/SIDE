@@ -29,13 +29,6 @@ class BaseProcessor:
     def _setup(self) -> None:
         logger.subheader('Setup')
         
-        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-        logger.info(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
-        
-        cpu_cores = list(range(24))
-        os.sched_setaffinity(os.getpid(), cpu_cores)
-        logger.info(f'Set CPU affinity to cores: {cpu_cores}')
-        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f'Using device: {self.device}')
         

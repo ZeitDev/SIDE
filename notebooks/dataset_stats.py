@@ -1,4 +1,7 @@
 #%%
+import os, sys
+sys.path.append(os.path.dirname(os.getcwd()))
+
 import json
 from pathlib import Path
 import cv2
@@ -6,6 +9,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
+
+from setup import setup_environment
+setup_environment()
 
 #%%
 # --- Configuration ---
