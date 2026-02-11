@@ -73,3 +73,6 @@ training:
       enabled: true
     disparity:
       enabled: true
+
+logging:
+  n_validation_images: 2

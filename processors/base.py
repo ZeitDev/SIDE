@@ -85,15 +85,26 @@ class BaseProcessor:
         index_padding = len(str(max_indices))
         
         if log_n_images > 0:
-            n_logged_batch = 0
-            for i in range(log_n_images):
-                if n_logged_batch < len(images) and self.n_logged_images < log_n_images:
-                    self.n_logged_images += 1
-                    n_logged_batch += 1
-                    
-                    if self.config['training']['tasks']['segmentation']['enabled']:
-                        figure = visualization.get_image_target_output_overlay(image=images[i].cpu().detach(), target=targets['segmentation'][i].cpu().detach(), output=outputs['segmentation'][i].cpu().detach(), n_classes=self.n_classes['segmentation'], epoch=epoch, index=i)
-                        
-                        if not self.config['logging']['notebook_mode']: mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch:0{epoch_padding}}/index_{i:0{index_padding}}.png')
-                        else: plt.show(figure)
-                        plt.close(figure)
+            for i in range(len(images)):
+                if self.n_logged_images >= log_n_images: break
+                self.n_logged_images += 1
+                
+                sample_targets = {k: v[i].cpu().detach() for k, v in targets.items()}
+                sample_outputs = {k: v[i].cpu().detach() for k, v in outputs.items()}
+                sample_image = images[i].cpu().detach()
+                
+                figure = visualization.get_multitask_visuals(
+                    image=sample_image,
+                    targets=sample_targets,
+                    outputs=sample_outputs,
+                    n_classes=self.n_classes,
+                    epoch=epoch,
+                    index=i,
+                    max_disparity=self.config['data']['max_disparity']
+                )
+                
+                if not self.config['logging']['notebook_mode']: 
+                    mlflow.log_figure(figure, artifact_file=f'validation_overlays/epoch_{epoch:0{epoch_padding}}/index_{i:0{index_padding}}.png')
+                else: 
+                    plt.show(figure)
+                plt.close(figure)

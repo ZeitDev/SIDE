@@ -293,8 +293,9 @@ class Trainer(BaseProcessor):
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                 total_loss_weighted += loss.item()
                 
+                self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
+                
                 if 'segmentation' in outputs:
-                    self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
                     for metric in self.metrics['segmentation'].values():
                         metric.update(outputs['segmentation'], targets['segmentation'])
                 if 'disparity' in outputs:

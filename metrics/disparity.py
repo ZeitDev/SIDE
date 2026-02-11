@@ -20,7 +20,7 @@ class DisparityMetric:
             output = output * self.max_disparity
             target = target * self.max_disparity
             
-            valid_mask = target > 0
+            valid_mask = target != 0
 
             batch_error_sum = self.get_batch_error_sum(output, target, valid_mask, baseline, focal_length)
 
