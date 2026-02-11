@@ -264,10 +264,10 @@ class Trainer(BaseProcessor):
                     for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
                         total_task_weights[task] += torch.exp(-s_param).item()
                         
-        epoch_metrics = {'optimization/training/loss/weighted': total_loss_weighted / len(self.dataloader_train)}
+        epoch_metrics = {'optimization/training/loss/auto_weighted_sum': total_loss_weighted / len(self.dataloader_train)}
         for task in self.tasks:
             epoch_metrics[f'optimization/training/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
-            epoch_metrics[f'optimization/training/loss/weight_{task}'] = total_task_weights[task] / len(self.dataloader_train)
+            epoch_metrics[f'optimization/training/loss/auto_weight_{task}'] = total_task_weights[task] / len(self.dataloader_train)
         
         return epoch_metrics
     
@@ -310,10 +310,10 @@ class Trainer(BaseProcessor):
                         total_task_weights[task] += torch.exp(-s_param).item()
         
         epoch_metrics = self._compute_metrics(mode='validation')
-        epoch_metrics['optimization/validation/loss/weighted'] = total_loss_weighted / len(self.dataloader_val)
+        epoch_metrics['optimization/validation/loss/auto_weighted_sum'] = total_loss_weighted / len(self.dataloader_val)
         for task in self.tasks:
             epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
-            epoch_metrics[f'optimization/validation/loss/weight_{task}'] = total_task_weights[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/auto_weight_{task}'] = total_task_weights[task] / len(self.dataloader_val)
                 
         return epoch_metrics
     
@@ -335,7 +335,7 @@ class Trainer(BaseProcessor):
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
             mlflow.log_metrics(val_epoch_metrics, step=epoch)
             
-            val_loss = val_epoch_metrics['optimization/validation/loss/weighted']
+            val_loss = val_epoch_metrics['optimization/validation/loss/auto_weighted_sum']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau): self.scheduler.step(val_loss)
             else: self.scheduler.step()
             
@@ -348,11 +348,11 @@ class Trainer(BaseProcessor):
                 best_val_epoch_metrics = val_epoch_metrics
                 
                 torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
-                mlflow.log_metric('optimization/validation/loss/best', best_val_loss, step=epoch)
+                mlflow.log_metric('optimization/validation/loss/best_auto_weighted_sum', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/training/loss/weighted']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/training/loss/auto_weighted_sum']:.4f}',
                 'val_loss': f'{val_loss:.4f}',
                 'best_val_epoch': best_val_epoch,
                 'best_val_loss': f'{best_val_loss:.4f}'
@@ -375,7 +375,7 @@ class Trainer(BaseProcessor):
             train_epoch_metrics = self._train_epoch()
             mlflow.log_metrics(train_epoch_metrics, step=epoch)
             
-            train_loss = train_epoch_metrics['optimization/training/loss/weighted']
+            train_loss = train_epoch_metrics['optimization/training/loss/auto_weighted_sum']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(train_loss)
             else:
@@ -386,7 +386,7 @@ class Trainer(BaseProcessor):
             
             epochs_tqdm.set_postfix({
                 'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/training/loss/weighted']:.4f}',
+                'train_loss': f'{train_epoch_metrics['optimization/training/loss/auto_weighted_sum']:.4f}',
             })
             log_vram(f'Full Trainer Epoch {epoch}')
             

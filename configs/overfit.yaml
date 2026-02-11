@@ -1,4 +1,4 @@
-description: Overfit test for segmentation and disparity
+description: Overfit test for disparity
 
 data:
   dataset: data.datasets.OverfitDataset
@@ -69,7 +69,7 @@ data:
 training:
   epochs: 2000
   optimizer:
-    base_lr: 3.0e-4
+    base_lr: 6.0e-4
 
   encoder:
     name: models.encoders.timm.Encoder
@@ -79,7 +79,7 @@ training:
 
   tasks:
     segmentation:
-      enabled: true
+      enabled: false
     disparity:
       enabled: true
 

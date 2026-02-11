@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from utils import visualization
 from metrics.segmentation import IoU, Dice
-from metrics.disparity import PixelEPE, PixelBad3, DepthMAE
+from metrics.disparity import EPE, Bad3, MAE
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -49,17 +49,17 @@ class BaseProcessor:
         if tasks_config['segmentation']['enabled']:
             self.metrics['segmentation'] = {}
             
-            self.metrics['segmentation']['IoU'] = IoU(n_classes=self.n_classes['segmentation'], device=self.device)
-            self.metrics['segmentation']['DICE'] = Dice(n_classes=self.n_classes['segmentation'], device=self.device)
+            self.metrics['segmentation']['IoU_score'] = IoU(n_classes=self.n_classes['segmentation'], device=self.device)
+            self.metrics['segmentation']['DICE_score'] = Dice(n_classes=self.n_classes['segmentation'], device=self.device)
             logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.n_classes['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
             max_disparity = self.config['data']['max_disparity']
             self.metrics['disparity'] = {}
-            self.metrics['disparity']['PixelEPE'] = PixelEPE(max_disparity=max_disparity, device=self.device)
-            self.metrics['disparity']['PixelBad3'] = PixelBad3(max_disparity=max_disparity, device=self.device)
-            self.metrics['disparity']['DepthMAE'] = DepthMAE(max_disparity=max_disparity, device=self.device)
-            logger.info('Initialized PixelEPE, PixelBad3, and DepthMAE metrics for disparity.')
+            self.metrics['disparity']['EPE_pixel'] = EPE(max_disparity=max_disparity, device=self.device)
+            self.metrics['disparity']['Bad3_rate'] = Bad3(max_disparity=max_disparity, device=self.device)
+            self.metrics['disparity']['MAE_mm'] = MAE(max_disparity=max_disparity, device=self.device)
+            logger.info('Initialized EPE, Bad3, and MAE metrics for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:
         computed_metrics = {}

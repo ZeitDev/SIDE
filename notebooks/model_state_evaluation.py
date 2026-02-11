@@ -17,9 +17,9 @@ setup_environment()
 
 # %% Settings
 # Settings
-experiment = 'debug'
-run = '260206:1457'
-model_path = 'train/fold_2'
+experiment = 'overfit'
+run = '260206:1650'
+model_path = 'train/fold_1'
 show_n_images = None # None for all images
 
 # %% Load mlflow data
@@ -74,6 +74,16 @@ elif path_depth == 3:
         order_by=["attributes.start_time DESC"],
         max_results=1
     ).iloc[0].run_id 
+
+# %%
+# Get metrics of the model run
+model_run_metrics = mlflow.get_run(model_run_id).data.metrics
+# search key path for metric IoU
+iou_metric_key = None
+for key in model_run_metrics.keys():
+    if 'IoU' in key:
+        iou_metric_key = key
+        break
 
 # %%
 print(f'Testing Model \nExperiment: {experiment} \nRun: {run} \nModel Path: {model_path} \nID: {model_run_id}\n')

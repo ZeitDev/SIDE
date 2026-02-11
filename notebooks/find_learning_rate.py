@@ -18,7 +18,7 @@ from setup import setup_environment
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'debug'
+EXPERIMENT = 'overfit'
 START_LR = 1e-7
 END_LR = 10
 NUM_ITER = 100
@@ -39,6 +39,17 @@ class AutomaticWeightedLossWraper(nn.Module):
         total_loss, _ = self.automatic_weighted_loss(outputs, targets)
         return total_loss
 
+class ModelInputWrapper(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        
+    def forward(self, inputs):
+        if isinstance(inputs, dict):
+            return self.model(inputs['image'], inputs.get('right_image'))
+        
+        return self.model(inputs)
+
 class DictToDevice:
     def __init__(self, data_dict):
         self.data_dict = data_dict
@@ -51,8 +62,16 @@ class DictToDevice:
 
 class MultiTaskIter(TrainDataLoaderIter):
     def inputs_labels_from_batch(self, batch_data):
-        inputs, targets = batch_data
-        return inputs, DictToDevice(targets)
+        inputs = {}
+        targets = {}
+        
+        for k, v in batch_data.items():
+            if k in ['image', 'right_image']:
+                inputs[k] = v
+            else:
+                targets[k] = v
+        
+        return DictToDevice(inputs), DictToDevice(targets)
 
 
 # %%
@@ -60,7 +79,7 @@ print(f'LR Finder for configuration: {EXPERIMENT}')
 
 dataset_class = load(config['data']['dataset'])
 trainer = Trainer(config, train_subsets=dataset_class(mode='train').get_all_subset_names())
-model = trainer.model
+model = ModelInputWrapper(trainer.model)
 raw_criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
 criterion = AutomaticWeightedLossWraper(raw_criterion).to('cuda')
 train_iter = MultiTaskIter(trainer.dataloader_train)

@@ -85,9 +85,9 @@ def main():
                             trainer = Trainer(copy.deepcopy(config), train_subsets=train_subsets, val_subsets=[val_subset])
                             best_val_epoch_metrics = trainer.train()
                             
-                            if best_val_epoch_metrics['optimization/validation/loss/weighted'] < best_fold_loss:
+                            if best_val_epoch_metrics['optimization/validation/loss/auto_weighted_sum'] < best_fold_loss:
                                 best_fold = i + 1
-                                best_fold_loss = best_val_epoch_metrics['optimization/validation/loss/weighted']
+                                best_fold_loss = best_val_epoch_metrics['optimization/validation/loss/auto_weighted_sum']
                                 best_model_run_id = fold_run.info.run_id
                             
                             for metric_name, metric_value in best_val_epoch_metrics.items():
