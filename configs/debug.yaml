@@ -72,4 +72,4 @@ training:
     segmentation:
       enabled: true
     disparity:
-      enabled: false
+      enabled: true
