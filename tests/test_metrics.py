@@ -72,6 +72,7 @@ def test_iou_metric():
     assert math.isclose(results[0], 0.5)
     assert math.isclose(results[1], 0.5)
     assert math.isclose(results['mean'], 0.5)
+    assert math.isclose(results['std'], 0.0)
     
 def test_dice_metric():
     dice_metric = Dice(n_classes=2)
@@ -125,6 +126,7 @@ def test_dice_metric():
     assert math.isclose(results[0], 0.5)
     assert math.isclose(results[1], 0.5)
     assert math.isclose(results['mean'], 0.5)
+    assert math.isclose(results['std'], 0.0)
     
 def test_missing_class():
     iou_metric = IoU(n_classes=3)

@@ -69,5 +69,5 @@ if show_n_images: config['logging']['n_validation_images'] = show_n_images
 else: config['logging']['n_validation_images'] = len(tester.dataloader_test.dataset) 
 
 test_metrics = tester.test()
-[print(f'{k}: {v}') for k, v in test_metrics.items()];
+[print(f'{k}: {v}') for k, v in test_metrics.items()]
 # %%

@@ -33,57 +33,99 @@ Run `pytest` in environment.
 2. `mlflow ui`
 3. open mlflow server website (shown in terminal, usually `127.0.0.1:5000`)
 
-## Ongoing
-* Implementing disparity task
-* Dataset evaluation
+## Status
+* Training and Testing Pipeline finished
+* TODO: Evaluation Notebooks
 
 ## Features
 
-* **Tasks:** Surgical Instrument Segmentation and Full Scene Disparity Estimation (not yet implemented)
-* **Metrics:** IoU + DICE (mean and per instrument class) and MAE + RMSE (not yet implemented)
+* **Tasks:** Surgical Instrument Segmentation and Full Scene Disparity Estimation 
+* **Metrics:** IoU, DICE (Segmentation) and Bad3 Rate, EPE Pixel, MAE mm (Disparity)
 * **Cross Validation or Full Training:** Leave one sequence out cross validation or train on all sequences for inference (define sequences in /dataset/train/sequence_* or with a custom dataset class)
 * **Custom Datasets:** Define custom datasets, paths, sequences in ./data/datasets.py
-* **MLflow Logging:** Full experiment tracking, including full repository snapshot, metrics, cross validation summary, best validation or full training model state, segmentation mask validation images, learning rate, loss and all config parameters (extractable as pandas dataframes)
-* **Multi-Task Learning:** Training of a shared-feature encoder + seperate task decoders (not yet tested)
+* **MLflow Logging:** Full experiment tracking (via local Server or extractable as pandas dataframes)
+* **Multi-Task Learning:** Training of a shared-feature encoder + seperate task decoders
+* **Multi-Teacher Knowledge Distillation:** Teacher per task for knowledge distillation
 * **Automatic Weighted Loss:** Uses the homoscedastic uncertainty weighting method by Kendall (2018) for multi-task weight normalization
-* **Multi-Teacher Knowledge Distillation:** Multiple teacher per task for knowledge distillation (not yet verified and tested)
-* **Config:** Comprehensible settings config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging
-* **Evaluation:** Notebooks for evaluation (not fully implemented)
+* **Config:** Comprehensible settings config with modular encoder-decoder, optimizer, loss function, multi-task, multi-teacher, finetuning, transforms, logging, and more settings
+* **Evaluation:** Notebooks for evaluation
 * **Test Cases:** Test cases for verification of central components `uv run pytest` (tests every file that starts with 'test*')
 * **LR Finder:** Learning rate finder by fastai exponential (increasing the LR in an exponential manner)
 
 ## MLflow Logging Intervals
 
 * Experiment Run *(e.g. 251125:1636)*
-    * Complete config *(saved in Parameters, propagated to subruns)*
-    * Snapshot of all relevant files in repository *(saved in Artifacts)*
-    * Parent name, run type, description *(saved in Tags)*
-* Full/CV Training Subrun *(e.g. 251125:1636/train)*
-    * Parent name, run mode
+    * Complete config *(saved in Overview/Parameters, propagated to subruns)*
+    * Repository Snapshot of all relevant files  *(saved in Artifacts)*
+    * *(saved in Tags)* 
+        * Description
+        * Parent name
+        * Run Type 
+* Full/CV Training Subrun *(e.g. 251125:1636/train/fold_1)*
+    * *(saved in Overview)*
+        * Description
+        * Parent Name
+        * Run Mode
+        * Run Type
+        * Validation Subset
+        * Fold Index
     * *Each Epoch (saved in Model Metrics)*
-        * Learning Rate
-        * Automatic Task Weights
-        * Training Weighted Loss 
-        * Training Raw Task Loss 
-        * Validation Weighted Loss *(only CV)*
-        * Validation Raw Loss *(only CV)*
-        * Best Validation Loss *(only CV)*
-        * Segmentation Overlay Images *(only CV and if set by config)*
-    * *Each Run (saved in Models)*
-        * Best model determined by lowest validation loss *(CV)* or after all epochs *(Full) [better approach for Full Training?]*
+        * Training
+            * Learning Rate
+            * Auto Weighted Loss Sum
+            * Auto Weights per Task and Teacher
+            * Raw Loss per Task and Teacher
+        * Validation *(only CV)*
+            * Auto Weighted Loss Sum
+            * Best Auto Weighted Loss Sum
+            * Auto Weights per Task
+            * Raw Loss per Task
+            * If Segmentation
+                * Mean, std, and per class
+                * IoU Score
+                * DICE Score
+                * Overlay Image *(saved in Artifacts)*
+            * If Disparity
+                * Bad3 Rate
+                * EPE Pixel
+                * MAE mm
+                * Overlay Image *(saved in Artifacts)*
+    * *Each Run*
+        * Best model determined by lowest validation loss *(CV)* or after all epochs *(Full)* *(saved in Models)*
+        * Cross Validation Summary *(saved in Model Metrics)*
+            * Best Fold Index
+            * Best Fold Auto Weighted Loss Sum
+            * Comparison per Fold, mean, std 
+                * Auto Weighted Loss Sum
+                * Auto Weights per Task
+                * Raw Loss per Task
+                * If Segmentation
+                    * IoU Score
+                    * DICE Score
+                * If Disparity
+                    * Bad3 Rate
+                    * EPE Pixel
+                    * MAE mm
 * Test Subrun *(e.g. 211125:1636/test)*
     * Performance Metrics *(saved in Model Metrics)*
-        * Mean and per class
-            * IoU, DICE
+        * If Segmentation
+            * Mean, std, and per class
+                * IoU Score
+                * DICE Score
+        * If Disparity
+            * Bad3 Rate
+            * EPE Pixel
+            * MAE mm
 
 ## Notes
 
+### Kullback-Leibler Divergence Loss for Knowledge Distillation
+* Logits are divided by a temperature T to soften the probability distribution
+* Final loss is divided by image size to normalize it, as the KL Divergence is a sum over all pixels and classes. This prevents the loss from exploding and allows for better convergence.
+
 ### Modular Encoder + Decoder
 * Encoder needs to return feature map
-* Standard Decoder resembles mostly a U-Net with custom Heads for each task. Can adjust dynamically to corresponding feature maps provided by different encoders.
-
-### Test Cases
-* Verification of correct IoU and DICE calculation
+* Standard Decoder resembles mostly a U-Net with custom Heads for each task. Can adjust dynamically to corresponding feature maps provided by different encoders and is stereo compatible.
 
 ### Negative Weighted Loss
 * When the raw loss of a task converges to 0.0 the AutomaticWeightedLoss gains confidence (Task Weight Value). To maximize the confidence, it lowers the uncertainty *s* to become negative, such that the task weight *e^-s* goes up. The equation looks like this for example: *e^-s * L_raw + 0.5 * s = 5.0 * 0.0001 + 0.5 * (-2) = -1*.
@@ -97,7 +139,6 @@ Run `pytest` in environment.
 
 ### LRFinder
 * Automatic Weighted Loss needs to have frozen uncertainty weights, because when the exponential learning rate explodes the Automatic Weights will fight against it, preventing the loss moutain we want to see at the end of the graph.
-
 * Best learning rate in the middle of the steepest slide down, before the exploding cliff. Because this point indicates "maximum speed" and far away of exploding cliff (divergence). Do not trust the red dot.
 
 ### DimitrisPs/ris2017_toolkit

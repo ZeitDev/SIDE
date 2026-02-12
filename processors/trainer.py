@@ -135,14 +135,6 @@ class Trainer(BaseProcessor):
                     
                     model_run_id = get_state_run_id(kd_config['state'])
                     
-                    # cache_path = os.path.join('cache', 'teachers', model_run_id)
-                    # teacher_model_path = os.path.join(cache_path, 'best_model')
-                    # if not os.path.exists(teacher_model_path):
-                    #     logger.info(f'Downloading teacher model to {cache_path}')
-                    #     os.makedirs(cache_path, exist_ok=True)
-                    #     mlflow.artifacts.download_artifacts(run_id=model_run_id, artifact_path='best_model', dst_path=cache_path)
-                    
-                    # teacher_model = mlflow.pytorch.load_model(teacher_model_path, map_location=self.device)
                     teacher_model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model', map_location=self.device)
                     teacher_model.eval()
                 
@@ -165,7 +157,7 @@ class Trainer(BaseProcessor):
             if kd_task_config['enabled']:
                 kd_criterion_config = kd_task_config['criterion']
                 KdCriterionClass = load(kd_criterion_config['name'])
-                self.criterions[f'{task}_teacher'] = KdCriterionClass(**kd_criterion_config['params'])
+                self.criterions[f'{task}_distillation'] = KdCriterionClass(**kd_criterion_config['params'])
                 logger.info(f'KD Criterion for task {task}: {kd_criterion_config["name"]} with params {kd_criterion_config["params"]}')
 
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
@@ -239,8 +231,8 @@ class Trainer(BaseProcessor):
                     for task, kd_teacher in self.kd_models.items():
                         with torch.no_grad():
                             teacher_output = kd_teacher(left_images, right_images)[task]
-                            targets[f'{task}_teacher'] = teacher_output
-                            outputs[f'{task}_teacher'] = outputs[task]
+                            targets[f'{task}_distillation'] = teacher_output
+                            outputs[f'{task}_distillation'] = outputs[task]
                 
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                         
