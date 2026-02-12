@@ -57,7 +57,7 @@ class Tester(BaseProcessor):
     def _load_models(self) -> None:
         logger.subheader('Loading Model')
         model_path = f'runs:/{self.run_id}/best_model'
-        self.model = mlflow.pytorch.load_model(model_path, map_location=self.device) 
+        self.model = mlflow.pytorch.load_model(model_path, map_location=self.device)
         self.model.eval()
         logger.info(f'Loaded best model from {model_path}')
  
@@ -76,7 +76,7 @@ class Tester(BaseProcessor):
                 targets = {task: data[task].to(self.device) for task in self.tasks}
                 
                 outputs = self.model(left_images, right_images)
-                            
+                
                 if 'segmentation' in outputs:
                     self._log_visuals(epoch='Test', images=left_images, targets=targets, outputs=outputs)
                     for metric in self.metrics['segmentation'].values():

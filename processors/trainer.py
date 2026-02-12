@@ -8,7 +8,7 @@ import mlflow
 from torch.utils.data import DataLoader 
 from mlflow.models.signature import infer_signature
 
-from utils.helpers import load, log_vram
+from utils.helpers import load, log_vram, get_state_run_id
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
@@ -127,38 +127,28 @@ class Trainer(BaseProcessor):
                     
     def _load_teachers(self) -> None:
         self.kd_models = {}
-        self.kd_criterions = {}
         for task, task_config in self.config['training']['tasks'].items():
             if task_config['enabled']:
                 kd_config = task_config['knowledge_distillation']
                 if kd_config['enabled']:
                     logger.subheader(f'Loading Teachers for {task}')
-                    self.kd_models[task] = []
+                    
+                    model_run_id = get_state_run_id(kd_config['state'])
+                    
+                    # cache_path = os.path.join('cache', 'teachers', model_run_id)
+                    # teacher_model_path = os.path.join(cache_path, 'best_model')
+                    # if not os.path.exists(teacher_model_path):
+                    #     logger.info(f'Downloading teacher model to {cache_path}')
+                    #     os.makedirs(cache_path, exist_ok=True)
+                    #     mlflow.artifacts.download_artifacts(run_id=model_run_id, artifact_path='best_model', dst_path=cache_path)
+                    
+                    # teacher_model = mlflow.pytorch.load_model(teacher_model_path, map_location=self.device)
+                    teacher_model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model', map_location=self.device)
+                    teacher_model.eval()
                 
-                    for state_path in kd_config['states']:
-                        teacher_encoder = load(kd_config['encoder']['name'], **kd_config['encoder']['params'])
-                        logger.info(f'Loaded teacher encoder: {kd_config["encoder"]["name"]} with params {kd_config["encoder"]["params"]}')
-                        
-                        teacher_decoder = load(kd_config['decoder']['name'], **kd_config['decoder']['params'])
-                        logger.info(f'Loaded teacher decoder: {kd_config["decoder"]["name"]} with params {kd_config["decoder"]["params"]}')
-                        
-                        teacher_model = load(
-                            'utils.models.Combiner',
-                            encoder=teacher_encoder,
-                            decoders={task: teacher_decoder}
-                        ).to(self.device)
-                        
-                        state_dict = torch.load(state_path, map_location=self.device)
-                        teacher_model.load_state_dict(state_dict['model_state_dict'])
-                        teacher_model.eval()
-                        self.kd_models[task].append(teacher_model)
-                        logger.info(f'Loaded teacher {state_path}')
-                        
-                    self.kd_criterions[task] = load(
-                        kd_config['criterion']['name'],
-                        **kd_config['criterion']['params'])
-                    logger.info(f'Loaded KD criterion for task {task}: {kd_config["criterion"]["name"]} with params {kd_config["criterion"]["params"]}')
-        
+                    self.kd_models[task] = teacher_model
+                    logger.info(f'Loaded teacher {kd_config["state"]} for task {task} with model run ID {model_run_id}')
+
     def _load_components(self) -> None:
         logger.subheader('Loading Components')
 
@@ -170,6 +160,13 @@ class Trainer(BaseProcessor):
                 CriterionClass = load(criterion_config['name'])
                 self.criterions[task] = CriterionClass(**criterion_config['params'])
                 logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
+                
+            kd_task_config = task_config['knowledge_distillation']
+            if kd_task_config['enabled']:
+                kd_criterion_config = kd_task_config['criterion']
+                KdCriterionClass = load(kd_criterion_config['name'])
+                self.criterions[f'{task}_teacher'] = KdCriterionClass(**kd_criterion_config['params'])
+                logger.info(f'KD Criterion for task {task}: {kd_criterion_config["name"]} with params {kd_criterion_config["params"]}')
 
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
         optimizer_config = self.config['training']['optimizer']
@@ -226,8 +223,8 @@ class Trainer(BaseProcessor):
     def _train_epoch(self) -> Dict[str, float]:
         self.model.train()
         total_loss_weighted = 0
-        total_raw_task_losses = {task: 0.0 for task in self.tasks}
-        total_task_weights = {task: 0.0 for task in self.tasks}
+        total_raw_task_losses = {task: 0.0 for task in self.criterions}
+        total_task_weights = {task: 0.0 for task in self.criterions}
         
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
         for data in batch_tqdm:
@@ -238,18 +235,14 @@ class Trainer(BaseProcessor):
             with torch.set_grad_enabled(True):
                 outputs = self.model(left_images, right_images)
                 
-                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
-                    
                 if self.kd_models:
-                    for task, kd_teachers in self.kd_models.items():
-                        student_output = outputs[task]
+                    for task, kd_teacher in self.kd_models.items():
                         with torch.no_grad():
-                            teacher_outputs = [teacher(left_images, right_images)[task] for teacher in kd_teachers]
-                            mean_teacher_output = torch.mean(torch.stack(teacher_outputs), dim=0)
-                        
-                        kd_loss = self.kd_criterions[task](student_output, mean_teacher_output)
-                        kd_weight = self.config['training']['tasks'][task]['knowledge_distillation']['criterion']['weight']
-                        loss += (kd_weight * kd_loss)
+                            teacher_output = kd_teacher(left_images, right_images)[task]
+                            targets[f'{task}_teacher'] = teacher_output
+                            outputs[f'{task}_teacher'] = outputs[task]
+                
+                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                         
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -265,9 +258,9 @@ class Trainer(BaseProcessor):
                         total_task_weights[task] += torch.exp(-s_param).item()
                         
         epoch_metrics = {'optimization/training/loss/auto_weighted_sum': total_loss_weighted / len(self.dataloader_train)}
-        for task in self.tasks:
-            epoch_metrics[f'optimization/training/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
-            epoch_metrics[f'optimization/training/loss/auto_weight_{task}'] = total_task_weights[task] / len(self.dataloader_train)
+        for task in self.criterions.keys():
+            epoch_metrics[f'optimization/training/loss/raw/{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
+            epoch_metrics[f'optimization/training/loss/auto_weights/{task}'] = total_task_weights[task] / len(self.dataloader_train)
         
         return epoch_metrics
     
@@ -307,14 +300,15 @@ class Trainer(BaseProcessor):
                 for task, raw_task_loss in raw_task_losses.items():
                     total_raw_task_losses[task] += raw_task_loss
                 with torch.no_grad():
-                    for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
+                    for task in self.tasks:
+                        s_param = self.automatic_weighted_loss.logarithmic_variances[task]
                         total_task_weights[task] += torch.exp(-s_param).item()
         
         epoch_metrics = self._compute_metrics(mode='validation')
         epoch_metrics['optimization/validation/loss/auto_weighted_sum'] = total_loss_weighted / len(self.dataloader_val)
         for task in self.tasks:
-            epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
-            epoch_metrics[f'optimization/validation/loss/auto_weight_{task}'] = total_task_weights[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/raw/{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/auto_weights/{task}'] = total_task_weights[task] / len(self.dataloader_val)
                 
         return epoch_metrics
     

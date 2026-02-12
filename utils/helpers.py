@@ -3,7 +3,7 @@ import mlflow
 import logging
 import importlib
 import collections.abc
-from typing import cast, Dict, Any, List, Optional
+from typing import cast, Dict, Any
 
 import torch
 
@@ -88,3 +88,19 @@ def log_vram(stage: str = ''):
         reserved = torch.cuda.memory_reserved(device) / 1024**3
         total = torch.cuda.get_device_properties(device).total_memory / 1024**3
         logger.vram(f'[{stage}] Allocated: {allocated:.2f}GB | Reserved: {reserved:.2f}GB | Total: {total:.2f}GB')
+        
+def get_state_run_id(state_path: str) -> str:
+    model_state_parts = state_path.split('/')
+    experiment = model_state_parts[0]
+    run_path = '/'.join(model_state_parts[1:])
+    
+    mlflow_experiment = mlflow.get_experiment_by_name(experiment)
+    
+    model_run_id = mlflow.search_runs(
+        experiment_ids=[mlflow_experiment.experiment_id], 
+        filter_string=f"tags.mlflow.runName = '{run_path}'", 
+        order_by=["attributes.start_time DESC"], 
+        max_results=1
+    ).iloc[0].run_id  
+        
+    return model_run_id

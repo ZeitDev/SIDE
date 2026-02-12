@@ -71,17 +71,12 @@ training:
         params: {}
       knowledge_distillation:
         enabled: false
-        states: []
+        state: null
         criterion:
-          weight: 0.5
-          name: torch.nn.KLDivLoss
-          params: {}
-        encoder:
-          name: models.encoders.timm.Encoder
-          params: {}
-        decoder:
-          name: models.decoders.dynamic_unet.Decoder
-          params: {}
+          name: criterions.segmentation.KLDivLoss
+          params:
+            temperature: 4.0
+            reduction: batchmean
 
     disparity: 
       enabled: true
@@ -97,17 +92,13 @@ training:
           is_stereo: true
       knowledge_distillation:
         enabled: false
-        states: []
+        state: null
         criterion:
-          weight: 0.5
-          name: torch.nn.KLDivLoss
-          params: {}
-        encoder:
-          name: models.encoders.timm.Encoder
-          params: {}
-        decoder:
-          name: models.decoders.dynamic_unet.Decoder
-          params: {}
+          name: criterions.disparity.MaskedSmoothL1Loss
+          params:
+            ignore_value: 0
+            reduction: mean
+            beta: 1.0
 
 logging:
   vram: false

@@ -1,4 +1,4 @@
-description: Debugging segmentation and disparity with OverfitDataset
+description: Debugging knowledge distillation
 
 data:
   dataset: data.datasets.OverfitDataset
@@ -67,12 +67,18 @@ data:
           std: [0.229, 0.224, 0.225]
 
 training:
-  epochs: 2
+  epochs: 3
   tasks:
     segmentation:
       enabled: true
+      knowledge_distillation:
+        enabled: true
+        state: debug/260211:1659/train
     disparity:
       enabled: true
+      knowledge_distillation:
+        enabled: true
+        state: debug/260211:1709/train
 
 logging:
-  n_validation_images: 2
+  n_validation_images: 0

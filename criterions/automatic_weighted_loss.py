@@ -25,7 +25,7 @@ class AutomaticWeightedLoss(nn.Module):
             if task in self.criterions and task in targets:
                 criterion = self.criterions[task]
                 raw_task_loss = criterion(task_output, targets[task])
-                raw_task_losses[task] = raw_task_loss.item()                
+                raw_task_losses[task] = raw_task_loss.item()
                 
                 # Uncertainty Formula from paper:
                 # L_total = sum( (1 / 2*sigma_i^2) * L_i + log(sigma_i) )
