@@ -92,7 +92,7 @@ Run `pytest` in environment.
                 * Overlay Image *(saved in Artifacts)*
     * *Each Run*
         * Best model determined by lowest validation loss *(CV)* or after all epochs *(Full)* *(saved in Models)*
-        * Cross Validation Summary *(saved in Model Metrics)*
+        * Cross Validation Summary *(only CV, saved in Model Metrics)*
             * Best Fold Index
             * Best Fold Auto Weighted Loss Sum
             * Comparison per Fold, mean, std 

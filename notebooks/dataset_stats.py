@@ -20,7 +20,7 @@ BASE_DATA_DIR = Path("/data/Zeitler/SIDED/EndoVis17/raw")
 TRAIN_DIR = BASE_DATA_DIR / "train"
 TEST_DIR = BASE_DATA_DIR / "test"
 # The mapping file is expected in the training directory.
-MAPPINGS_PATH = TRAIN_DIR / "instrument_type_mapping.json"
+MAPPINGS_PATH = BASE_DATA_DIR / "instrument_type_mapping.json"
 
 #%%
 def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFrame:
@@ -189,5 +189,95 @@ fig_seq_combined.update_xaxes(tickangle=-90)
 fig_seq_combined.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # Clean up facet titles
 fig_seq_combined.update_layout(yaxis_title='Total Pixels')
 fig_seq_combined.show()
+
+# %%
+# --- Cross Validation Folds Analysis ---
+
+# Define the 5 folds based on sequence IDs
+# Fold definitions:
+# Fold 0: Test {1, 2} | Train {3..10}
+# Fold 1: Test {3, 4} | Train {1, 2, 5..10}
+# Fold 2: Test {5, 6} | Train {1..4, 7..10}
+# Fold 3: Test {7, 8} | Train {1..6, 9, 10}
+# Fold 4: Test {9, 10}| Train {1..8} (Official Split)
+
+folds_config = {
+    "Fold 0": [1, 2],
+    "Fold 1": [3, 4],
+    "Fold 2": [5, 6],
+    "Fold 3": [7, 8],
+    "Fold 4": [9, 10]
+}
+all_seq_ids = set(range(1, 11))
+
+# Extract numeric ID from sequence name to match fold definitions
+# We assume sequence folder names contain the ID (e.g., 'seq_1', 'instrument_dataset_10')
+def extract_seq_id(seq_name):
+    digits = ''.join(filter(str.isdigit, str(seq_name)))
+    return int(digits) if digits else -1
+
+# Create a column for sequence ID to facilitate filtering
+combined_counts_df['seq_id'] = combined_counts_df['sequence'].apply(extract_seq_id)
+
+fold_records = []
+
+for fold_name, test_ids_list in folds_config.items():
+    test_ids = set(test_ids_list)
+    train_ids = all_seq_ids - test_ids
+    
+    # Aggregate Train for this fold
+    # Filter by seq_id being in the calculated train_ids set
+    train_mask = combined_counts_df['seq_id'].isin(train_ids)
+    train_fold_data = combined_counts_df[train_mask]
+    train_agg = train_fold_data.groupby("instrument")["pixel_count"].sum().reset_index()
+    train_agg["split"] = "Train"
+    train_agg["fold"] = fold_name
+    fold_records.append(train_agg)
+    
+    # Aggregate Test for this fold
+    test_mask = combined_counts_df['seq_id'].isin(test_ids)
+    test_fold_data = combined_counts_df[test_mask]
+    test_agg = test_fold_data.groupby("instrument")["pixel_count"].sum().reset_index()
+    test_agg["split"] = "Test"
+    test_agg["fold"] = fold_name
+    fold_records.append(test_agg)
+
+cv_df = pd.concat(fold_records)
+
+# Plot comparison
+fig_cv = px.bar(
+    cv_df,
+    x="instrument",
+    y="pixel_count",
+    color="split",
+    barmode="group",
+    facet_col="fold",
+    facet_col_wrap=3, # Arranges plots in a grid (3 columns)
+    title="Class Balance across 5 Cross-Validation Folds",
+    labels={'instrument': 'Instrument', 'pixel_count': 'Total Pixels'},
+    category_orders={"fold": sorted(folds_config.keys())}
+)
+
+fig_cv.update_xaxes(tickangle=-45)
+fig_cv.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # Clean facet labels
+fig_cv.update_layout(yaxis_title="Total Pixels")
+fig_cv.show()
+
+# %%
+# --- Total Pixel Count Comparison (Train vs Test per Fold) ---
+total_pixels_per_fold = cv_df.groupby(["fold", "split"])["pixel_count"].sum().reset_index()
+
+fig_total_cv = px.bar(
+    total_pixels_per_fold,
+    x="fold",
+    y="pixel_count",
+    color="split",
+    barmode="group",
+    text_auto='.2s',
+    title="Total Pixel Count: Train vs Test per Fold",
+    labels={'fold': 'Fold', 'pixel_count': 'Total Pixels', 'split': 'Split'}
+)
+fig_total_cv.update_layout(yaxis_title="Total Pixels")
+fig_total_cv.show()
 
 # %%
