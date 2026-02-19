@@ -12,7 +12,7 @@ from tqdm.notebook import tqdm
 
 from collections import Counter
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %%

@@ -10,7 +10,7 @@ def setup_environment():
     os.sched_setaffinity(os.getpid(), cpu_cores)
     print(f'Set CPU affinity to cores: {cpu_cores}')
     
-    local_tmp = os.path.join(os.getcwd(), '.tmp')
+    local_tmp = os.path.join(os.getcwd(), '.temp')
     os.makedirs(local_tmp, exist_ok=True)
     
     os.environ['TMPDIR'] = local_tmp

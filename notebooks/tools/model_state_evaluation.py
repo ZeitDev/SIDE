@@ -13,7 +13,7 @@ from processors.tester import Tester
 
 from utils import helpers
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %% Settings
@@ -32,8 +32,8 @@ mlflow.set_tracking_uri('../mlruns')
 mlflow_experiment = mlflow.get_experiment_by_name(experiment)
 mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f"run_name = '{state_path_parts[1]}'").iloc[0] 
 
-base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../cache')
-experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{experiment}.yaml', dst_path='../cache')
+base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp')
+experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{experiment}.yaml', dst_path='../.temp')
 
 with open(base_config_filepath, 'r') as f: base_config = yaml.safe_load(f)
 with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)

@@ -2,7 +2,7 @@ description: Debugging knowledge distillation
 
 data:
   dataset: data.datasets.OverfitDataset
-  cross_validation: true
+  cross_validation: false
 
   transforms:
     train:
@@ -73,12 +73,12 @@ training:
       enabled: true
       knowledge_distillation:
         enabled: true
-        state: debug/260211:1659/train
+        state: debug/260211:1659/train #teacher::segmentation/260217:1457
     disparity:
       enabled: true
       knowledge_distillation:
         enabled: true
-        state: debug/260211:1709/train
+        state: debug/260211:1709/train #teacher::disparity/260217:1502
 
 logging:
   n_validation_images: 0

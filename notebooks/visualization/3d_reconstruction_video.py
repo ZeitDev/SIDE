@@ -1,7 +1,7 @@
 # %% Imports
 # Imports
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append(os.path.dirname('../../'))
 
 import os
 import cv2
@@ -12,7 +12,7 @@ import open3d as o3d
 import pyvista as pv
 from tqdm import tqdm
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %% Settings
@@ -107,11 +107,11 @@ def generate_3d_reconstruction_video(
 
     solid_seg_colors = np.zeros_like(left_image)
     palette = [
-        [255, 0, 0],    # Class 1: Red
+        [0, 255, 255],  # Class 5: Cyan
         [0, 255, 0],    # Class 2: Green
+        [255, 0, 0],    # Class 1: Red
         [0, 0, 255],    # Class 3: Blue
         [255, 255, 0],  # Class 4: Yellow
-        [0, 255, 255],  # Class 5: Cyan
         [255, 0, 255],  # Class 6: Magenta
         [255, 128, 0],  # Class 7: Orange
         [128, 0, 255],  # Class 8: Purple
@@ -216,7 +216,11 @@ def generate_3d_reconstruction_video(
                     
     # Option B: Overlay
     disp_overlay = cv2.addWeighted(left_image, 0.6, color_disp, 0.4, 0)
-    cv2.imwrite(output_path / f'{name}_overlay.png', disp_overlay)
+    cv2.imwrite(output_path / f'{name}_disp_overlay.png', disp_overlay)
+    
+    # Segmentation Overlay
+    seg_overlay = cv2.addWeighted(left_image, 0.6, solid_seg_colors, 0.4, 0)
+    cv2.imwrite(output_path / f'{name}_seg_overlay.png', seg_overlay)
 
 # %%
 # %% Loop
@@ -230,7 +234,7 @@ for mode in ['train', 'test']:
                 left_image_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/input/left_images/image{frame_num_str}.png')
                 segmentation_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/ground_truth/segmentation/image{frame_num_str}.png')
                 disparity_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/ground_truth/disparity/image{frame_num_str}.png')
-                intrinsic_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/input/foundation_stereo_calibration.txt')
+                intrinsic_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/calibration/foundation_stereo_calibration.txt')
                 
                 name = f'{mode}_{sequence_name}_{frame_num_str}'
                 

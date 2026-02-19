@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 #%%

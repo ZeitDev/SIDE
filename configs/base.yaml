@@ -4,6 +4,7 @@ description: Base configuration
 data:
   dataset: data.datasets.EndoVis17
   max_disparity: 512
+  cross_validation: false
 
   transforms:
     train:
@@ -32,7 +33,6 @@ data:
 # --- Training Configuration ---
 training:
   epochs: 10
-  cross_validation: false
 
   optimizer:
     name: torch.optim.AdamW
@@ -73,10 +73,9 @@ training:
         enabled: false
         state: null
         criterion:
-          name: criterions.segmentation.KLDivLoss
+          name: criterions.segmentation.ChannelWiseKLDivLoss
           params:
             temperature: 4.0
-            reduction: batchmean
 
     disparity: 
       enabled: true

@@ -13,7 +13,7 @@ import shutil
 import matplotlib.pyplot as plt
 import math
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %% Settings

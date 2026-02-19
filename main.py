@@ -13,7 +13,7 @@ from processors.tester import Tester
 from processors.trainer import Trainer
 
 from utils import helpers
-from setup import setup_environment
+from utils.setup import setup_environment
 from utils.helpers import load, log_vram
 
 from utils.logger import setup_logging, CustomLogger
@@ -22,9 +22,9 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Test Knowledge Distillation end-to-end
+# TODO: Integrate FoundationStereo Class as a teacher for disparity KD
+# TODO: Extract cost volume mapping for disparity KD
 
-# * Info: This file is procedural, because MLflow seems to break otherwise 
 def main():
     try:
         setup_environment()
@@ -36,7 +36,7 @@ def main():
         with open(args.config, 'r') as f: experiment_config = yaml.safe_load(f)
         config = helpers.deep_merge(experiment_config, base_config)
         
-        if not os.path.exists('cache'): os.makedirs('cache')
+        if not os.path.exists('.temp'): os.makedirs('.temp')
         if not os.path.exists('logs'): os.makedirs('logs')
 
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]

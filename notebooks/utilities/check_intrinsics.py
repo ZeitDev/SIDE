@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.getcwd()))
 
 import json
 from pathlib import Path
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %%

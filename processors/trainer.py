@@ -193,7 +193,7 @@ class Trainer(BaseProcessor):
     def _save_model(self):
         logger.info('Saving best model to mlflow')        
         
-        state_dict = torch.load(os.path.join('cache', 'model_state.pth'))
+        state_dict = torch.load(os.path.join('.temp', 'model_state.pth'))
         self.model.load_state_dict(state_dict['model_state_dict'])
         self.model.to('cpu')
         self.model.eval()
@@ -334,7 +334,7 @@ class Trainer(BaseProcessor):
                 best_val_loss = val_loss
                 best_val_epoch_metrics = val_epoch_metrics
                 
-                torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
+                torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
                 mlflow.log_metric('optimization/validation/loss/best_auto_weighted_sum', best_val_loss, step=epoch)
                 
             epochs_tqdm.set_postfix({
@@ -378,7 +378,7 @@ class Trainer(BaseProcessor):
             log_vram(f'Full Trainer Epoch {epoch}')
             
         
-        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('cache', 'model_state.pth'))
+        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
         self._save_model()
         del self.model
         del self.optimizer

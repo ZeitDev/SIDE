@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script archives the 'mlruns' directory into the 'cache' directory.
+# This script archives the 'mlruns' directory into the '.temp' directory.
 
 # Define source and destination
 SOURCE_DIR="mlruns"

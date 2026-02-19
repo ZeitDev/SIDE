@@ -123,12 +123,11 @@ class OverfitDataset(BaseDataset):
         
     def _get_class_mappings(self) -> None:
         if self.tasks['segmentation']['enabled']:
-            class_mapping_path = os.path.join(self.root_path, 'instrument_type_mapping.json')
+            class_mapping_path = os.path.join(self.root_path, 'mapping.json')
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
                 
             self.class_mappings = {v: k for k, v in name2id.items()}
-            self.class_mappings[0] = 'Background'
         
     def _get_file_names(self, subset_path: str) -> List[str]:
         left_images_path = os.path.join(subset_path, 'input', 'left_images')
@@ -144,7 +143,7 @@ class OverfitDataset(BaseDataset):
         if self.tasks['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
             sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
-            sample_paths['intrinsics'] = os.path.join(subset_path, 'input', 'rectified_calibration.json')
+            sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
             
         return sample_paths
 
@@ -155,12 +154,11 @@ class EndoVis17(BaseDataset):
         
     def _get_class_mappings(self) -> None:
         if self.tasks['segmentation']['enabled']:
-            class_mapping_path = os.path.join(self.root_path, 'instrument_type_mapping.json')
+            class_mapping_path = os.path.join(self.root_path, 'mapping.json')
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
                 
             self.class_mappings = {v: k for k, v in name2id.items()}
-            self.class_mappings[0] = 'background'
         
     def _get_file_names(self, subset_path: str) -> List[str]:
         left_images_path = os.path.join(subset_path, 'input', 'left_images')
@@ -176,7 +174,7 @@ class EndoVis17(BaseDataset):
         if self.tasks['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
             sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
-            sample_paths['intrinsics'] = os.path.join(subset_path, 'input', 'rectified_calibration.json')
+            sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
                 
         return sample_paths
     

@@ -1,13 +1,13 @@
 # %%
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import timm
 
-from setup import setup_environment
+from utils.setup import setup_environment
 setup_environment()
 
 # %% Print encoder feature shapes

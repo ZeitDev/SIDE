@@ -11,8 +11,8 @@ class Combiner(nn.Module):
         
     def forward(self, left_image, right_image=None) -> Dict[str, torch.Tensor]:
         outputs = {}
+        left_features = self.encoder(left_image)
         for task, decoder in self.decoders.items():
-            left_features = self.encoder(left_image)
             if task == 'segmentation':
                 outputs[task] = decoder(left_features)
             if task == 'disparity':

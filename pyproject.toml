@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "albumentations>=2.0.8",
     "colorlog>=6.9.0",
+    "einops>=0.8.2",
     "imageio[ffmpeg]>=2.37.2",
     "iprogress>=0.4",
     "ipykernel>=6.30.1",
@@ -14,6 +15,7 @@ dependencies = [
     "monai>=1.5.1",
     "nbformat>=5.10.4",
     "numpy>=2.1.2",
+    "omegaconf>=2.3.0",
     "open3d>=0.19.0",
     "opencv-python>=4.12.0.88",
     "pillow>=11.0.0",
@@ -27,6 +29,7 @@ dependencies = [
     "torch-lr-finder>=0.2.2",
     "torchvision>=0.23.0",
     "tqdm>=4.67.1",
+    "trimesh>=4.11.2",
 ]
 
 [[tool.uv.index]]
