@@ -22,7 +22,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Integrate FoundationStereo Class as a teacher for disparity KD
+# TODO: Save logits to disk because VRAM is not sufficient for two teachers and student
 # TODO: Extract cost volume mapping for disparity KD
 
 def main():

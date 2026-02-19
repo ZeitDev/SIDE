@@ -13,4 +13,5 @@ wheels/
 cache/
 mlruns/
 logs/
-.tmp/
+.temp/
+models/teachers/FoundationStereo/

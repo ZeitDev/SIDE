@@ -10,8 +10,8 @@ data:
     train:
       - name: Resize
         params:
-          height: 256
-          width: 256
+          height: 1024
+          width: 1024
       - name: Normalize
         params:
           mean: [0.485, 0.456, 0.406]
@@ -19,14 +19,14 @@ data:
     test:
       - name: Resize
         params:
-          height: 256
-          width: 256
+          height: 1024
+          width: 1024
       - name: Normalize
         params:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
 
-  batch_size: 8
+  batch_size: 4
   num_workers: 4
   pin_memory: true
 
@@ -70,8 +70,9 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params: {}
       knowledge_distillation:
-        enabled: false
-        state: null
+        enabled: true
+        name: mlflow
+        state: debug/260211:1659/train
         criterion:
           name: criterions.segmentation.ChannelWiseKLDivLoss
           params:
@@ -90,7 +91,8 @@ training:
         params:
           is_stereo: true
       knowledge_distillation:
-        enabled: false
+        enabled: true
+        name: models.teachers.FoundationStereo.custom_wrapper.FoundationStereoWrapper
         state: null
         criterion:
           name: criterions.disparity.MaskedSmoothL1Loss

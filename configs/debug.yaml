@@ -4,81 +4,19 @@ data:
   dataset: data.datasets.OverfitDataset
   cross_validation: false
 
-  transforms:
-    train:
-      - name: Affine # Simulate camera distance changes and rotations
-        params:
-          scale: [0.8, 1.2]
-          translate_percent: [0.0, 0.0625]
-          rotate: [-45, 45]
-          p: 0.5
-      - name: HorizontalFlip # Instruments can come from either side
-        params:
-          p: 0.5
-      - name: VerticalFlip # Instruments can come from top or bottom
-        params:
-          p: 0.5
-      - name: GridDistortion # Simulate lens distortion of endoscopic cameras
-        params:
-          num_steps: 5
-          distort_limit: 0.3
-          p: 0.3
-      - name: RandomBrightnessContrast # Vary lighting conditions
-        params:
-          brightness_limit: 0.2
-          contrast_limit: 0.2
-          p: 0.5
-      - name: OneOf # Simulate smoke / fog
-        params:
-          transforms:
-            - name: GaussianBlur
-              params:
-                blur_limit: [3, 5]
-            - name: MotionBlur
-              params:
-                blur_limit: [3, 5]
-          p: 0.2
-      - name: GaussNoise # Simulate sensor noise
-        params:
-          std_range: [0.01, 0.03]
-          p: 0.2
-      - name: CoarseDropout # Simulate glare on metal
-        params:
-          num_holes_range: [1, 8]
-          hole_height_range: [1, 20]
-          hole_width_range: [1, 20]
-          p: 0.2
-      - name: Resize
-        params:
-          height: 512
-          width: 512
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-    test:
-      - name: Resize
-        params:
-          height: 512
-          width: 512
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-
 training:
   epochs: 3
-  tasks:
-    segmentation:
-      enabled: true
-      knowledge_distillation:
-        enabled: true
-        state: debug/260211:1659/train #teacher::segmentation/260217:1457
-    disparity:
-      enabled: true
-      knowledge_distillation:
-        enabled: true
-        state: debug/260211:1709/train #teacher::disparity/260217:1502
+  # tasks:
+  #   segmentation:
+  #     enabled: true
+  #     knowledge_distillation:
+  #       enabled: true
+  #       state: debug/260211:1659/train #teacher::segmentation/260217:1457
+  #   disparity:
+  #     enabled: true
+  #     knowledge_distillation:
+  #       enabled: true
+  #       state: debug/260211:1709/train #teacher::disparity/260217:1502
 
 logging:
   n_validation_images: 0

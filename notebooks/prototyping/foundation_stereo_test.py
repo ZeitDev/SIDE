@@ -3,6 +3,7 @@ import os, sys
 sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 from utils.setup import setup_environment
 
+import numpy as np
 import yaml
 import torch
 from omegaconf import OmegaConf
@@ -13,6 +14,7 @@ from torch.utils.data import DataLoader
 from data.transforms import build_transforms
 
 from models.teachers.FoundationStereo.foundation_stereo import FoundationStereo
+from models.teachers.FoundationStereo.core.utils.utils import InputPadder
 
 os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
@@ -47,24 +49,38 @@ dataloader_train = DataLoader(
 # %%
 
 # TODO: build remove_invisible into the forward pass
+state_path = '/data/Zeitler/code/SIDE/models/teachers/FoundationStereo/state'
 
-cfg = OmegaConf.load('/data/Zeitler/code/SIDE/models/teachers/FoundationStereo/state/cfg.yaml')
+cfg = OmegaConf.load(os.path.join(state_path, 'cfg.yaml'))
 args = OmegaConf.create(cfg)
 
 model = FoundationStereo(args)
+ckpt = torch.load(os.path.join(state_path, 'model_best_bp2.pth'), weights_only=False)
+model.load_state_dict(ckpt['model'])
 model.to('cuda')
 model.eval()
-# %%
 
+# %%
 for data in dataloader_train:
-    with torch.no_grad():
+    with torch.cuda.amp.autocast(True) and torch.no_grad():
         left_images = data['image'].to('cuda')
         right_images = data['right_image'].to('cuda') if 'right_image' in data else None
-        outputs = model.forward(left_images, right_images, iters=args.valid_iters, test_mode=True)
+        padder = InputPadder(left_images.shape, divis_by=32, force_square=False)
+        left_images, right_images = padder.pad(left_images, right_images)
+        
+        # if hierarchical = False
+        # outputs = model.forward(left_images, right_images, iters=args.valid_iters, test_mode=True)
+        # if hierarchical = True
+        outputs = model.run_hierachical(left_images, right_images, iters=args.valid_iters, test_mode=True, small_ratio=0.5)
+        outputs = padder.unpad(outputs.float())
+        
+        yy, xx = torch.meshgrid(torch.arange(outputs.shape[2], device=outputs.device), torch.arange(outputs.shape[3], device=outputs.device), indexing='ij')
+        xx = xx.unsqueeze(0).unsqueeze(0)
+        us_right = xx - outputs
+        invalid = us_right < 0
+        outputs[invalid] = 0
+        
     break        
 
-# %%
-print(outputs.shape)
-print(outputs[0])
 
 # %%
