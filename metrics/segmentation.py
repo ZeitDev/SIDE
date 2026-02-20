@@ -7,20 +7,20 @@ class SegmentationMetric:
         self.ignore_index = ignore_index
         self.confusion_matrix = torch.zeros((n_classes, n_classes), dtype=torch.int64, device=device)
 
-    def update(self, output: torch.Tensor, target: torch.Tensor) -> None:
+    def update(self, outputs: torch.Tensor, target: torch.Tensor) -> None:
         with torch.no_grad():
-            outputs = torch.argmax(output, dim=1)
+            predictions = torch.argmax(outputs, dim=1)
             
-            outputs = outputs.reshape(-1)
+            predictions = predictions.reshape(-1)
             target = target.reshape(-1)
             
             if self.ignore_index is not None:
                 mask = target != self.ignore_index
-                outputs = outputs[mask]
+                predictions = predictions[mask]
                 target = target[mask]
                 
             _confusion_matrix = torch.bincount(
-                self.n_classes * target + outputs,
+                self.n_classes * target + predictions,
                 minlength=self.n_classes**2
             ).reshape(self.n_classes, self.n_classes)
             

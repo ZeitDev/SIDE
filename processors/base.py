@@ -20,7 +20,6 @@ class BaseProcessor:
         logger.header(f'Initializing {self.__class__.__name__}')
         self.config = config
         self.tasks = []
-        self.n_classes = {}
         self.metrics: Dict[str, Any] = {}
         self.segmentation_class_mappings: Optional[Dict[int, str]] = None
         self.n_logged_images = 0
@@ -49,16 +48,15 @@ class BaseProcessor:
         if tasks_config['segmentation']['enabled']:
             self.metrics['segmentation'] = {}
             
-            self.metrics['segmentation']['IoU_score'] = IoU(n_classes=self.n_classes['segmentation'], device=self.device)
-            self.metrics['segmentation']['DICE_score'] = Dice(n_classes=self.n_classes['segmentation'], device=self.device)
-            logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.n_classes['segmentation']} classes.')
+            self.metrics['segmentation']['IoU_score'] = IoU(n_classes=self.config['data']['num_of_classes']['segmentation'], device=self.device)
+            self.metrics['segmentation']['DICE_score'] = Dice(n_classes=self.config['data']['num_of_classes']['segmentation'], device=self.device)
+            logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.config['data']['num_of_classes']['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
-            max_disparity = self.config['data']['max_disparity']
             self.metrics['disparity'] = {}
-            self.metrics['disparity']['EPE_pixel'] = EPE(max_disparity=max_disparity, device=self.device)
-            self.metrics['disparity']['Bad3_rate'] = Bad3(max_disparity=max_disparity, device=self.device)
-            self.metrics['disparity']['MAE_mm'] = MAE(max_disparity=max_disparity, device=self.device)
+            self.metrics['disparity']['EPE_pixel'] = EPE(max_disparity=self.config['data']['max_disparity'], device=self.device)
+            self.metrics['disparity']['Bad3_rate'] = Bad3(max_disparity=self.config['data']['max_disparity'], device=self.device)
+            self.metrics['disparity']['MAE_mm'] = MAE(max_disparity=self.config['data']['max_disparity'], device=self.device)
             logger.info('Initialized EPE, Bad3, and MAE metrics for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:
@@ -97,7 +95,7 @@ class BaseProcessor:
                     image=sample_image,
                     targets=sample_targets,
                     outputs=sample_outputs,
-                    n_classes=self.n_classes,
+                    num_of_segmentation_classes=self.config['data']['num_of_classes']['segmentation'],
                     epoch=epoch,
                     index=i,
                     max_disparity=self.config['data']['max_disparity']

@@ -21,7 +21,7 @@ def test_iou_metric():
     iou_metric.reset()
 
     # Predictions (logits)
-    # Shape: (N, C, H, W) -> (1, 2, 2, 3)
+    # Shape: (B, C, H, W) -> (1, 2, 2, 3)
     output = torch.tensor(
         [
             [
@@ -40,7 +40,7 @@ def test_iou_metric():
     #                [1, 1, 1]
 
     # Target
-    # Shape: (N, H, W) -> (1, 2, 3)
+    # Shape: (B, H, W) -> (1, 2, 3)
     target = torch.tensor(
         [
             [
@@ -135,7 +135,7 @@ def test_missing_class():
     dice_metric.reset()
     
     # Prediction (logits)
-    # Shape: (N, C, H, W) -> (1, 3, 2, 2)
+    # Shape: (B, C, H, W) -> (1, 3, 2, 2)
     output = torch.tensor(
         [
             [
@@ -212,18 +212,50 @@ def test_disparity_metrics():
     bad3_metric.reset()
     mae_metric.reset()
     
-    # Predictions (normalized 0-1)
-    # Shape: (N, C, H, W) -> (1, 1, 2, 2)
+    # Predictions (logits)
+    # Shape: (B, D, H, W) -> (1, 8, 2, 2)
+    # [0, 0] => softmax spikes at Bin 4 => Predicted Disparity = 4/8 * 512 = 256px
+    # [0, 1] => softmax spikes at Bin 2 => Predicted Disparity = 2/8 * 512 = 128px
+    # [1, 0] => softmax spikes at Bin 1 => Predicted Disparity = 1/8 * 512 = 64px
+    # [1, 1] => softmax spikes at Bin 8 => Predicted Disparity = 8/8 * 512 = 512px (ignored)
     output = torch.tensor(
+    [
         [
-            [
-                [
-                    [0.5, 0.25], 
-                    [0.125, 0.0]
-                ]
-            ]
+            [ # Bin 1
+                [0.0, 0.0], 
+                [100.0, 0.0]
+            ],   
+            [ # Bin 2
+                [0.0, 100.0], 
+                [0.0, 0.0]
+            ],     
+            [ # Bin 3
+                [0.0, 0.0], 
+                [0.0, 0.0]
+            ],       
+            [ # Bin 4
+                [100.0, 0.0], 
+                [0.0, 0.0]
+            ], 
+            [ # Bin 5
+                [0.0, 0.0], 
+                [0.0, 0.0]
+            ],
+            [ # Bin 6
+                [0.0, 0.0], 
+                [0.0, 0.0]
+            ],
+            [ # Bin 7
+                [0.0, 0.0], 
+                [0.0, 0.0]
+            ],
+            [ # Bin 8
+                [0.0, 0.0], 
+                [0.0, 100.0]
+            ],
         ]
-    )
+    ]
+)
     
     # Target (normalized 0-1)
     target = torch.tensor(
@@ -253,7 +285,7 @@ def test_disparity_metrics():
     # Calculations (max_disparity = 512):
     # Prediction (px):
     # [256.0, 128.0]
-    # [64.0, 0.0]
+    # [64.0, 512.0]
     # Target (px):
     # [256.0, 256.0]
     # [128.0, 0.0 (ignored)]

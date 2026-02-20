@@ -6,7 +6,7 @@ from matplotlib.figure import Figure
 
 from typing import Optional, Dict, Any
 
-def _get_segmentation_raw_overlay(image: np.ndarray, target: np.ndarray, n_classes: int, alpha: float = 0.5) -> np.ndarray:
+def _get_segmentation_raw_overlay(image: np.ndarray, target: np.ndarray, num_of_segmentation_classes: int, alpha: float = 0.5) -> np.ndarray:
     if image.max() <= 1.0:
         image = (image * 255).astype(np.uint8)
 
@@ -14,10 +14,10 @@ def _get_segmentation_raw_overlay(image: np.ndarray, target: np.ndarray, n_class
     colors = plt.cm.get_cmap('hot')
     
     color_mask = np.zeros_like(image)
-    for class_id in range(1, n_classes):
+    for class_id in range(1, num_of_segmentation_classes):
         class_mask = target == class_id
         if np.any(class_mask):
-            color = (np.array(colors(class_id / n_classes))[:3] * 255).astype(np.uint8)
+            color = (np.array(colors(class_id / num_of_segmentation_classes))[:3] * 255).astype(np.uint8)
             color_mask[class_mask] = color
 
     overlay_region = target > 0
@@ -115,7 +115,7 @@ def _get_disparity_error_overlay(image: np.ndarray, target: np.ndarray, output: 
         
     return overlay
 
-def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], n_classes: Any = 0, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 1.0) -> Figure:
+def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], num_of_segmentation_classes: Int = 2, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 1.0) -> Figure:
     tasks = [t for t in ['segmentation', 'disparity'] if t in targets]
     n_rows = len(tasks)
     
@@ -138,8 +138,8 @@ def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor],
             segmentation_target_array = targets['segmentation'].numpy().squeeze()
             segmentation_prediction_array = torch.argmax(outputs['segmentation'], dim=0).numpy()
             
-            segmentation_target_overlay = _get_segmentation_raw_overlay(image_arr, segmentation_target_array, n_classes['segmentation'])
-            segmentation_prediction_overlay = _get_segmentation_raw_overlay(image_arr, segmentation_prediction_array, n_classes['segmentation'])
+            segmentation_target_overlay = _get_segmentation_raw_overlay(image_arr, segmentation_target_array, num_of_segmentation_classes)
+            segmentation_prediction_overlay = _get_segmentation_raw_overlay(image_arr, segmentation_prediction_array, num_of_segmentation_classes)
             segmentation_accuracy_overlay = _get_segmentation_error_overlay(image_arr, segmentation_target_array, segmentation_prediction_array)
             
             ax[i, 0].imshow(segmentation_target_overlay)

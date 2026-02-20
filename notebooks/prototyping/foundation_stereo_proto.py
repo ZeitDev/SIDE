@@ -49,7 +49,7 @@ dataloader_train = DataLoader(
 # %%
 
 # TODO: build remove_invisible into the forward pass
-state_path = '/data/Zeitler/code/SIDE/models/teachers/FoundationStereo/state'
+state_path = '/data/Zeitler/code/SIDE/models/external/FoundationStereo/state'
 
 cfg = OmegaConf.load(os.path.join(state_path, 'cfg.yaml'))
 args = OmegaConf.create(cfg)

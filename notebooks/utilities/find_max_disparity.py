@@ -1,7 +1,7 @@
 # %%
 # import
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append('/data/Zeitler/code/SIDE')
 
 from pathlib import Path
 import numpy as np

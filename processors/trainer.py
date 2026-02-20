@@ -78,13 +78,6 @@ class Trainer(BaseProcessor):
         dataset_val_length = len(dataset_val) if dataset_val else 0
         logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
         
-        if 'segmentation' in self.tasks:
-            self.segmentation_class_mappings = dataset_train.class_mappings
-            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
-            logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
-        if 'disparity' in self.tasks: 
-            self.n_classes['disparity'] = 1
-        
     def _load_model(self) -> None:
         logger.subheader('Loading Model')
         
@@ -101,7 +94,7 @@ class Trainer(BaseProcessor):
                 DecoderClass = load(decoder_config['name'])
                 decoders[task] = AttachHead(
                     decoder_class=DecoderClass,
-                    n_classes=self.n_classes[task],
+                    n_classes=self.config['data']['num_of_classes'][task],
                     encoder_channels=encoder.feature_info.channels(), 
                     encoder_reductions=encoder.feature_info.reduction(), 
                     **decoder_config['params']

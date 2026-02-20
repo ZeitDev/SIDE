@@ -3,6 +3,9 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
+  num_of_classes:
+    segmentation: 2
+    disparity: 128
   max_disparity: 512
   cross_validation: false
 
@@ -95,11 +98,9 @@ training:
         name: models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
         state: null
         criterion:
-          name: criterions.disparity.MaskedSmoothL1Loss
+          name: criterions.disparity.PixelWiseKLDivLoss
           params:
-            ignore_value: 0
-            reduction: mean
-            beta: 1.0
+            temperature: 1.0
 
 logging:
   vram: false

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.helpers import soft_argmin
 
 class MaskedSmoothL1Loss(nn.Module):
     def __init__(self, ignore_value=0, reduction='mean', beta=1.0):
@@ -9,9 +10,11 @@ class MaskedSmoothL1Loss(nn.Module):
         self.reduction = reduction
         self.beta = beta
         
-    def forward(self, prediction, target):
-        valid_mask = (target != self.ignore_value).float()
-        loss = F.smooth_l1_loss(prediction, target, reduction='none', beta=self.beta)
+    def forward(self, outputs, targets):
+        predictions = soft_argmin(outputs)
+        
+        valid_mask = (targets != self.ignore_value).float()
+        loss = F.smooth_l1_loss(predictions, targets, reduction='none', beta=self.beta)
         loss = loss * valid_mask
         
         if self.reduction == 'mean':
@@ -23,7 +26,7 @@ class MaskedSmoothL1Loss(nn.Module):
             return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature=4.0):
+    def __init__(self, temperature=1.0):
         super().__init__()
         self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='sum', log_target=False)

@@ -4,9 +4,9 @@ import torch.nn.functional as F
 
 
 class ChannelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature=4.0):
+    def __init__(self, temperature=1.0):
         super().__init__()
-        self.temperature = temperature        
+        self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='sum', log_target=False)
 
     def forward(self, student_logits, teacher_logits):

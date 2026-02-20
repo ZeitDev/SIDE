@@ -6,6 +6,7 @@ import collections.abc
 from typing import cast, Dict, Any
 
 import torch
+import torch.nn.functional as F
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -104,3 +105,15 @@ def get_state_run_id(state_path: str) -> str:
     ).iloc[0].run_id  
         
     return model_run_id
+
+def soft_argmin(outputs: torch.Tensor) -> torch.Tensor:
+    output_probabilities = F.softmax(outputs, dim=1)
+    
+    B, D, H, W = output_probabilities.shape
+    disparity_indices = torch.arange(1, D + 1, device=output_probabilities.device, dtype=output_probabilities.dtype, requires_grad=False) # shift disparity bins by 1 because 0 == invalid
+    disparity_indices = disparity_indices.view(1, D, 1, 1)
+    
+    predictions = torch.sum(output_probabilities * disparity_indices, dim=1, keepdim=True) / D
+    print(predictions)
+    
+    return predictions
