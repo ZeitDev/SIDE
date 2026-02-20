@@ -14,4 +14,4 @@ cache/
 mlruns/
 logs/
 .temp/
-models/teachers/FoundationStereo/
+models/external/

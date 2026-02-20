@@ -92,7 +92,7 @@ training:
           is_stereo: true
       knowledge_distillation:
         enabled: true
-        name: models.teachers.FoundationStereo.custom_wrapper.FoundationStereoWrapper
+        name: models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
         state: null
         criterion:
           name: criterions.disparity.MaskedSmoothL1Loss

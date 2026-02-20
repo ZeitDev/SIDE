@@ -13,8 +13,8 @@ from utils.helpers import load
 from torch.utils.data import DataLoader 
 from data.transforms import build_transforms
 
-from models.teachers.FoundationStereo.foundation_stereo import FoundationStereo
-from models.teachers.FoundationStereo.core.utils.utils import InputPadder
+from models.external.FoundationStereo.foundation_stereo import FoundationStereo
+from models.external.FoundationStereo.core.utils.utils import InputPadder
 
 os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
