@@ -10,15 +10,15 @@ class DisparityMetric:
         self.total_error = torch.tensor(0.0, device=self.device)
         self.total_valid_pixels = torch.tensor(0.0, device=self.device)
 
-    def update(self, outputs: torch.Tensor, targets: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
+    def update(self, output_logits: torch.Tensor, targets: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
         """
-        outputs: Predicted disparity in logits.
+        output_logits: Predicted disparity in logits.
         targets: Ground truth disparity in [px].
         baseline: Stereo baseline. The unit used here millimeters defines the unit of the calculated depth.
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
-            predictions = soft_argmin(outputs) * self.max_disparity
+            predictions = soft_argmin(output_logits) * self.max_disparity
             targets = targets * self.max_disparity
             
             valid_mask = targets != 0

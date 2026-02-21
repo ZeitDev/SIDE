@@ -29,7 +29,7 @@ data:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
 
-  batch_size: 4
+  batch_size: 8
   num_workers: 4
   pin_memory: true
 
@@ -74,8 +74,8 @@ training:
         params: {}
       knowledge_distillation:
         enabled: true
-        name: mlflow
-        state: debug/260211:1659/train
+        name: offline # mlflow
+        state: null # debug/260211:1659/train
         criterion:
           name: criterions.segmentation.ChannelWiseKLDivLoss
           params:
@@ -95,12 +95,13 @@ training:
           is_stereo: true
       knowledge_distillation:
         enabled: true
-        name: models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
+        name: offline # models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
         state: null
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
             temperature: 1.0
+            scale: 0.25
 
 logging:
   vram: false

@@ -115,7 +115,7 @@ def _get_disparity_error_overlay(image: np.ndarray, target: np.ndarray, output: 
         
     return overlay
 
-def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], num_of_segmentation_classes: Int = 2, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 1.0) -> Figure:
+def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], num_of_segmentation_classes: int = 2, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 1.0) -> Figure:
     tasks = [t for t in ['segmentation', 'disparity'] if t in targets]
     n_rows = len(tasks)
     

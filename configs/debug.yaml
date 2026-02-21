@@ -3,6 +3,7 @@ description: Debugging knowledge distillation
 data:
   dataset: data.datasets.OverfitDataset
   cross_validation: false
+  batch_size: 1
 
 training:
   epochs: 3

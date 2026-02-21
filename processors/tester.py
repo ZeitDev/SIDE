@@ -34,8 +34,8 @@ class Tester(BaseProcessor):
         
         dataset_test = dataset_class(
             mode='test',
+            config=self.config,
             transforms=test_transforms,
-            tasks=self.config['training']['tasks']
         )
         self.dataloader_test = DataLoader(
             dataset_test,

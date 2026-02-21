@@ -42,8 +42,8 @@ class Trainer(BaseProcessor):
         
         dataset_train = dataset_class(
             mode='train',
+            config=self.config,
             transforms=train_transforms,
-            tasks=self.config['training']['tasks'],
             subset_names=self.train_subsets
         )
         self.dataloader_train = DataLoader(
@@ -57,8 +57,8 @@ class Trainer(BaseProcessor):
         
         dataset_val = dataset_class(
             mode='train',
+            config=self.config,
             transforms=val_transforms,
-            tasks=self.config['training']['tasks'],
             subset_names=self.val_subsets
         ) if self.val_subsets else None
         if dataset_val:
@@ -124,23 +124,27 @@ class Trainer(BaseProcessor):
             if task_config['enabled']:
                 kd_config = task_config['knowledge_distillation']
                 if kd_config['enabled']:
-                    logger.subheader(f'Loading Teachers for {task}')
-                    
-                    if kd_config['name'] == 'mlflow':
-                        model_run_id = get_state_run_id(kd_config['state'])
-                        teacher_model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model', map_location=self.device)
+                    if kd_config['name'] == 'offline':
+                        logger.subheader(f'Loading offline teacher outputs from disk for {task}')
+                        self.kd_models[task] = 'offline'
                     else:
-                        teacher_class = load(kd_config['name'])
-                        teacher_model = teacher_class().to(self.device)
-                        if kd_config['state']:
-                            state_dict = torch.load(kd_config['state'], map_location=self.device)
-                            teacher_model.load_state_dict(state_dict['model_state_dict'])
+                        logger.subheader(f'Loading Teachers for {task}')
+                        
+                        if kd_config['name'] == 'mlflow':
+                            model_run_id = get_state_run_id(kd_config['state'])
+                            teacher_model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model', map_location=self.device)
+                        else:
+                            teacher_class = load(kd_config['name'])
+                            teacher_model = teacher_class().to(self.device)
+                            if kd_config['state']:
+                                state_dict = torch.load(kd_config['state'], map_location=self.device)
+                                teacher_model.load_state_dict(state_dict['model_state_dict'])
+                        
+                        for param in teacher_model.parameters(): param.requires_grad = False
+                        teacher_model.eval()
                     
-                    for param in teacher_model.parameters(): param.requires_grad = False
-                    teacher_model.eval()
-                
-                    self.kd_models[task] = teacher_model
-                    logger.info(f'Loaded teacher {kd_config["state"]} for task {task} with model run ID {model_run_id}')
+                        self.kd_models[task] = teacher_model
+                        logger.info(f'Loaded teacher {kd_config["state"]} for task {task} with model run ID {model_run_id}')
 
     def _load_components(self) -> None:
         logger.subheader('Loading Components')
@@ -230,10 +234,13 @@ class Trainer(BaseProcessor):
                 
                 if self.kd_models:
                     for task, kd_teacher in self.kd_models.items():
-                        with torch.no_grad():
-                            teacher_outputs = kd_teacher(left_images, right_images)[task]
-                            targets[f'{task}_distillation'] = teacher_outputs
-                            outputs[f'{task}_distillation'] = outputs[task]
+                        if self.kd_models[task] == 'offline':
+                            teacher_outputs = data[f'teacher_{task}'].to(self.device)
+                        else:
+                            with torch.no_grad():
+                                teacher_outputs = kd_teacher(left_images, right_images)[task]
+                        targets[f'{task}_distillation'] = teacher_outputs
+                        outputs[f'{task}_distillation'] = outputs[task]
                 
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                         

@@ -23,7 +23,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
 # TODO: Save logits to disk because VRAM is not sufficient for two teachers and student
-# TODO: Extract cost volume mapping for disparity KD
+# TODO: Debug all metrics and losses of teacher and student
 
 def main():
     try:
