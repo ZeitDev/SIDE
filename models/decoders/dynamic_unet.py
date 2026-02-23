@@ -42,9 +42,10 @@ class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip
         return x
     
 class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel list
-    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_stereo=False):
+    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_stereo=False, stop_increases_at=1):
         super().__init__()
         self.is_stereo = is_stereo
+        self.stop_increases_at = stop_increases_at
         
         # Channels
         # Encoder: [16, 24, 40, 112, 320] (Top -> Bottom)
@@ -59,6 +60,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
         # 3. Build the Blocks
         self.blocks = nn.ModuleList()
         
+        self.n_blocks = 0
         for i in range(len(all_n_encoder_channels) - 1):
             # For stereo input, double input channels for the first block to accommodate right image features
             # because both left and right features are concatenated
@@ -85,20 +87,24 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             
             block = DecoderBlock(n_input_channels=n_decoder_channels, n_skip_channels=n_skip_channels, n_output_channels=n_output_channels)
             self.blocks.append(block)
-
+            self.n_blocks += 1
+            
+            # If next block's spatial increase matches or passes stop target
+            if self.all_decoder_increases[i+1] <= self.stop_increases_at: break
+            
         # We need one final upsampling to reach the original input resolution, because the encoder downsamples one more time than we have decoder blocks
         # Usually scale_factor=2 because encoder strides by 2, but depends on encoder architecture
-        if self.all_decoder_increases[-1] >= 2:
-            current_stride = self.all_decoder_increases[-1]
-            
+        current_stride = self.all_decoder_increases[self.n_blocks]
+        if current_stride > self.stop_increases_at:
             upsample_layers = []
-            while current_stride > 1:
+            while current_stride > self.stop_increases_at:
                 # Each upsampling step doubles the spatial dimensions
                 upsample_layers.append(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True))
                 # Sharpens features after upsampling
-                upsample_layers.append(nn.Conv2d(self.all_n_decoder_channels[-1], self.all_n_decoder_channels[-1], kernel_size=3, padding=1))
+                last_channels = self.all_n_decoder_channels[self.n_blocks]
+                upsample_layers.append(nn.Conv2d(last_channels, last_channels, kernel_size=3, padding=1))
                 upsample_layers.append(nn.ReLU(inplace=True))
-                # Halve the current stride until we reach original resolution
+                # Halve the current stride until we reach original resolution or stop target
                 current_stride //= 2
                 
             self.final_block = nn.Sequential(*upsample_layers)

@@ -11,6 +11,10 @@ data:
 
   transforms:
     train:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
       - name: Resize
         params:
           height: 1024
@@ -20,6 +24,10 @@ data:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
     test:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
       - name: Resize
         params:
           height: 1024
@@ -93,6 +101,7 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params:
           is_stereo: true
+          stop_increases_at: 4
       knowledge_distillation:
         enabled: true
         name: offline # models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
@@ -101,7 +110,6 @@ training:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
             temperature: 1.0
-            scale: 0.25
 
 logging:
   vram: false

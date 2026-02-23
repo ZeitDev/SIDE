@@ -18,7 +18,7 @@ class DisparityMetric:
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
-            predictions = soft_argmin(output_logits) * self.max_disparity
+            predictions = soft_argmin(output_logits, size=targets.shape[2:]) * self.max_disparity
             targets = targets * self.max_disparity
             
             valid_mask = targets != 0

@@ -24,7 +24,11 @@ class AutomaticWeightedLoss(nn.Module):
         for task, task_output in outputs.items():
             if task in self.criterions and task in targets:
                 criterion = self.criterions[task]
-                raw_task_loss = criterion(task_output, targets[task])
+                if 'teacher' in task:
+                    true_targets = targets[task.replace('_teacher', '')]
+                    raw_task_loss = criterion(task_output, targets[task], true_targets)
+                else:
+                    raw_task_loss = criterion(task_output, targets[task])
                 raw_task_losses[task] = raw_task_loss.item()
                 
                 # Uncertainty Formula from paper:

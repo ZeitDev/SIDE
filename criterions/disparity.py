@@ -11,7 +11,7 @@ class MaskedSmoothL1Loss(nn.Module):
         self.beta = beta
         
     def forward(self, output_logits, targets):
-        predictions = soft_argmin(output_logits)
+        predictions = soft_argmin(output_logits, size=targets.shape[2:])
         
         valid_mask = (targets != self.ignore_value).float()
         loss = F.smooth_l1_loss(predictions, targets, reduction='none', beta=self.beta)
@@ -26,24 +26,29 @@ class MaskedSmoothL1Loss(nn.Module):
             return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature=1.0, scale=1.0):
+    def __init__(self, temperature=1.0):
         super().__init__()
         self.temperature = temperature
-        self.scale = scale
-        self.criterion = nn.KLDivLoss(reduction='sum', log_target=False)
+        self.criterion = nn.KLDivLoss(reduction='none', log_target=False)
         
-    def forward(self, student_logits, teacher_logits):
-        if self.scale != 1.0: student_logits = F.avg_pool2d(student_logits, kernel_size=int(1/self.scale), stride=int(1/self.scale))
+    def forward(self, student_logits, teacher_logits, targets):
+        B, D, H, W = student_logits.shape
         
-        b, d, h, w = student_logits.shape
+        targets = F.interpolate(targets, size=(H, W), mode='nearest-exact')
+        valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
         
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature
         
+        student = soft_argmin(student_logits, size=targets.shape[2:])
+        teacher = soft_argmin(teacher_logits, size=targets.shape[2:])
+        
         student_log_probabilities = F.log_softmax(student_logits, dim=1)
         with torch.no_grad(): teacher_probabilities = F.softmax(teacher_logits, dim=1)
         
-        loss = self.criterion(student_log_probabilities, teacher_probabilities)
-        loss = (loss / (b * h * w)) * (self.temperature ** 2)
+        pixel_loss = self.criterion(student_log_probabilities, teacher_probabilities)
+        valid_loss = pixel_loss * valid.float()
+        
+        loss = (valid_loss.sum() / valid.sum()) * (self.temperature ** 2)
         
         return loss

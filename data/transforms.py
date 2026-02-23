@@ -30,6 +30,10 @@ pixel_transforms = [
     'FDA', 'HistogramMatching', 'PixelDistributionAdaptation', 'TemplateTransform'
 ]
 
+scaling_transforms = [
+    'Resize', 'RandomScale', 'LongestMaxSize', 'SmallestMaxSize'
+]
+
 class IsolationCompose(A.Compose):
     def __init__(self, transforms, excluded_keys: List[str], p: float = 1.0, additional_targets: dict = None, renaming: dict = None):
         if additional_targets: additional_targets = {k: v for k, v in additional_targets.items() if k not in excluded_keys}
@@ -52,7 +56,24 @@ class IsolationCompose(A.Compose):
         data.update(held_data)
         
         return data
-    
+
+class ResizeCompose(A.Compose):
+    """
+    Scale disparity values by width ratio when resizing. Assumes images are square and that disparity is in pixel units (not normalized).
+    """
+    def __init__(self, transform, additional_targets=None):
+        super().__init__([transform], additional_targets=additional_targets)
+        
+    def __call__(self, **data):
+        W = data['image'].shape[1]
+        data = super().__call__(**data)
+        W_resized = data['image'].shape[1]
+        if W != W_resized:
+            scale_factor = W_resized / W
+            if 'disparity' in data:
+                data['disparity'] = data['disparity'] * scale_factor
+                
+        return data
 
 def build_transforms(config: Dict[str, Any], mode: str = 'train') -> A.Compose:
     transform_config = config['data']['transforms'][mode]
@@ -70,15 +91,19 @@ def build_transforms(config: Dict[str, Any], mode: str = 'train') -> A.Compose:
         
         instance = load(f'albumentations.{name}', **params)
         
-        if name in pixel_transforms: return IsolationCompose([instance], excluded_keys=['disparity'], additional_targets=additional_targets)
-        else: return instance
+        if name in pixel_transforms: 
+            return IsolationCompose([instance], excluded_keys=['disparity'], additional_targets=additional_targets)
+        elif name in scaling_transforms:
+            return ResizeCompose(instance, additional_targets=additional_targets)
+        else: 
+            return instance
     
     transforms = []
     if transform_config:
         for transform_config_item in transform_config:
             transforms.append(_instantiate(transform_config_item))
     else:
-        transforms.append(A.Resize(height=256, width=256))
+        transforms.append(ResizeCompose(A.Resize(height=256, width=256), additional_targets=additional_targets))
         normalize = A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         transforms.append(IsolationCompose([normalize], excluded_keys=['disparity'], additional_targets=additional_targets))
             

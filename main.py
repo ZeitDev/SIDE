@@ -22,6 +22,8 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
+# TODO: FIX TEST METRIC
+# TODO: Find a suitable segmentation teacher
 # TODO: Save logits to disk because VRAM is not sufficient for two teachers and student
 # TODO: Debug all metrics and losses of teacher and student
 
@@ -47,7 +49,7 @@ def main():
         setup_logging(log_filepath=log_filepath, vram_only=config['logging']['vram'])
         
         dataset_class = load(config['data']['dataset'])
-        all_train_subsets = dataset_class(mode='train').get_all_subset_names()
+        all_train_subsets = dataset_class(mode='train', config=config).get_all_subset_names()
         logger.info(f'Found {len(all_train_subsets)} training subsets: {all_train_subsets}')
         
         with mlflow.start_run(run_name=run_datetime) as run:

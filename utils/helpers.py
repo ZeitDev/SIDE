@@ -3,7 +3,7 @@ import mlflow
 import logging
 import importlib
 import collections.abc
-from typing import cast, Dict, Any
+from typing import cast, Dict, Any, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -106,14 +106,15 @@ def get_state_run_id(state_path: str) -> str:
         
     return model_run_id
 
-def soft_argmin(outputs: torch.Tensor) -> torch.Tensor:
+def soft_argmin(outputs: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
     output_probabilities = F.softmax(outputs, dim=1)
     
     B, D, H, W = output_probabilities.shape
-    disparity_indices = torch.arange(1, D + 1, device=output_probabilities.device, dtype=output_probabilities.dtype, requires_grad=False) # shift disparity bins by 1 because 0 == invalid
+    disparity_indices = torch.arange(0, D, device=output_probabilities.device, dtype=output_probabilities.dtype, requires_grad=False)
     disparity_indices = disparity_indices.view(1, D, 1, 1)
     
-    predictions = torch.sum(output_probabilities * disparity_indices, dim=1, keepdim=True) / D
-    print(predictions)
+    predictions = torch.sum(output_probabilities * disparity_indices, dim=1, keepdim=True) / D # this only gives us disparity up to 508 pixels, use (D-1) for full range
+    
+    predictions = F.interpolate(predictions, size=size, mode='bilinear', align_corners=False)
     
     return predictions

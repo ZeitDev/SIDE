@@ -15,18 +15,19 @@ class FoundationStereoWrapper(nn.Module):
         ckpt = torch.load(os.path.join(state_path, 'model_best_bp2.pth'), weights_only=False)
         self.model.load_state_dict(ckpt['model'])
         
-    def forward(self, left_images, right_images):
+    def get_disparity(self, left_images, right_images):
         padder = InputPadder(left_images.shape, divis_by=32, force_square=False)
         left_images_padded, right_images_padded = padder.pad(left_images, right_images)
 
         with torch.no_grad(), torch.cuda.amp.autocast(True):
-            outputs_padded =self.model.forward(
+            outputs_padded = self.model.true_forward(
                 left_images_padded,
                 right_images_padded,
                 iters=self.args.valid_iters,
-                test_mode=True
+                test_mode=True,
+                output_mode='disparity'
                 )
-            
+        
         outputs = padder.unpad(outputs_padded.float())
         
         B, C, H, W = outputs.shape
@@ -39,17 +40,25 @@ class FoundationStereoWrapper(nn.Module):
         us_right = xx - outputs
         invalid = us_right < 0
         outputs[invalid] = 0
-
+        
         return outputs
     
     def get_logits(self, left_images, right_images):
+        """
+        Expects input to be divisible by 32
+        """
+        B, C, H, W = left_images.shape
+        assert H % 32 == 0 and W % 32 == 0
+        
         with torch.no_grad(), torch.cuda.amp.autocast(True):
-            outputs =self.model.forward(
+            logits = self.model.true_forward(
                 left_images,
                 right_images,
                 iters=self.args.valid_iters,
                 test_mode=True,
-                logits_mode=True
+                output_mode='logits'
                 )
             
-        return outputs
+        return logits.float()
+
+    

@@ -162,7 +162,7 @@ class Trainer(BaseProcessor):
             if kd_task_config['enabled']:
                 kd_criterion_config = kd_task_config['criterion']
                 KdCriterionClass = load(kd_criterion_config['name'])
-                self.criterions[f'{task}_distillation'] = KdCriterionClass(**kd_criterion_config['params'])
+                self.criterions[f'{task}_teacher'] = KdCriterionClass(**kd_criterion_config['params'])
                 logger.info(f'KD Criterion for task {task}: {kd_criterion_config["name"]} with params {kd_criterion_config["params"]}')
 
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
@@ -239,8 +239,8 @@ class Trainer(BaseProcessor):
                         else:
                             with torch.no_grad():
                                 teacher_outputs = kd_teacher(left_images, right_images)[task]
-                        targets[f'{task}_distillation'] = teacher_outputs
-                        outputs[f'{task}_distillation'] = outputs[task]
+                        targets[f'{task}_teacher'] = teacher_outputs
+                        outputs[f'{task}_teacher'] = outputs[task]
                 
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                         

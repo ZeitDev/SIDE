@@ -149,3 +149,6 @@ Run `pytest` in environment.
 * The paper evaluates every image individually, averages them for the batch and saves these in a running average.
 * This project differs by accumulating these metrices for the entire dataset and finally averaging them per epoch. 
 * This approach ensures metrics are weighted by valid pixel count, preventing outliers from disproportionately skewing the results.
+
+### FoundationStereo Disparity Knowledge Distillation at 1/4 Resolution and 1/4 max disparity
+* FoundationStereo Teacher outputs its disparity probabilities in 1/4 resolution, so it operates in [B, max_disparity/4, H/4, W/4]

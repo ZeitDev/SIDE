@@ -34,8 +34,7 @@ class BaseDataset(Dataset):
                 ...
         """
         mode_path = os.path.join(self.root_path, self.mode)
-        subset_names = sorted([d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))])
-        return subset_names
+        return sorted([d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))])
     
     def _get_class_mappings(self) -> Optional[Dict[int, str]]:
         """
@@ -120,13 +119,12 @@ class BaseDataset(Dataset):
                 teacher_disparity = torch.load(sample_paths['teacher_disparity'], weights_only=True)
                 data['teacher_disparity'] = teacher_disparity.float()
         
-        
         return data
     
 class OverfitDataset(BaseDataset):
-    def __init__(self, mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+    def __init__(self, config: Dict[str, Any], mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
         root_path = '/data/Zeitler/SIDED/OverfitDataset'
-        super().__init__(root_path, mode, transforms, tasks, subset_names)
+        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
         
     def _get_class_mappings(self) -> None:
         if self.config['training']['tasks']['segmentation']['enabled']:
@@ -156,14 +154,14 @@ class OverfitDataset(BaseDataset):
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             if self.config['training']['tasks']['disparity']['knowledge_distillation']['enabled']:
-                sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', 'disparity', file_name.replace('.png', '.pt'))
+                sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', 'disparity_128_256_256', file_name.replace('.png', '.pt'))
             
         return sample_paths
 
 class EndoVis17(BaseDataset):
-    def __init__(self, mode: str = 'train',  transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+    def __init__(self, config: Dict[str, Any], mode: str = 'train',  transforms: Optional[A.Compose] = None, subset_names: Optional[list[str]] = None):
         root_path = '/data/Zeitler/SIDED/EndoVis17/processed'
-        super().__init__(root_path, mode, transforms, tasks, subset_names)
+        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
         
     def _get_class_mappings(self) -> None:
         if self.config['training']['tasks']['segmentation']['enabled']:
@@ -193,14 +191,14 @@ class EndoVis17(BaseDataset):
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             if self.config['training']['tasks']['disparity']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['disparity']['knowledge_distillation']['name'] == 'offline':
-                sample_paths['disparity_teacher'] = os.path.join(subset_path, 'teacher', 'disparity', file_name.replace('.png', '.pt'))
+                sample_paths['disparity_teacher'] = os.path.join(subset_path, 'teacher', 'disparity_128_256_256', file_name.replace('.png', '.pt'))
             
         return sample_paths
     
 class Scared(BaseDataset):
-    def __init__(self, mode: str = 'train',  transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+    def __init__(self, config: Dict[str, Any], mode: str = 'train',  transforms: Optional[A.Compose] = None, subset_names: Optional[list[str]] = None):
         root_path = '/data/Zeitler/SIDED/SCARED/processed'
-        super().__init__(root_path, mode, transforms, tasks, subset_names)
+        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
         
     def _get_file_names(self, subset_path: str) -> List[str]:
         return sorted(os.listdir(subset_path))

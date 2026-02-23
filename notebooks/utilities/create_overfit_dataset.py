@@ -14,6 +14,8 @@ for mode in ['train', 'test']:
     source_right_images_path = source_subset / 'input' / 'right_images'
     source_segmentation_path = source_subset / 'ground_truth' / 'segmentation'
     source_disparity_path = source_subset / 'ground_truth' / 'disparity'
+    source_teacher_disparity_path = source_subset / 'teacher' / 'disparity_128_256_256'
+    
     source_calibration_path = source_subset / 'calibration' / 'rectified_calibration.json'
     source_mapping_path = dataset_path / 'mapping.json'
     target_mapping_path = overfit_path / 'mapping.json'
@@ -27,6 +29,7 @@ for mode in ['train', 'test']:
         (target_subset / 'input' / 'right_images').mkdir(parents=True, exist_ok=True)
         (target_subset / 'ground_truth' / 'segmentation').mkdir(parents=True, exist_ok=True)
         (target_subset / 'ground_truth' / 'disparity').mkdir(parents=True, exist_ok=True)
+        (target_subset / 'teacher' / 'disparity_128_256_256').mkdir(parents=True, exist_ok=True)
         
         target_calibration_path = target_subset / 'calibration' / 'rectified_calibration.json'
         target_calibration_path.parent.mkdir(parents=True, exist_ok=True)
@@ -37,17 +40,20 @@ for mode in ['train', 'test']:
             target_right_image_path = target_subset / 'input' / 'right_images' / selected_file_name.name
             target_segmentation_path = target_subset / 'ground_truth' / 'segmentation' / selected_file_name.name
             target_disparity_path = target_subset / 'ground_truth' / 'disparity' / selected_file_name.name
+            target_teacher_disparity_path = target_subset / 'teacher' / 'disparity_128_256_256' / selected_file_name.name.replace('.png', '.pt')
             
             # Copy files to the new location
             source_left_image = (source_left_images_path / selected_file_name.name).read_bytes()
             source_right_image = (source_right_images_path / selected_file_name.name).read_bytes()
             source_segmentation = (source_segmentation_path / selected_file_name.name).read_bytes()
             source_disparity = (source_disparity_path / selected_file_name.name).read_bytes()
+            source_teacher_disparity = (source_teacher_disparity_path / selected_file_name.name.replace('.png', '.pt')).read_bytes()
             
             target_left_image_path.write_bytes(source_left_image)
             target_right_image_path.write_bytes(source_right_image)
             target_segmentation_path.write_bytes(source_segmentation)
             target_disparity_path.write_bytes(source_disparity)
+            target_teacher_disparity_path.write_bytes(source_teacher_disparity)
         
         
 # %%
