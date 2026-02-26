@@ -7,6 +7,7 @@ import mlflow
 import mlflow.pytorch
 from torch.utils.data import DataLoader 
 
+from utils import helpers
 from utils.helpers import load
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
@@ -45,6 +46,7 @@ class Tester(BaseProcessor):
             pin_memory=data_config['pin_memory'],
             persistent_workers=False
         )
+        helpers.check_dataleakage('test', dataset_test)
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
         if 'segmentation' in self.tasks:

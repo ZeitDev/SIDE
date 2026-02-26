@@ -3,11 +3,16 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
+  validation: false
+
   num_of_classes:
     segmentation: 2
     disparity: 128
   max_disparity: 512
-  cross_validation: false
+
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
 
   transforms:
     train:
@@ -37,9 +42,7 @@ data:
           mean: [0.485, 0.456, 0.406]
           std: [0.229, 0.224, 0.225]
 
-  batch_size: 8
-  num_workers: 4
-  pin_memory: true
+
 
 # --- Training Configuration ---
 training:
@@ -101,7 +104,7 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params:
           is_stereo: true
-          stop_increases_at: 4
+          stop_increases_at: 1
       knowledge_distillation:
         enabled: true
         name: offline # models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper

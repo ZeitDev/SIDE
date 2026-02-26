@@ -8,7 +8,8 @@ import mlflow
 from torch.utils.data import DataLoader 
 from mlflow.models.signature import infer_signature
 
-from utils.helpers import load, log_vram, get_state_run_id
+from utils import helpers
+from utils.helpers import load, log_vram, get_model_run_id
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
@@ -54,6 +55,7 @@ class Trainer(BaseProcessor):
             pin_memory=data_config['pin_memory'],
             persistent_workers=False
         )
+        helpers.check_dataleakage('train', dataset_train)
         
         dataset_val = dataset_class(
             mode='train',
@@ -70,6 +72,7 @@ class Trainer(BaseProcessor):
                 pin_memory=data_config['pin_memory'],
                 persistent_workers=False
             )
+            helpers.check_dataleakage('train', dataset_val)
             
         self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
         if 'disparity' in self.tasks: self.signature_input_example_right = dataset_train[0]['right_image'].unsqueeze(0)
@@ -131,7 +134,7 @@ class Trainer(BaseProcessor):
                         logger.subheader(f'Loading Teachers for {task}')
                         
                         if kd_config['name'] == 'mlflow':
-                            model_run_id = get_state_run_id(kd_config['state'])
+                            model_run_id = get_model_run_id(kd_config['state'])
                             teacher_model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model', map_location=self.device)
                         else:
                             teacher_class = load(kd_config['name'])
@@ -182,15 +185,15 @@ class Trainer(BaseProcessor):
                 'weight_decay': 0.0
             }
         ]
-        optimizer_class = load(optimizer_config['name'])
-        self.optimizer = optimizer_class(
+        OptimizerClass = load(optimizer_config['name'])
+        self.optimizer = OptimizerClass(
             model_parameter_groups,
             **optimizer_config['params'])
         logger.info(f'Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
         
         scheduler_config = self.config['training']['scheduler']
-        scheduler_class = load(scheduler_config['name'])
-        self.scheduler = scheduler_class(
+        SchedulerClass = load(scheduler_config['name'])
+        self.scheduler = SchedulerClass(
             self.optimizer,
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')

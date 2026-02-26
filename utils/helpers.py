@@ -90,7 +90,7 @@ def log_vram(stage: str = ''):
         total = torch.cuda.get_device_properties(device).total_memory / 1024**3
         logger.vram(f'[{stage}] Allocated: {allocated:.2f}GB | Reserved: {reserved:.2f}GB | Total: {total:.2f}GB')
         
-def get_state_run_id(state_path: str) -> str:
+def get_model_run_id(state_path: str) -> str:
     model_state_parts = state_path.split('/')
     experiment = model_state_parts[0]
     run_path = '/'.join(model_state_parts[1:])
@@ -118,3 +118,18 @@ def soft_argmin(outputs: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
     predictions = F.interpolate(predictions, size=size, mode='bilinear', align_corners=False)
     
     return predictions
+
+def check_dataleakage(mode, dataset):
+    other_mode = 'train' if mode == 'test' else 'test'
+    assert all(mode in sample['left_image'] for sample in dataset.sample_paths), f'All samples in {mode} dataset should contain "{mode}" in their path'
+    assert not any(other_mode in sample['left_image'] for sample in dataset.sample_paths), f'No samples in {mode} dataset should contain "{other_mode}" in their path'
+
+def upsample_logits(logits: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
+    upsampled_logits = F.interpolate(
+        logits,
+        size=size,
+        mode='bilinear',
+        align_corners=False
+    )
+    
+    return upsampled_logits

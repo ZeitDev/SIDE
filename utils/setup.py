@@ -2,9 +2,10 @@ import os
 import shutil
 import atexit
 
-def setup_environment():
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-    print(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
+def setup_environment(skip_cuda=False):
+    if not skip_cuda:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        print(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
         
     cpu_cores = list(range(24))
     os.sched_setaffinity(os.getpid(), cpu_cores)

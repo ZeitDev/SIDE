@@ -68,7 +68,7 @@ class BaseProcessor:
                 for key, value in metric_results.items():
                     if isinstance(key, int) and self.segmentation_class_mappings:
                         class_name = self.segmentation_class_mappings[key].replace(' ', '_').lower()
-                        computed_metrics[f'performance/{mode}/{task}/{metric_name}/class/{key}::{class_name}'] = value
+                        computed_metrics[f'performance/{mode}/{task}/{metric_name}/class/{class_name}'] = value
                     elif metric_name == key:
                         computed_metrics[f'performance/{mode}/{task}/{metric_name}'] = value
                     else:

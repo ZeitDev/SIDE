@@ -22,6 +22,9 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
+# TODO: Track scheduled learning rate
+# TODO: generate test disparity maps (overwrite!!!)
+# TODO: Save model by best val DICE?
 # TODO: FIX TEST METRIC
 # TODO: Find a suitable segmentation teacher
 # TODO: Save logits to disk because VRAM is not sufficient for two teachers and student
