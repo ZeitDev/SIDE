@@ -22,12 +22,14 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Track scheduled learning rate
-# TODO: generate test disparity maps (overwrite!!!)
-# TODO: Save model by best val DICE?
-# TODO: FIX TEST METRIC
-# TODO: Find a suitable segmentation teacher
-# TODO: Save logits to disk because VRAM is not sufficient for two teachers and student
+# TODO: Understand the left right consistency check and generate new disparity masks with valid masks and a gate mechanism, where only masks with > 25% valid pixels get saved, rest has 0 valid masks
+# TODO: Make a visualization notebook for best performing images and worst performing
+# TODO: Implement running loss for training loop, fractional epochs, etc.
+# TODO: Regenerate train disparity maps
+# TODO: Save model by best val DICE? Save model by best heuristic = DICE / (1 + EPE)
+# TODO: Run a full segmentation teacher training
+# TODO: Regenerate segmentation teacher logits
+# TODO: FIX TEST METRIC CASES
 # TODO: Debug all metrics and losses of teacher and student
 
 def main():
@@ -137,7 +139,7 @@ def main():
                     log_vram('Full Training Start')
                     best_model_run_id = train_run.info.run_id
                     trainer = Trainer(config, train_subsets=all_train_subsets)
-                    trainer.train_without_validation()
+                    trainer.full_train()
                     log_vram('Full Training End')
             
             logger.header('Mode: Testing Best Model')

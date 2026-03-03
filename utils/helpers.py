@@ -106,7 +106,7 @@ def get_model_run_id(state_path: str) -> str:
         
     return model_run_id
 
-def soft_argmin(outputs: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
+def logits2disparity(outputs: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
     output_probabilities = F.softmax(outputs, dim=1)
     
     B, D, H, W = output_probabilities.shape

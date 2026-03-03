@@ -19,7 +19,7 @@ setup_environment(skip_cuda=True)
 
 # %%
 # Settings
-run = 'segmentation_teacher/260225:1742/train'
+run = 'segmentation_teacher/260226:1718/train'
 
 # %%
 # Load model
@@ -56,7 +56,7 @@ helpers.check_dataleakage('test', dataset_test)
 
 # %%
 # Visualize
-index = 110
+index = 400
 
 sample = dataset_test[index]
 outputs = model(sample['image'].unsqueeze(0).to(device), None)

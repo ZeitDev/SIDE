@@ -14,4 +14,4 @@ cache/
 mlruns/
 logs/
 .temp/
-models/external/
+external/

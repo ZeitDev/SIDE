@@ -1,6 +1,6 @@
 import torch
 from typing import Dict
-from utils.helpers import soft_argmin
+from utils.helpers import logits2disparity
 
 class DisparityMetric:
     def __init__(self, max_disparity: float = 512, device: torch.device = torch.device('cpu')):
@@ -18,7 +18,7 @@ class DisparityMetric:
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
-            predictions = soft_argmin(output_logits, size=targets.shape[2:]) * self.max_disparity
+            predictions = logits2disparity(output_logits, size=targets.shape[2:]) * self.max_disparity
             targets = targets * self.max_disparity
             
             valid_mask = targets != 0

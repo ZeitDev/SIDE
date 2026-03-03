@@ -1,7 +1,6 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.helpers import soft_argmin
+from utils.helpers import logits2disparity
 
 class MaskedSmoothL1Loss(nn.Module):
     def __init__(self, ignore_value=0, reduction='mean', beta=1.0):
@@ -11,7 +10,7 @@ class MaskedSmoothL1Loss(nn.Module):
         self.beta = beta
         
     def forward(self, output_logits, targets):
-        predictions = soft_argmin(output_logits, size=targets.shape[2:])
+        predictions = logits2disparity(output_logits, size=targets.shape[2:])
         
         valid_mask = (targets != self.ignore_value).float()
         loss = F.smooth_l1_loss(predictions, targets, reduction='none', beta=self.beta)
@@ -34,17 +33,17 @@ class PixelWiseKLDivLoss(nn.Module):
     def forward(self, student_logits, teacher_logits, targets):
         B, D, H, W = student_logits.shape
         
-        targets = F.interpolate(targets, size=(H, W), mode='nearest-exact')
+        targets = F.interpolate(targets, size=(H, W), mode='nearest-exact') # Sample down to 1/4 resolution
         valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
         
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature
         
-        student = soft_argmin(student_logits, size=targets.shape[2:])
-        teacher = soft_argmin(teacher_logits, size=targets.shape[2:])
+        student = logits2disparity(student_logits, size=targets.shape[2:])
+        teacher = logits2disparity(teacher_logits, size=targets.shape[2:])
         
         student_log_probabilities = F.log_softmax(student_logits, dim=1)
-        with torch.no_grad(): teacher_probabilities = F.softmax(teacher_logits, dim=1)
+        teacher_probabilities = F.softmax(teacher_logits.detach(), dim=1)
         
         pixel_loss = self.criterion(student_log_probabilities, teacher_probabilities)
         valid_loss = pixel_loss * valid.float()

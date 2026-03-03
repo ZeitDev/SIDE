@@ -14,7 +14,6 @@ import json
 import logging
 import random
 import datetime
-import numpy as np
 from tqdm import tqdm
 from typing import cast
 
@@ -34,7 +33,7 @@ from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
 from metrics.segmentation import IoU, Dice
 from utils import helpers
-from helpers import load, upsample_logits
+from utils.helpers import load, upsample_logits
 from data.transforms import build_transforms
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -61,7 +60,7 @@ val_transforms = build_transforms(config, mode='test')
 
 all_subsets = dataset_class(mode='train', config=config).get_all_subset_names()
 random.shuffle(all_subsets)
-if config['data']['validation']:
+if data_config['validation']:
     split_idx = int(0.8 * len(all_subsets))
     train_subsets = all_subsets[:split_idx]
     val_subsets = all_subsets[split_idx:]
@@ -85,7 +84,7 @@ dataloader_train = DataLoader(
 )
 helpers.check_dataleakage('train', dataset_train)
 
-if config['data']['validation']:
+if data_config['validation']:
     dataset_val = dataset_class(
         mode='train',
         config=config,
@@ -123,12 +122,6 @@ helpers.check_dataleakage('test', dataset_test)
 # model
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 torch.cuda.empty_cache()
-seed = 42
-os.environ['PYTHONHASHSEED'] = str(seed)
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
 
 model_name = 'nvidia/mit-b4' # Huggingface SegFormer
 model = SegformerForSemanticSegmentation.from_pretrained(
@@ -142,15 +135,12 @@ print(model.config.semantic_loss_ignore_index) # 255
 # Settings
 EPOCHS = config['training']['epochs']
 
-segmentation_config = config['training']['task']['segmentation']
-OptimizerClass = load(segmentation_config['optimizer']['name'])
+OptimizerClass = load(config['training']['optimizer']['name'])
 optimizer = OptimizerClass(
     model.parameters(),
-    **segmentation_config['optimizer']['params'])
+    **config['training']['optimizer']['params'])
 
-total_steps = len(dataloader_train) * EPOCHS
-config['training']['scheduler']['params']['total_steps'] = total_steps
-config['training']['scheduler']['params']['num_warmup_steps'] = int(0.1 * total_steps)
+config['training']['scheduler']['params']['num_warmup_steps'] = len(dataloader_train) * config['training']['scheduler']['warmup_epochs']
 
 SchedulerClass = load(config['training']['scheduler']['name'])
 scheduler = SchedulerClass(
@@ -221,12 +211,15 @@ run_datetime = datetime.datetime.now().strftime("%y%m%d:%H%M")
 log_filepath = os.path.join('logs', f'{run_datetime}_{config_name}.log')
 setup_logging(log_filepath=log_filepath, vram_only=config['logging']['vram'])
 
+train_log_interval = max(1, int(len(dataloader_train) * config['logging']['log_interval']))
+
 IoU_metric = IoU(n_classes=config['data']['num_of_classes']['segmentation'], device=device)
 DICE_metric = Dice(n_classes=config['data']['num_of_classes']['segmentation'], device=device)
 
+global_step = 0
+train_loss_running = 0.0
 best_val_dice = 0.0
 best_metrics = {}
-
 with mlflow.start_run(run_name=run_datetime) as run:
     helpers.mlflow_log_misc(log_filepath)
     tags = {}
@@ -247,28 +240,33 @@ with mlflow.start_run(run_name=run_datetime) as run:
             
             ### Training Loop ###
             model.train()
-            train_loss = 0.0
             
             train_batch_tqdm = tqdm(dataloader_train, desc='Training')
-            for data in train_batch_tqdm:
+            for idx, data in enumerate(train_batch_tqdm):
                 images = data['image'].to(device)
                 targets = data['segmentation'].to(device)
                 
                 outputs = model(pixel_values=images, labels=targets.squeeze(1).long())
                 loss = outputs.loss
-                train_loss += loss.item()
+                train_loss_running += loss.item()
                 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
                 
-                current_lr = optimizer.param_groups[0]['lr']
-                train_batch_tqdm.set_postfix({'loss': loss.item(), 'lr': current_lr})
-                
-            train_loss /= len(dataloader_train)
-            mlflow.log_metric('optimization/training/loss', train_loss, step=epoch)
-            mlflow.log_metric('optimization/training/lr', current_lr, step=epoch)
+                global_step += 1
+                if global_step % train_log_interval == 0:
+                    fractional_epoch = epoch + (idx / len(dataloader_train))
+                    average_loss = train_loss_running / train_log_interval
+                    current_lr = optimizer.param_groups[0]['lr']
+                    
+                    mlflow.log_metric('epoch', fractional_epoch, step=global_step)
+                    mlflow.log_metric('optimization/training/loss', average_loss, step=global_step)
+                    mlflow.log_metric('optimization/training/learning_rate', current_lr, step=global_step)
+                    train_batch_tqdm.set_postfix({'loss': average_loss, 'lr': current_lr})
+                    
+                    train_loss_running = 0.0
                 
             ### Validation Loop ###
             if config['data']['validation']:
@@ -309,22 +307,26 @@ with mlflow.start_run(run_name=run_datetime) as run:
                     if key == 0: key = 'background'
                     if key == 1: key = 'instrument'
                     val_metrics[f'performance/validation/segmentation/DICE_score/{key}'] = value
-                mlflow.log_metrics(val_metrics, step=epoch)
                 print(f'Validation Loss: {val_loss:.4f}')
+                mlflow.log_metrics(val_metrics, step=global_step)
                 
                 dice_instrument = DICE_results[1]
                 if dice_instrument > best_val_dice:
-                    best_epoch = epoch + 1
+                    best_epoch = epoch
                     best_val_dice = dice_instrument
-                    best_metrics = {f'best_{k}': v for k, v in val_metrics.items()}
-                    best_metrics['best_epoch'] = best_epoch
+                    best_metrics = {f'best/{k}': v for k, v in val_metrics.items()}
+                    best_metrics['best/optimization/validation/epoch'] = best_epoch
                     
                     torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
                     print(f'New best model saved with DICE Instrument: {best_val_dice:.4f}')
             else:
-                 torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
-                 best_metrics = {'best_epoch': epoch+1}
-                 print('No validation - model from last epoch saved as best model.')
+                if epoch == EPOCHS - 1:
+                    torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+                    best_metrics = {'best/optimization/validation/epoch': epoch}
+                    print('No validation - model from last epoch saved as best model.')
+            
+            mlflow.log_metric('epoch_raw', epoch, step=global_step)
+            mlflow.log_metric('epoch', float(epoch + 1), step=global_step)
             print()
 
         state_dict = torch.load(os.path.join('.temp', 'model_state.pth'))

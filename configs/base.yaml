@@ -50,10 +50,9 @@ training:
 
   optimizer:
     name: torch.optim.AdamW
-    base_lr: 1.0e-3 # decoder and task heads learning rate
-    encoder_lr_mod: 0.1 # dont let pretrained encoder explode
     params:
-      weight_decay: 0.01
+      lr: 1.0e-3 # decoder and task heads learning rate
+    encoder_lr_mod: 0.1 # dont let pretrained encoder explode
 
   scheduler:
     name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
@@ -104,7 +103,7 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params:
           is_stereo: true
-          stop_increases_at: 1
+          stop_increases_at: 4
       knowledge_distillation:
         enabled: true
         name: offline # models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
@@ -115,6 +114,7 @@ training:
             temperature: 1.0
 
 logging:
+  log_interval: 0.05
   vram: false
   notebook_mode: false
   n_validation_images: 0

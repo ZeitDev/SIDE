@@ -69,7 +69,9 @@ data:
 training:
   epochs: 2000
   optimizer:
-    base_lr: 6.0e-4
+    name: torch.optim.AdamW
+    params:
+      lr: 6.0e-4
 
   encoder:
     name: models.encoders.timm.Encoder

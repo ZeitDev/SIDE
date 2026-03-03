@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 import os
 from omegaconf import OmegaConf
-from models.external.FoundationStereo.foundation_stereo import FoundationStereo
-from models.external.FoundationStereo.core.utils.utils import InputPadder
+from external.FoundationStereo.foundation_stereo import FoundationStereo
+from external.FoundationStereo.core.utils.utils import InputPadder
 
 class FoundationStereoWrapper(nn.Module):
     def __init__(self):
         super().__init__()
-        state_path = '/data/Zeitler/code/SIDE/models/external/FoundationStereo/state'
+        state_path = '/data/Zeitler/code/SIDE/external/FoundationStereo/state'
         cfg = OmegaConf.load(os.path.join(state_path, 'cfg.yaml'))
         self.args = OmegaConf.create(cfg)
         self.model = FoundationStereo(self.args)
