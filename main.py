@@ -99,6 +99,7 @@ def main():
                                     fold_val_metrics_summary[metric_name][i+1] = metric_value
                                     
                             log_vram(f'Fold {i+1}')
+                            break # TODO: Switch to normal train / val
                     
                     logger.header('Cross-Validation Summary')
                     logger.info(f'Best Fold: {best_fold_idx} with Loss: {best_fold_loss:.4f}')

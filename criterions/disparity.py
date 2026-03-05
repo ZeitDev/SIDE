@@ -32,9 +32,13 @@ class PixelWiseKLDivLoss(nn.Module):
         
     def forward(self, student_logits, teacher_logits, targets):
         B, D, H, W = student_logits.shape
+        teacher_logits = teacher_logits.detach()
         
         targets = F.interpolate(targets, size=(H, W), mode='nearest-exact') # Sample down to 1/4 resolution
         valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
+        
+        raw_teacher_probabilities = F.softmax(teacher_logits, dim=1)
+        teacher_confidence = raw_teacher_probabilities.max(dim=1, keepdim=True)[0]
         
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature  
@@ -43,11 +47,12 @@ class PixelWiseKLDivLoss(nn.Module):
         # teacher = logits2disparity(teacher_logits, size=targets.shape[2:])
         
         student_log_probabilities = F.log_softmax(student_logits, dim=1)
-        teacher_probabilities = F.softmax(teacher_logits.detach(), dim=1)
+        teacher_probabilities = F.softmax(teacher_logits, dim=1)
         
         pixel_loss = self.criterion(student_log_probabilities, teacher_probabilities)
-        valid_loss = pixel_loss * valid.float()
+        weighted_pixel_loss = pixel_loss * teacher_confidence
+        valid_pixel_loss = weighted_pixel_loss * valid.float()
         
-        loss = (valid_loss.sum() / valid.sum()) * (self.temperature ** 2)
+        loss = (valid_pixel_loss.sum() / valid.sum()) * (self.temperature ** 2)
         
         return loss

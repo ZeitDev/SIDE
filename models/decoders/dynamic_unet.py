@@ -42,10 +42,11 @@ class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip
         return x
     
 class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel list
-    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_stereo=False, stop_increases_at=1):
+    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_stereo=False, stop_increases_at=1, intercept_at=1, **kwargs):
         super().__init__()
         self.is_stereo = is_stereo
         self.stop_increases_at = stop_increases_at
+        self.intercept_at = intercept_at
         
         # Channels
         # Encoder: [16, 24, 40, 112, 320] (Top -> Bottom)
@@ -122,6 +123,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             reversed_encoder_features_right = encoder_features_right[::-1]
             x = torch.cat([reversed_encoder_features[0], reversed_encoder_features_right[0]], dim=1)
             
+        intercept_features = None
         
         # Pass through each decoder block with corresponding skip features
         for i, block in enumerate(self.blocks):
@@ -134,7 +136,13 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             
             x = block(x, skip_features)
             
+            if self.is_stereo and self.all_decoder_increases[i+1] == self.intercept_at:
+                intercept_features = x # Intercept features at 1/stop_increases_at resolution for disparity head
+            
         # Final upsampling to original resolution    
         x = self.final_block(x)
+        
+        if self.is_stereo:
+            return x, intercept_features
         
         return x

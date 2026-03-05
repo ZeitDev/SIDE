@@ -217,18 +217,19 @@ class Trainer(BaseProcessor):
 
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
         optimizer_config = self.config['training']['optimizer']
+        base_lr = optimizer_config['params']['lr']
         model_parameter_groups = [
             {
                 'params': [p for n, p in self.model.named_parameters() if 'encoder' in n and p.requires_grad],
-                'lr': optimizer_config['base_lr'] * optimizer_config['encoder_lr_mod']
+                'lr': base_lr * optimizer_config['encoder_lr_mod']
             },
             {
                 'params': [p for n, p in self.model.named_parameters() if 'encoder' not in n and p.requires_grad],
-                'lr': optimizer_config['base_lr']
+                'lr': base_lr
             },
             {
                 'params': self.automatic_weighted_loss.parameters(),
-                'lr': optimizer_config['base_lr'],
+                'lr': base_lr,
                 'weight_decay': 0.0
             }
         ]
@@ -296,8 +297,8 @@ class Trainer(BaseProcessor):
                         else:
                             with torch.no_grad():
                                 teacher_outputs = kd_teacher(left_images, right_images)[task]
-                        targets[f'{task}_teacher'] = teacher_outputs
                         outputs[f'{task}_teacher'] = outputs[task]
+                        targets[f'{task}_teacher'] = teacher_outputs
                 
                 loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
                         

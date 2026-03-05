@@ -7,7 +7,7 @@ data:
 
   num_of_classes:
     segmentation: 2
-    disparity: 128
+    disparity: 1
   max_disparity: 512
 
   batch_size: 8
@@ -103,7 +103,9 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params:
           is_stereo: true
-          stop_increases_at: 4
+          stop_increases_at: 1
+          intercept_at: 4
+          intercept_channels: 128 # matching FoundationStereo V'_c logits
       knowledge_distillation:
         enabled: false
         name: offline # models.teachers.foundation_stereo.FoundationStereoWrapper

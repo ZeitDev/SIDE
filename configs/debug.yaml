@@ -1,19 +1,34 @@
-description: Debugging knowledge distillation
+description: Debugging Multi Task Segmentation and Disparity with Knowledge Distillation
 
 data:
-  dataset: data.datasets.OverfitDataset
-  cross_validation: false
+  dataset: data.datasets.EndoVis17
+  batch_size: 2
 
 training:
-  epochs: 4
+  epochs: 1
+
+  optimizer:
+    name: torch.optim.AdamW
+    params:
+      lr: 2.0e-4
+
+  scheduler:
+    name: torch.optim.lr_scheduler.OneCycleLR
+    params:
+      max_lr: 2.0e-4
+      epochs: 50
+      steps_per_epoch: 400
+      pct_start: 0.3
+      anneal_strategy: cos
+
   tasks:
     segmentation:
       enabled: true
       knowledge_distillation:
-        enabled: false
-        state: debug/260211:1659/train #teacher::segmentation/260217:1457
+        enabled: true
+        name: offline
     disparity:
-      enabled: false
+      enabled: true
       knowledge_distillation:
-        enabled: false
-        # state: debug/260211:1709/train #teacher::disparity/260217:1502
+        enabled: true
+        name: offline

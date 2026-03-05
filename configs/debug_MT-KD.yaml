@@ -1,10 +1,26 @@
 description: Debugging Multi Task Segmentation and Disparity with Knowledge Distillation
 
 data:
-  dataset: data.datasets.OverfitDataset
+  dataset: data.datasets.EndoVis17
+  batch_size: 2
 
 training:
-  epochs: 4
+  epochs: 1
+
+  optimizer:
+    name: torch.optim.AdamW
+    params:
+      lr: 2.0e-4
+
+  scheduler:
+    name: torch.optim.lr_scheduler.OneCycleLR
+    params:
+      max_lr: 2.0e-4
+      epochs: 50
+      steps_per_epoch: 400
+      pct_start: 0.3
+      anneal_strategy: cos
+
   tasks:
     segmentation:
       enabled: true

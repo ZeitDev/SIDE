@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from helpers import upsample_logits
+from utils.helpers import upsample_logits
 
 class ChannelWiseKLDivLoss(nn.Module):
     def __init__(self, temperature=1.0):
