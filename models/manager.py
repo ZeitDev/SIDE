@@ -4,12 +4,12 @@ import torch.nn as nn
 from typing import Dict
 
 class Combiner(nn.Module):
-    def __init__(self, encoder, decoders):
+    def __init__(self, encoder: nn.Module, decoders: Dict[str, nn.Module]):
         super().__init__()
         self.encoder = encoder
         self.decoders = nn.ModuleDict(decoders)
         
-    def forward(self, left_image, right_image=None) -> Dict[str, torch.Tensor]:
+    def forward(self, left_image: torch.Tensor, right_image: torch.Tensor = None) -> Dict[str, torch.Tensor]:
         outputs = {}
         left_features = self.encoder(left_image)
         for task, decoder in self.decoders.items():

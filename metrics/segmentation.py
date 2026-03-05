@@ -46,11 +46,11 @@ class IoU(SegmentationMetric):
         present_classes = self.confusion_matrix.sum(dim=1) > 0
             
         valid_iou = iou_per_class[present_classes & ~torch.isnan(iou_per_class)]
-        mean_iou = valid_iou.mean().item()
-        std_iou = valid_iou.std().item()
+        # mean_iou = valid_iou.mean().item()
+        # std_iou = valid_iou.std().item()
         
-        results['mean'] = mean_iou
-        results['std'] = std_iou
+        # results['mean'] = mean_iou
+        # results['std'] = std_iou
         
         return results
 
@@ -67,10 +67,10 @@ class Dice(SegmentationMetric):
         present_classes = self.confusion_matrix.sum(dim=1) > 0
 
         valid_dice = dice_per_class[present_classes & ~torch.isnan(dice_per_class)]
-        mean_dice = valid_dice.mean().item()
-        std_dice = valid_dice.std().item()
+        # mean_dice = valid_dice.mean().item()
+        # std_dice = valid_dice.std().item()
         
-        results['mean'] = mean_dice
-        results['std'] = std_dice
+        # results['mean'] = mean_dice
+        # results['std'] = std_dice
             
         return results

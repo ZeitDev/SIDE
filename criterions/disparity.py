@@ -37,10 +37,10 @@ class PixelWiseKLDivLoss(nn.Module):
         valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
         
         student_logits = student_logits / self.temperature
-        teacher_logits = teacher_logits / self.temperature
+        teacher_logits = teacher_logits / self.temperature  
         
-        student = logits2disparity(student_logits, size=targets.shape[2:])
-        teacher = logits2disparity(teacher_logits, size=targets.shape[2:])
+        # student = logits2disparity(student_logits, size=targets.shape[2:])
+        # teacher = logits2disparity(teacher_logits, size=targets.shape[2:])
         
         student_log_probabilities = F.log_softmax(student_logits, dim=1)
         teacher_probabilities = F.softmax(teacher_logits.detach(), dim=1)

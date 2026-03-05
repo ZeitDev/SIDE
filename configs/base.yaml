@@ -3,7 +3,7 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
-  validation: false
+  cross_validation: true
 
   num_of_classes:
     segmentation: 2
@@ -72,7 +72,7 @@ training:
 
   tasks:
     segmentation:
-      enabled: true
+      enabled: false
       criterion:
         name: monai.losses.DiceCELoss
         params:
@@ -83,7 +83,7 @@ training:
         name: models.decoders.dynamic_unet.Decoder
         params: {}
       knowledge_distillation:
-        enabled: true
+        enabled: false
         name: offline # mlflow
         state: null # debug/260211:1659/train
         criterion:
@@ -92,7 +92,7 @@ training:
             temperature: 4.0
 
     disparity: 
-      enabled: true
+      enabled: false
       criterion:
         name: criterions.disparity.MaskedSmoothL1Loss
         params:
@@ -105,8 +105,8 @@ training:
           is_stereo: true
           stop_increases_at: 4
       knowledge_distillation:
-        enabled: true
-        name: offline # models.teachers.foundation_stereo_wrapper.FoundationStereoWrapper
+        enabled: false
+        name: offline # models.teachers.foundation_stereo.FoundationStereoWrapper
         state: null
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss

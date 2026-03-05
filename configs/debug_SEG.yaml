@@ -1,0 +1,10 @@
+description: Debugging single task segmentation
+
+data:
+  dataset: data.datasets.OverfitDataset
+
+training:
+  epochs: 4
+  tasks:
+    segmentation:
+      enabled: true

@@ -22,15 +22,8 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Understand the left right consistency check and generate new disparity masks with valid masks and a gate mechanism, where only masks with > 25% valid pixels get saved, rest has 0 valid masks
-# TODO: Make a visualization notebook for best performing images and worst performing
-# TODO: Implement running loss for training loop, fractional epochs, etc.
-# TODO: Regenerate train disparity maps
-# TODO: Save model by best val DICE? Save model by best heuristic = DICE / (1 + EPE)
-# TODO: Run a full segmentation teacher training
-# TODO: Regenerate segmentation teacher logits
+# TODO: Debug running per step loss and metric logging in MLflow
 # TODO: FIX TEST METRIC CASES
-# TODO: Debug all metrics and losses of teacher and student
 
 def main():
     try:
@@ -151,8 +144,7 @@ def main():
                 
                 log_vram('Testing Start')
                 tester = Tester(config, run_id=best_model_run_id)
-                test_metrics = tester.test()
-                mlflow.log_metrics(test_metrics)
+                tester.test()
                 log_vram('Testing End')
         
     except KeyboardInterrupt:

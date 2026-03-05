@@ -1,0 +1,12 @@
+description: Debugging multi task Segmentation and Disparity
+
+data:
+  dataset: data.datasets.OverfitDataset
+
+training:
+  epochs: 4
+  tasks:
+    segmentation:
+      enabled: true
+    disparity:
+      enabled: true

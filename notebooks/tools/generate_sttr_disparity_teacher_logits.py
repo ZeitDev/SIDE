@@ -9,7 +9,7 @@ from utils import helpers
 from utils.helpers import load, logits2disparity
 from torch.utils.data import DataLoader
 from data.transforms import build_transforms
-from models.teachers.foundation_stereo_wrapper import FoundationStereoWrapper
+from models.teachers.sttr import STTRWrapper
 
 from torch.utils.data import Dataset
 import torch.nn.functional as F
@@ -70,13 +70,11 @@ class EndoVisTeacherDataset(Dataset):
 
 
 # %%
-model = FoundationStereoWrapper()
-model.to('cuda')
-model.eval()
+model = STTRWrapper()
 
 # %% Save Disparity Maps
-if False:
-    mode = 'train'  # ! Do both train and test
+if True:
+    mode = 'test'  # ! Do both train and test
     config['data']['transforms'][mode] = [
         {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
     ]
@@ -101,62 +99,26 @@ if False:
             left_image = data['image'].to('cuda')
             right_image = data['right_image'].to('cuda')
             
-            disparity = model.get_disparity(left_image, right_image)
+            disparity, confidence_map = model(left_image, right_image)
             
             image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity')
+            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity_sttr')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
             disp = disparity.squeeze().cpu().numpy()
             disp_scaled = disp * 128.0
             disp_scaled = np.clip(disp_scaled, 0, 65535)
             disp_scaled = disp_scaled.astype(np.uint16)
-                
             cv2.imwrite(save_path, disp_scaled)
-
-# %% Save Disparity Teacher Logits
-if True:
-    mode = 'test'
-    
-    config['data']['transforms'][mode] = [
-        {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
-        {'name': 'Resize', 'params': {'height': 1024, 'width': 1024}},
-        {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
-    ]
-    train_transform = build_transforms(config, mode=mode)
-
-    dataset_train = EndoVisTeacherDataset(
-        mode=mode,
-        transforms=train_transform)
-
-    dataloader_train = DataLoader(
-        dataset_train,
-        batch_size=1,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=False,
-        persistent_workers=False
-    )
-    helpers.check_dataleakage(mode, dataset_train)
-
-    FP16_MAX = torch.finfo(torch.float16).max
-    for data in tqdm(dataloader_train):
-        with torch.cuda.amp.autocast(True) and torch.no_grad():
-            left_image = data['image'].to('cuda')
-            right_image = data['right_image'].to('cuda')
             
-            logit = model.get_logits(left_image, right_image)
-
-            logit_save = logit.squeeze().half().cpu()
-            assert logit_save.abs().max() < FP16_MAX, f'Logit values exceed FP16 max value: {logit_save.abs().max()}'
-            assert not torch.isnan(logit_save).any(), 'Logit contains NaN values'
-
-            # raw_disparity = logits2disparity(logit, size=left_image.shape[2:]) * 512.0
+            save_path_confidence = image_path.replace('input', 'teacher').replace('left_images', 'disparity_confidence_sttr')
+            os.makedirs(os.path.dirname(save_path_confidence), exist_ok=True)
+            #torch.save(confidence_map.squeeze().half().cpu(), save_path_confidence)
+            conf = confidence_map.squeeze().cpu().numpy()
+            conf_scaled = conf * 255.0
+            conf_scaled = conf_scaled.astype(np.uint8)
+            cv2.imwrite(save_path_confidence, conf_scaled)
             
-            image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'teacher').replace('left_images', 'disparity_128_256_256').replace('.png', '.pt')
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            torch.save(logit_save, save_path)
 
 
 # %% Saving Right Disparity Maps

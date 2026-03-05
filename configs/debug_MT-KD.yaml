@@ -1,0 +1,18 @@
+description: Debugging Multi Task Segmentation and Disparity with Knowledge Distillation
+
+data:
+  dataset: data.datasets.OverfitDataset
+
+training:
+  epochs: 4
+  tasks:
+    segmentation:
+      enabled: true
+      knowledge_distillation:
+        enabled: true
+        name: offline
+    disparity:
+      enabled: true
+      knowledge_distillation:
+        enabled: true
+        name: offline

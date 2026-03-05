@@ -1,12 +1,11 @@
 description: Debugging knowledge distillation
 
 data:
-  # dataset: data.datasets.OverfitDataset
+  dataset: data.datasets.OverfitDataset
   cross_validation: false
-  #batch_size: 1
 
 training:
-  epochs: 3
+  epochs: 4
   tasks:
     segmentation:
       enabled: true
@@ -18,6 +17,3 @@ training:
       knowledge_distillation:
         enabled: false
         # state: debug/260211:1709/train #teacher::disparity/260217:1502
-
-logging:
-  n_validation_images: 0

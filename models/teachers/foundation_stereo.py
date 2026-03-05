@@ -8,11 +8,12 @@ from external.FoundationStereo.core.utils.utils import InputPadder
 class FoundationStereoWrapper(nn.Module):
     def __init__(self):
         super().__init__()
-        state_path = '/data/Zeitler/code/SIDE/external/FoundationStereo/state'
+        state_path = './external/FoundationStereo/state'
         cfg = OmegaConf.load(os.path.join(state_path, 'cfg.yaml'))
         self.args = OmegaConf.create(cfg)
         self.model = FoundationStereo(self.args)
         ckpt = torch.load(os.path.join(state_path, 'model_best_bp2.pth'), weights_only=False)
+        self.model = self.model.cuda().eval()
         self.model.load_state_dict(ckpt['model'])
         
     def get_disparity(self, left_images, right_images):

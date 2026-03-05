@@ -20,7 +20,6 @@ class Tester(BaseProcessor):
         super().__init__(config)
         self.run_id = run_id
         self._load_data()
-        self._load_models()
         self._init_metrics()
 
     def _load_data(self) -> None:
@@ -56,9 +55,9 @@ class Tester(BaseProcessor):
         if 'disparity' in self.tasks:
             self.n_classes['disparity'] = 1
             
-    def _load_models(self) -> None:
+    def _load_models(self, task_mode: str) -> None:
         logger.subheader('Loading Model')
-        model_path = f'runs:/{self.run_id}/best_model'
+        model_path = f'runs:/{self.run_id}/best_model_{task_mode}'
         self.model = mlflow.pytorch.load_model(model_path, map_location=self.device)
         self.model.eval()
         logger.info(f'Loaded best model from {model_path}')
@@ -66,33 +65,42 @@ class Tester(BaseProcessor):
     def test(self) -> Dict[str, float]:
         logger.header('Starting Testing')
         
-        for task_metrics in self.metrics.values():
-            for metric in task_metrics.values():
-                metric.reset()
+        if 'segmentation' in self.tasks: task_modes = ['segmentation']
+        if 'disparity' in self.tasks: task_modes = ['disparity']
+        if 'segmentation' in self.tasks and 'disparity' in self.tasks: task_modes = ['segmentation', 'disparity', 'combined']
         
-        batch_tqdm = tqdm(self.dataloader_test, desc='Testing', position=1, leave=False)
-        with torch.no_grad():
-            for data in batch_tqdm:
-                left_images = data['image'].to(self.device)
-                right_images = data['right_image'].to(self.device) if 'right_image' in data else None
-                targets = {task: data[task].to(self.device) for task in self.tasks}
-                
-                outputs = self.model(left_images, right_images)
-                
-                if 'segmentation' in outputs:
-                    self._log_visuals(epoch='Test', images=left_images, targets=targets, outputs=outputs)
-                    for metric in self.metrics['segmentation'].values():
-                        metric.update(outputs['segmentation'], targets['segmentation'])
-                if 'disparity' in outputs:
-                    baseline, focal_length = data['baseline'].to(self.device), data['focal_length'].to(self.device)
-                    for metric in self.metrics['disparity'].values():
-                        metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
+        test_metrics = {}
+        for task_mode in task_modes:
+            self._load_models(task_mode=task_mode)
+            
+            for task_metrics in self.metrics.values():
+                for metric in task_metrics.values():
+                    metric.reset()
+            
+            batch_tqdm = tqdm(self.dataloader_test, desc='Testing', position=1, leave=False)
+            with torch.no_grad():
+                for data in batch_tqdm:
+                    left_images = data['image'].to(self.device)
+                    right_images = data['right_image'].to(self.device) if 'right_image' in data else None
+                    targets = {task: data[task].to(self.device) for task in self.tasks}
+                    
+                    outputs = self.model(left_images, right_images)
+                    
+                    if 'segmentation' in outputs:
+                        self._log_visuals(epoch='Test', images=left_images, targets=targets, outputs=outputs)
+                        for metric in self.metrics['segmentation'].values():
+                            metric.update(outputs['segmentation'], targets['segmentation'])
+                    if 'disparity' in outputs:
+                        baseline, focal_length = data['baseline'].to(self.device), data['focal_length'].to(self.device)
+                        for metric in self.metrics['disparity'].values():
+                            metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
 
-        logger.subheader('Test Results')
-        test_metrics = self._compute_metrics(mode='testing')
-        for metric_key, metric_value in test_metrics.items():
-            logger.info(f'{metric_key}: {metric_value:.4f}')
+            logger.subheader('Test Results')
+            test_metrics = self._compute_metrics(mode='testing')
+            for key, value in test_metrics.items(): mlflow.log_metric(f'best_{task_mode}/{key}', value)
             
-        del self.model
+            for metric_key, metric_value in test_metrics.items():
+                logger.info(f'{metric_key}: {metric_value:.4f}')
             
-        return test_metrics    
+            del self.model
+            

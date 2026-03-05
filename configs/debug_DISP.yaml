@@ -1,0 +1,10 @@
+description: Debugging single task disparity
+
+data:
+  dataset: data.datasets.OverfitDataset
+
+training:
+  epochs: 4
+  tasks:
+    disparity:
+      enabled: true

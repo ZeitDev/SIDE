@@ -18,6 +18,53 @@ from criterions.automatic_weighted_loss import AutomaticWeightedLoss
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 
+
+class MetricsTracker:
+    def __init__(self, criterion_keys: List[str], log_interval: int, dataloader_len: int):
+        self.log_interval = log_interval
+        self.dataloader_len = dataloader_len
+        self.criterion_keys = criterion_keys
+        self.global_step = 0
+        
+        self._reset()
+    
+    def _reset(self):
+        self.running_loss_weighted = 0.0
+        self.running_raw_task_losses = {task: 0.0 for task in self.criterion_keys}
+        self.running_task_weights = {task: 0.0 for task in self.criterion_keys}
+        self.loss_for_scheduler = 0.0
+    
+    def update(self, loss: float, raw_task_losses: Dict[str, float], task_weights: Dict[str, float]):
+        self.running_loss_weighted += loss
+        
+        for task, raw_loss in raw_task_losses.items():
+            self.running_raw_task_losses[task] += raw_loss
+            
+        for task, weight in task_weights.items():
+            self.running_task_weights[task] += weight
+            
+        self.global_step += 1
+    
+    def should_log(self) -> bool:
+        return self.global_step % self.log_interval == 0
+    
+    def get_metrics(self, epoch: int, batch_idx: int, lr: float) -> Dict[str, float]:
+        metrics = {}
+        metrics['epoch_train'] = epoch + (batch_idx / self.dataloader_len)
+        metrics['epoch_validation'] = epoch
+        metrics['optimization/training/loss/auto_weighted_sum'] = self.running_loss_weighted / self.log_interval
+        
+        for task in self.criterion_keys:
+            metrics[f'optimization/training/loss/raw/{task}'] = self.running_raw_task_losses[task] / self.log_interval
+            metrics[f'optimization/training/loss/auto_weights/{task}'] = self.running_task_weights[task] / self.log_interval
+        metrics['optimization/training/learning_rate'] = lr
+        
+        self.loss_for_scheduler = self.running_loss_weighted / self.log_interval
+        self._reset()
+        
+        return metrics
+
+
 class Trainer(BaseProcessor):
     def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
         super().__init__(config)
@@ -197,37 +244,44 @@ class Trainer(BaseProcessor):
             self.optimizer,
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
-    
+        
+        train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
+        self.metrics_tracker = MetricsTracker(
+            criterion_keys=list(self.criterions.keys()),
+            log_interval=train_log_interval,
+            dataloader_len=len(self.dataloader_train)
+        )
+
     def _save_model(self):
         logger.info('Saving best model to mlflow')        
-        
-        state_dict = torch.load(os.path.join('.temp', 'model_state.pth'))
-        self.model.load_state_dict(state_dict['model_state_dict'])
-        self.model.to('cpu')
-        self.model.eval()
         
         with torch.no_grad():
             if 'disparity' not in self.tasks: signature_output_example = self.model(self.signature_input_example)
             else: signature_output_example = self.model(self.signature_input_example, self.signature_input_example_right)
             
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
-            
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
-        mlflow.pytorch.log_model( 
-            pytorch_model=self.model,
-            name='best_model',
-            code_paths=['models/'],
-            signature=signature
-        )
+            
+        for task_mode in ['segmentation', 'disparity', 'combined']:
+            model_state_path = os.path.join('.temp', f'model_state_{task_mode}.pth')
+            if os.path.exists(model_state_path):
+                state_dict = torch.load(model_state_path)
+                self.model.load_state_dict(state_dict['model_state_dict'])
+                self.model.to('cpu')
+                self.model.eval()
+                
+                mlflow.pytorch.log_model(
+                    pytorch_model=self.model,
+                    name=f'best_model_{task_mode}',
+                    code_paths=['models/'],
+                    signature=signature
+                )
 
-    def _train_epoch(self) -> Dict[str, float]:
+    def _train_epoch(self, epoch: int) -> None:
         self.model.train()
-        total_loss_weighted = 0
-        total_raw_task_losses = {task: 0.0 for task in self.criterions}
-        total_task_weights = {task: 0.0 for task in self.criterions}
         
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
-        for data in batch_tqdm:
+        for idx, data in enumerate(batch_tqdm):
             left_images = data['image'].to(self.device)
             right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
@@ -251,21 +305,15 @@ class Trainer(BaseProcessor):
                 loss.backward()
                 self.optimizer.step()
                 
-                total_loss_weighted += loss.item()
-                
-                batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
-                for task, raw_task_loss in raw_task_losses.items():
-                    total_raw_task_losses[task] += raw_task_loss
                 with torch.no_grad():
-                    for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items():
-                        total_task_weights[task] += torch.exp(-s_param).item()
-                        
-        epoch_metrics = {'optimization/training/loss/auto_weighted_sum': total_loss_weighted / len(self.dataloader_train)}
-        for task in self.criterions.keys():
-            epoch_metrics[f'optimization/training/loss/raw/{task}'] = total_raw_task_losses[task] / len(self.dataloader_train)
-            epoch_metrics[f'optimization/training/loss/auto_weights/{task}'] = total_task_weights[task] / len(self.dataloader_train)
-        
-        return epoch_metrics
+                    task_weights = {task: torch.exp(-s_param).item() for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items()}
+                
+                self.metrics_tracker.update(loss.item(), raw_task_losses, task_weights)
+            
+            if self.metrics_tracker.should_log():
+                lr = self.optimizer.param_groups[0]['lr']
+                metrics = self.metrics_tracker.get_metrics(epoch, idx, lr)
+                mlflow.log_metrics(metrics, step=self.metrics_tracker.global_step)
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
         self.model.eval()
@@ -320,6 +368,9 @@ class Trainer(BaseProcessor):
         
         best_val_epoch = -1
         best_val_loss = float('inf')
+        best_val_dice = 0.0
+        best_val_bad3 = 1.0
+        best_val_heuristic = float('inf')
         best_val_epoch_metrics = {}
         
         epochs = self.config['training']['epochs']
@@ -327,34 +378,42 @@ class Trainer(BaseProcessor):
         for epoch in epochs_tqdm:
             self.n_logged_images = 0
             
-            train_epoch_metrics = self._train_epoch()
-            mlflow.log_metrics(train_epoch_metrics, step=epoch)
+            self._train_epoch(epoch=epoch)
             
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
-            mlflow.log_metrics(val_epoch_metrics, step=epoch)
+            mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
             
             val_loss = val_epoch_metrics['optimization/validation/loss/auto_weighted_sum']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau): self.scheduler.step(val_loss)
             else: self.scheduler.step()
             
-            lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('optimization/training/learning_rate', lr, step=epoch)
-            
-            if val_loss < best_val_loss:
-                best_val_epoch = epoch
-                best_val_loss = val_loss
-                best_val_epoch_metrics = val_epoch_metrics
+            if 'segmentation' in self.tasks:
+                val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
+                if val_dice > best_val_dice:
+                    best_val_dice = val_dice
+                    
+                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
+                    mlflow.log_metric('best_segmentation/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_segmentation/{key}', value, step=self.metrics_tracker.global_step)
+                    
+            if 'disparity' in self.tasks:
+                val_bad3 = val_epoch_metrics['performance/validation/disparity/Bad3_rate']
+                if val_bad3 < best_val_bad3:
+                    best_val_bad3 = val_bad3
+                    
+                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
+                    mlflow.log_metric('best_disparity/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_disparity/{key}', value, step=self.metrics_tracker.global_step)
+                    
+            if 'segmentation' in self.tasks and 'disparity' in self.tasks:
+                val_heuristic = ((1 - val_dice) ** 2 + val_bad3 ** 2) ** 0.5
+                if val_heuristic < best_val_heuristic:
+                    best_val_heuristic = val_heuristic
+                    
+                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
+                    mlflow.log_metric('best_combined/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_combined/{key}', value, step=self.metrics_tracker.global_step)
                 
-                torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
-                mlflow.log_metric('optimization/validation/loss/best_auto_weighted_sum', best_val_loss, step=epoch)
-                
-            epochs_tqdm.set_postfix({
-                'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/training/loss/auto_weighted_sum']:.4f}',
-                'val_loss': f'{val_loss:.4f}',
-                'best_val_epoch': best_val_epoch,
-                'best_val_loss': f'{best_val_loss:.4f}'
-            })
             log_vram(f'Trainer Epoch {epoch}')
             
         self._save_model()
@@ -370,22 +429,13 @@ class Trainer(BaseProcessor):
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
-            train_epoch_metrics = self._train_epoch()
-            mlflow.log_metrics(train_epoch_metrics, step=epoch)
+            self._train_epoch(epoch=epoch)
             
-            train_loss = train_epoch_metrics['optimization/training/loss/auto_weighted_sum']
             if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                self.scheduler.step(train_loss)
+                self.scheduler.step(self.metrics_tracker.loss_for_scheduler)
             else:
                 self.scheduler.step()
             
-            lr = self.optimizer.param_groups[0]['lr']
-            mlflow.log_metric('optimization/training/learning_rate', lr, step=epoch)
-            
-            epochs_tqdm.set_postfix({
-                'lr': f'{lr:.2e}',
-                'train_loss': f'{train_epoch_metrics['optimization/training/loss/auto_weighted_sum']:.4f}',
-            })
             log_vram(f'Full Trainer Epoch {epoch}')
             
         
