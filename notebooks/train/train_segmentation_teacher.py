@@ -12,7 +12,6 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 import yaml
 import json
 import logging
-import random
 import datetime
 from tqdm import tqdm
 from typing import cast

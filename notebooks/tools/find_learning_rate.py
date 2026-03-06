@@ -5,9 +5,8 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 
-import torch
 import torch.nn as nn
-from torch_lr_finder import LRFinder, TrainDataLoaderIter, ValDataLoaderIter
+from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
 from utils import helpers
 from utils.helpers import load

@@ -3,7 +3,6 @@ import os, sys
 sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 from utils.setup import setup_environment
 
-import numpy as np
 import yaml
 import torch
 from omegaconf import OmegaConf

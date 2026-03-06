@@ -1,7 +1,7 @@
 import os
 import logging
 from tqdm import tqdm
-from typing import cast, Any, List, Dict, Optional
+from typing import cast, Any, List, Dict
 
 import torch
 import mlflow
@@ -139,7 +139,6 @@ class Trainer(BaseProcessor):
             self.segmentation_class_mappings = dataset_train.segmentation_class_mappings
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')    
             
-        
     def _load_model(self) -> None:
         logger.subheader('Loading Model')
         
@@ -384,8 +383,8 @@ class Trainer(BaseProcessor):
         
         best_val_epoch = -1
         best_val_loss = float('inf')
-        best_val_dice = 0.0
-        best_val_bad3 = 1.0
+        best_val_dice = float('-inf')
+        best_val_bad3 = float('inf')
         best_val_heuristic = float('inf')
         best_val_epoch_metrics = {}
         
@@ -409,8 +408,8 @@ class Trainer(BaseProcessor):
                     best_val_dice = val_dice
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
-                    mlflow.log_metric('best_segmentation/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_segmentation/{key}', value, step=self.metrics_tracker.global_step)
+                    mlflow.log_metric('best/segmentation/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'disparity' in self.tasks:
                 val_bad3 = val_epoch_metrics['performance/validation/disparity/Bad3_rate']
@@ -418,8 +417,8 @@ class Trainer(BaseProcessor):
                     best_val_bad3 = val_bad3
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
-                    mlflow.log_metric('best_disparity/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_disparity/{key}', value, step=self.metrics_tracker.global_step)
+                    mlflow.log_metric('best/disparity/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'segmentation' in self.tasks and 'disparity' in self.tasks:
                 val_heuristic = ((1 - val_dice) ** 2 + val_bad3 ** 2) ** 0.5
@@ -427,9 +426,9 @@ class Trainer(BaseProcessor):
                     best_val_heuristic = val_heuristic
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
-                    mlflow.log_metric('best_combined/optimization/validation/epoch', epoch, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best_combined/{key}', value, step=self.metrics_tracker.global_step)
-                
+                    mlflow.log_metric('best/combined/epoch', epoch, step=self.metrics_tracker.global_step)
+                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
+            
             log_vram(f'Trainer Epoch {epoch}')
             
         self._save_model()
@@ -437,7 +436,6 @@ class Trainer(BaseProcessor):
         del self.optimizer
         del self.scheduler
             
-    
     def full_train(self) -> None:
         logger.header('Starting Full Training Loop without Validation')
         

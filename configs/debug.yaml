@@ -5,7 +5,7 @@ data:
   batch_size: 2
 
 training:
-  epochs: 1
+  epochs: 2
 
   optimizer:
     name: torch.optim.AdamW
