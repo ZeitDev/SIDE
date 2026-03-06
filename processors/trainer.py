@@ -124,6 +124,10 @@ class Trainer(BaseProcessor):
         self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
         if 'disparity' in self.tasks: self.signature_input_example_right = dataset_train[0]['right_image'].unsqueeze(0)
             
+        if 'segmentation' in self.tasks:
+            self.segmentation_class_mappings = dataset_train.segmentation_class_mappings
+            logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')    
+            
         logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
         dataset_val_length = len(dataset_val) if dataset_val else 0
         logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
@@ -254,7 +258,10 @@ class Trainer(BaseProcessor):
         )
 
     def _save_model(self):
-        logger.info('Saving best model to mlflow')        
+        logger.subheader('Model Saving to MLflow')
+        
+        self.model.to('cpu')
+        self.model.eval()
         
         with torch.no_grad():
             if 'disparity' not in self.tasks: signature_output_example = self.model(self.signature_input_example)
@@ -268,8 +275,6 @@ class Trainer(BaseProcessor):
             if os.path.exists(model_state_path):
                 state_dict = torch.load(model_state_path)
                 self.model.load_state_dict(state_dict['model_state_dict'])
-                self.model.to('cpu')
-                self.model.eval()
                 
                 mlflow.pytorch.log_model(
                     pytorch_model=self.model,
@@ -277,6 +282,8 @@ class Trainer(BaseProcessor):
                     code_paths=['models/'],
                     signature=signature
                 )
+                
+                logger.info(f'Logged best {task_mode} model.')
 
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()

@@ -49,11 +49,8 @@ class Tester(BaseProcessor):
         logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
         
         if 'segmentation' in self.tasks:
-            self.segmentation_class_mappings = dataset_test.class_mappings
-            self.n_classes['segmentation'] = len(self.segmentation_class_mappings) 
+            self.segmentation_class_mappings = dataset_test.segmentation_class_mappings
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')
-        if 'disparity' in self.tasks:
-            self.n_classes['disparity'] = 1
             
     def _load_models(self, task_mode: str) -> None:
         logger.subheader('Loading Model')

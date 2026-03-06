@@ -1,7 +1,7 @@
 description: Debugging Multi Task Segmentation and Disparity with Knowledge Distillation
 
 data:
-  dataset: data.datasets.EndoVis17
+  dataset: data.datasets.OverfitDataset
   batch_size: 2
 
 training:

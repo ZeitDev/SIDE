@@ -132,7 +132,7 @@ class OverfitDataset(BaseDataset):
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
                 
-            self.class_mappings = {v: k for k, v in name2id.items()}
+            self.segmentation_class_mappings = {v: k for k, v in name2id.items()}
         
     def _get_file_names(self, subset_path: str) -> List[str]:
         left_images_path = os.path.join(subset_path, 'input', 'left_images')
