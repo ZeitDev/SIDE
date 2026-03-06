@@ -29,13 +29,11 @@ config = helpers.deep_merge(experiment_config, base_config)
 data_config = config['data']
 dataset_class = load(data_config['dataset'])
 train_transforms = build_transforms(config, mode='train')
-train_subsets = dataset_class(mode='train').get_all_subset_names()
 
 dataset_train = dataset_class(
     mode='train',
     transforms=train_transforms,
-    tasks=config['training']['tasks'],
-    subset_names=train_subsets
+    tasks=config['training']['tasks']
 )
 dataloader_train = DataLoader(
     dataset_train,

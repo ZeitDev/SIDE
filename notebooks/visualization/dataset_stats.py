@@ -1,6 +1,6 @@
 #%%
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append(os.path.dirname('../../'))
 
 import json
 from pathlib import Path
@@ -20,7 +20,7 @@ BASE_DATA_DIR = Path("/data/Zeitler/SIDED/EndoVis17/raw")
 TRAIN_DIR = BASE_DATA_DIR / "train"
 TEST_DIR = BASE_DATA_DIR / "test"
 # The mapping file is expected in the training directory.
-MAPPINGS_PATH = BASE_DATA_DIR / "instrument_type_mapping.json"
+MAPPINGS_PATH = BASE_DATA_DIR / "mapping.json"
 
 #%%
 def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFrame:
@@ -82,6 +82,34 @@ def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFra
             
     return pd.DataFrame(records)
 
+
+def extract_seq_id(seq_name):
+    """
+    Extract the numeric sequence ID from a sequence folder name.
+    """
+    digits = ''.join(filter(str.isdigit, str(seq_name)))
+    return int(digits) if digits else -1
+
+
+def aggregate_split_pixel_counts(
+    counts_df: pd.DataFrame,
+    split_config: dict[str, list[int]],
+    split_name: str
+) -> pd.DataFrame:
+    """
+    Aggregate class-wise pixel counts for a named train/val/test split.
+    """
+    records = []
+
+    for split_label, sequence_ids in split_config.items():
+        split_df = counts_df[counts_df["seq_id"].isin(sequence_ids)]
+        split_agg = split_df.groupby("instrument", as_index=False)["pixel_count"].sum()
+        split_agg["subset"] = split_label
+        split_agg["split_name"] = split_name
+        records.append(split_agg)
+
+    return pd.concat(records, ignore_index=True)
+
 # Load instrument mappings
 try:
     with open(MAPPINGS_PATH) as f:
@@ -91,9 +119,16 @@ except FileNotFoundError:
     instrument_mappings = {}
 
 # Process both train and test sets
+train_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count"])
+test_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count"])
+
 if instrument_mappings:
     train_counts_df = get_pixel_counts(TRAIN_DIR, instrument_mappings)
     test_counts_df = get_pixel_counts(TEST_DIR, instrument_mappings)
+else:
+    raise FileNotFoundError(
+        f"Instrument mapping file not found or empty: {MAPPINGS_PATH}"
+    )
 
 #%%
 # --- Aggregate and Display Results ---
@@ -210,12 +245,6 @@ folds_config = {
 }
 all_seq_ids = set(range(1, 11))
 
-# Extract numeric ID from sequence name to match fold definitions
-# We assume sequence folder names contain the ID (e.g., 'seq_1', 'instrument_dataset_10')
-def extract_seq_id(seq_name):
-    digits = ''.join(filter(str.isdigit, str(seq_name)))
-    return int(digits) if digits else -1
-
 # Create a column for sequence ID to facilitate filtering
 combined_counts_df['seq_id'] = combined_counts_df['sequence'].apply(extract_seq_id)
 
@@ -279,5 +308,50 @@ fig_total_cv = px.bar(
 )
 fig_total_cv.update_layout(yaxis_title="Total Pixels")
 fig_total_cv.show()
+
+# %%
+# --- Custom Train / Val / Test Split Comparison ---
+
+# Add more named split definitions here to compare alternative train/val/test setups.
+custom_split_configs = {
+    "Split A": {
+        "Train": [7, 8, 1, 2, 3, 4],
+        "Val": [5, 6],
+        "Test": [9, 10],
+    },
+}
+
+custom_split_records = []
+
+for split_name, split_config in custom_split_configs.items():
+    custom_split_records.append(
+        aggregate_split_pixel_counts(combined_counts_df, split_config, split_name)
+    )
+
+custom_splits_df = pd.concat(custom_split_records, ignore_index=True)
+
+fig_custom_splits = px.bar(
+    custom_splits_df,
+    x="instrument",
+    y="pixel_count",
+    color="subset",
+    barmode="group",
+    facet_col="split_name",
+    title="Class Pixel Counts for Custom Train / Val / Test Splits",
+    labels={
+        "instrument": "Instrument",
+        "pixel_count": "Total Pixels",
+        "subset": "Subset",
+        "split_name": "Split Definition",
+    },
+    category_orders={"subset": ["Train", "Val", "Test"]},
+)
+
+fig_custom_splits.update_xaxes(tickangle=-45)
+fig_custom_splits.for_each_annotation(
+    lambda a: a.update(text=a.text.split("=")[-1])
+)
+fig_custom_splits.update_layout(yaxis_title="Total Pixels")
+fig_custom_splits.show()
 
 # %%

@@ -79,7 +79,9 @@ class MultiTaskIter(TrainDataLoaderIter):
 print(f'LR Finder for configuration: {EXPERIMENT}')
 
 dataset_class = load(config['data']['dataset'])
-trainer = Trainer(config, train_subsets=dataset_class(mode='train', config=config).get_all_subset_names())
+train_transforms = helpers.build_transforms(config, mode='train')
+
+trainer = Trainer(config, train_subsets=dataset_class(mode='train', config=config, transforms=train_transforms))
 model = ModelInputWrapper(trainer.model)
 raw_criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
 criterion = AutomaticWeightedLossWraper(raw_criterion).to('cuda')

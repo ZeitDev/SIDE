@@ -2,7 +2,7 @@ description: Overfit test for disparity
 
 data:
   dataset: data.datasets.OverfitDataset
-  cross_validation: true
+  validation: true
 
   transforms:
     train:

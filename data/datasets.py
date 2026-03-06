@@ -9,32 +9,31 @@ from torch.utils.data import Dataset
 import albumentations as A
 
 class BaseDataset(Dataset):
-    def __init__(self, config: Dict[str, Any], root_path: str, mode: str = 'train', transforms: Optional[A.Compose] = None, subset_names: Optional[List[str]] = None):
+    """
+    Expects the following dataset directory structure:
+    root_path/
+        train/
+            subset_1/
+            subset_2/
+            ...
+        val/
+            subset_3/
+            ...
+        test/
+            subset_4/
+            ...
+    """
+    
+    def __init__(self, config: Dict[str, Any], root_path: str, mode: str = 'train', transforms: Optional[A.Compose] = None):
         self.config = config
         self.root_path = root_path
         self.mode = mode
-        self.subset_names = subset_names
         self.transforms = transforms
         
         self.class_mappings = None
         
         self._get_class_mappings()
         self._load_samples()
-        
-    def get_all_subset_names(self) -> List[str]:
-        """
-        Expects the following dataset directory structure:
-        root_path/
-            train/
-                subset_1/
-                subset_2/
-                ...
-            test/
-                subset_1/
-                ...
-        """
-        mode_path = os.path.join(self.root_path, self.mode)
-        return sorted([d for d in os.listdir(mode_path) if os.path.isdir(os.path.join(mode_path, d))])
     
     def _get_class_mappings(self) -> Optional[Dict[int, str]]:
         """
@@ -62,10 +61,8 @@ class BaseDataset(Dataset):
     def _load_samples(self) -> None:
         mode_path = os.path.join(self.root_path, self.mode)
         
-        if self.subset_names is None: self.subset_names = self.get_all_subset_names()
-            
         self.sample_paths = []
-        for subset_name in self.subset_names:
+        for subset_name in sorted(os.listdir(mode_path)):
             subset_path = os.path.join(mode_path, subset_name)
             file_names = self._get_file_names(subset_path)
             
@@ -122,9 +119,9 @@ class BaseDataset(Dataset):
         return data
     
 class OverfitDataset(BaseDataset):
-    def __init__(self, config: Dict[str, Any], mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None, subset_names: Optional[list[str]] = None):
+    def __init__(self, config: Dict[str, Any], mode: str = 'train', transforms: Optional[A.Compose] = None, tasks: Optional[Dict[str, Any]] = None):
         root_path = '/data/Zeitler/SIDED/OverfitDataset'
-        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
+        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms)
         
     def _get_class_mappings(self) -> None:
         if self.config['training']['tasks']['segmentation']['enabled']:
@@ -159,9 +156,9 @@ class OverfitDataset(BaseDataset):
         return sample_paths
 
 class EndoVis17(BaseDataset):
-    def __init__(self, config: Dict[str, Any], mode: str = 'train',  transforms: Optional[A.Compose] = None, subset_names: Optional[list[str]] = None):
+    def __init__(self, config: Dict[str, Any], mode: str = 'train',  transforms: Optional[A.Compose] = None):
         root_path = '/data/Zeitler/SIDED/EndoVis17/processed'
-        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
+        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms)
         
     def _get_class_mappings(self) -> None:
         if self.config['training']['tasks']['segmentation']['enabled']:
@@ -193,22 +190,6 @@ class EndoVis17(BaseDataset):
             if self.config['training']['tasks']['disparity']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['disparity']['knowledge_distillation']['name'] == 'offline':
                 sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', 'disparity_128_256_256', file_name.replace('.png', '.pt'))
             
-        return sample_paths
-    
-class Scared(BaseDataset):
-    def __init__(self, config: Dict[str, Any], mode: str = 'train',  transforms: Optional[A.Compose] = None, subset_names: Optional[list[str]] = None):
-        root_path = '/data/Zeitler/SIDED/SCARED/processed'
-        super().__init__(config=config, root_path=root_path, mode=mode, transforms=transforms, subset_names=subset_names)
-        
-    def _get_file_names(self, subset_path: str) -> List[str]:
-        return sorted(os.listdir(subset_path))
-    
-    def _get_sample_paths(self, subset_path: str, file_name: str) -> Dict[str, str]:
-        sample_paths = {}
-        sample_paths['left_image'] = os.path.join(subset_path, file_name, 'left_rectified.png')
-        sample_paths['right_image'] = os.path.join(subset_path, file_name, 'right_rectified.png')
-        sample_paths['disparity'] = os.path.join(subset_path, file_name, 'disparity.png')
-        
         return sample_paths
     
     

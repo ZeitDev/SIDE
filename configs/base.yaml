@@ -3,7 +3,7 @@ description: Base configuration
 # --- Data Configuration ---
 data:
   dataset: data.datasets.EndoVis17
-  cross_validation: true
+  validation: true
 
   num_of_classes:
     segmentation: 2

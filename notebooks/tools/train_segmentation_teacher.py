@@ -58,21 +58,11 @@ dataset_class = helpers.load(data_config['dataset'])
 train_transforms = build_transforms(config, mode='train')
 val_transforms = build_transforms(config, mode='test')
 
-all_subsets = dataset_class(mode='train', config=config).get_all_subset_names()
-random.shuffle(all_subsets)
-if data_config['validation']:
-    split_idx = int(0.8 * len(all_subsets))
-    train_subsets = all_subsets[:split_idx]
-    val_subsets = all_subsets[split_idx:]
-else:
-    train_subsets = all_subsets
-    val_subsets = None
 
 dataset_train = dataset_class(
     mode='train',
     config=config,
     transforms=train_transforms,
-    subset_names=train_subsets
 )
 dataloader_train = DataLoader(
     dataset_train,
@@ -84,22 +74,20 @@ dataloader_train = DataLoader(
 )
 helpers.check_dataleakage('train', dataset_train)
 
-if data_config['validation']:
-    dataset_val = dataset_class(
-        mode='train',
-        config=config,
-        transforms=val_transforms,
-        subset_names=val_subsets
-    )
-    dataloader_val = DataLoader(
-        dataset_val,
-        batch_size=data_config['batch_size'],
-        shuffle=False,
-        num_workers=data_config['num_workers'],
-        pin_memory=data_config['pin_memory'],
-        persistent_workers=False
-    )
-    helpers.check_dataleakage('train', dataset_val)
+dataset_val = dataset_class(
+    mode='val',
+    config=config,
+    transforms=val_transforms,
+)
+dataloader_val = DataLoader(
+    dataset_val,
+    batch_size=data_config['batch_size'],
+    shuffle=False,
+    num_workers=data_config['num_workers'],
+    pin_memory=data_config['pin_memory'],
+    persistent_workers=False
+)
+helpers.check_dataleakage('val', dataset_val)
 
 test_transforms = build_transforms(config, mode='test')
 dataset_test = dataset_class(

@@ -120,9 +120,11 @@ def logits2disparity(outputs: torch.Tensor, size: Tuple[int, int]) -> torch.Tens
     return predictions
 
 def check_dataleakage(mode, dataset):
-    other_mode = 'train' if mode == 'test' else 'test'
+    excluded_modes = ['train', 'val', 'test']
+    excluded_modes.remove(mode)
+    
     assert all(mode in sample['left_image'] for sample in dataset.sample_paths), f'All samples in {mode} dataset should contain "{mode}" in their path'
-    assert not any(other_mode in sample['left_image'] for sample in dataset.sample_paths), f'No samples in {mode} dataset should contain "{other_mode}" in their path'
+    assert not any(other_mode in sample['left_image'] for sample in dataset.sample_paths for other_mode in excluded_modes), f'No samples in {mode} dataset should contain any of {excluded_modes} in their path'
 
 def upsample_logits(logits: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
     upsampled_logits = F.interpolate(

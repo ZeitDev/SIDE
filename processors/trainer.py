@@ -5,7 +5,7 @@ from typing import cast, Any, List, Dict, Optional
 
 import torch
 import mlflow
-from torch.utils.data import DataLoader 
+from torch.utils.data import DataLoader, ConcatDataset
 from mlflow.models.signature import infer_signature
 
 from utils import helpers
@@ -66,10 +66,8 @@ class MetricsTracker:
 
 
 class Trainer(BaseProcessor):
-    def __init__(self, config: Dict[str, Any], train_subsets: List[str], val_subsets: Optional[List[str]] = None):
+    def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.train_subsets = train_subsets
-        self.val_subsets = val_subsets
         self._load_data()
         self._load_model()
         self._load_teachers()
@@ -86,13 +84,13 @@ class Trainer(BaseProcessor):
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
         train_transforms = build_transforms(self.config, mode='train')
-        val_transforms = build_transforms(self.config, mode='test')
+        val_mode = 'test' if data_config['validation'] else 'train'
+        val_transforms = build_transforms(self.config, mode=val_mode)
         
         dataset_train = dataset_class(
             mode='train',
             config=self.config,
             transforms=train_transforms,
-            subset_names=self.train_subsets
         )
         self.dataloader_train = DataLoader(
             dataset_train,
@@ -105,22 +103,35 @@ class Trainer(BaseProcessor):
         helpers.check_dataleakage('train', dataset_train)
         
         dataset_val = dataset_class(
-            mode='train',
+            mode='val',
             config=self.config,
             transforms=val_transforms,
-            subset_names=self.val_subsets
-        ) if self.val_subsets else None
-        if dataset_val:
-            self.dataloader_val = DataLoader(
-                dataset_val,
+        )
+        self.dataloader_val = DataLoader(
+            dataset_val,
+            batch_size=data_config['batch_size'],
+            shuffle=False,
+            num_workers=data_config['num_workers'],
+            pin_memory=data_config['pin_memory'],
+            persistent_workers=False
+        )
+        helpers.check_dataleakage('val', dataset_val)
+        
+        if not data_config['validation']:
+            dataset_full = ConcatDataset([dataset_train, dataset_val])
+            self.dataloader_train = DataLoader(
+                dataset_full,
                 batch_size=data_config['batch_size'],
-                shuffle=False,
+                shuffle=True,
                 num_workers=data_config['num_workers'],
                 pin_memory=data_config['pin_memory'],
                 persistent_workers=False
             )
-            helpers.check_dataleakage('train', dataset_val)
             
+        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
+        dataset_val_length = len(dataset_val) if data_config['validation'] else 0
+        logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
+        
         self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
         if 'disparity' in self.tasks: self.signature_input_example_right = dataset_train[0]['right_image'].unsqueeze(0)
             
@@ -128,9 +139,6 @@ class Trainer(BaseProcessor):
             self.segmentation_class_mappings = dataset_train.segmentation_class_mappings
             logger.info(f'Class Mappings for Segmentation Task: {self.segmentation_class_mappings}')    
             
-        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
-        dataset_val_length = len(dataset_val) if dataset_val else 0
-        logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
         
     def _load_model(self) -> None:
         logger.subheader('Loading Model')
@@ -429,10 +437,9 @@ class Trainer(BaseProcessor):
         del self.optimizer
         del self.scheduler
             
-        return best_val_epoch_metrics
     
-    def train_without_validation(self) -> None:
-        logger.header('Starting Training Loop without Validation')
+    def full_train(self) -> None:
+        logger.header('Starting Full Training Loop without Validation')
         
         epochs = self.config['training']['epochs']
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)

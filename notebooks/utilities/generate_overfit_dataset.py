@@ -6,7 +6,7 @@ dataset_path = Path('/data/Zeitler/SIDED/EndoVis17/processed')
 overfit_path = Path('/data/Zeitler/SIDED/OverfitDataset')
 
 
-for mode in ['train', 'test']:
+for mode in ['train', 'val', 'test']:
     source_subset = dataset_path / 'train' / 'instrument_dataset_1'
     target_subsets = [overfit_path / mode / f'subset_{i}' for i in [1, 2]]
     
