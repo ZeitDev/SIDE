@@ -10,7 +10,7 @@ class DisparityMetric:
         self.total_error = torch.tensor(0.0, device=self.device)
         self.total_valid_pixels = torch.tensor(0.0, device=self.device)
 
-    def update(self, output_logits: torch.Tensor, targets: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
+    def update(self, outputs: torch.Tensor, targets: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
         """
         output_logits: Predicted disparity in logits.
         targets: Ground truth disparity in [px].
@@ -18,12 +18,12 @@ class DisparityMetric:
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
-            predictions = logits2disparity(output_logits, size=targets.shape[2:]) * self.max_disparity
-            targets = targets * self.max_disparity
-            
-            valid_mask = targets != 0
+            outputs_px = outputs * self.max_disparity
+            targets_px = targets * self.max_disparity
 
-            batch_error_sum = self.get_batch_error_sum(predictions, targets, valid_mask, baseline, focal_length)
+            valid_mask = targets_px != 0
+
+            batch_error_sum = self.get_batch_error_sum(outputs_px, targets_px, valid_mask, baseline, focal_length)
 
             self.total_error += batch_error_sum
             self.total_valid_pixels += valid_mask.sum()

@@ -10,8 +10,8 @@
             "args": ["--config", "configs/debug.yaml"],
             "justMyCode": true,
             "rules": [
-                    {"path": "${workspaceFolder}/utils/*.py", "include": false},
-                    {"path": "${workspaceFolder}/models/combiner.py", "include": false},
+                    // {"path": "${workspaceFolder}/utils/*.py", "include": false},
+                    // {"path": "${workspaceFolder}/models/combiner.py", "include": false},
             ]
         },
         {

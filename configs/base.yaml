@@ -10,7 +10,7 @@ data:
     disparity: 1
   max_disparity: 512
 
-  batch_size: 8
+  batch_size:  2
   num_workers: 4
   pin_memory: true
 
@@ -96,6 +96,7 @@ training:
       criterion:
         name: criterions.disparity.MaskedSmoothL1Loss
         params:
+          max_disparity: 512
           ignore_value: 0
           reduction: mean
           beta: 1.0

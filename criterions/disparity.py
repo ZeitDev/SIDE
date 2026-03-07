@@ -3,17 +3,19 @@ import torch.nn.functional as F
 from utils.helpers import logits2disparity
 
 class MaskedSmoothL1Loss(nn.Module):
-    def __init__(self, ignore_value=0, reduction='mean', beta=1.0):
+    def __init__(self, max_disparity: float = 512, ignore_value: float = 0, reduction: str = 'mean', beta: float = 1.0):
         super().__init__()
+        self.max_disparity = max_disparity
         self.ignore_value = ignore_value
         self.reduction = reduction
         self.beta = beta
+
+    def forward(self, outputs, targets):
+        outputs_px = outputs * self.max_disparity
+        targets_px = targets * self.max_disparity
         
-    def forward(self, output_logits, targets):
-        predictions = logits2disparity(output_logits, size=targets.shape[2:])
-        
-        valid_mask = (targets != self.ignore_value).float()
-        loss = F.smooth_l1_loss(predictions, targets, reduction='none', beta=self.beta)
+        valid_mask = (targets_px != self.ignore_value).float()
+        loss = F.smooth_l1_loss(outputs_px, targets_px, reduction='none', beta=self.beta)
         loss = loss * valid_mask
         
         if self.reduction == 'mean':
@@ -25,7 +27,7 @@ class MaskedSmoothL1Loss(nn.Module):
             return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature=1.0):
+    def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='none', log_target=False)

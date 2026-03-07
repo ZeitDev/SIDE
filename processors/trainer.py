@@ -51,7 +51,6 @@ class MetricsTracker:
     def get_metrics(self, epoch: int, batch_idx: int, lr: float) -> Dict[str, float]:
         metrics = {}
         metrics['epoch_train'] = epoch + (batch_idx / self.dataloader_len)
-        metrics['epoch_validation'] = epoch
         metrics['optimization/training/loss/auto_weighted_sum'] = self.running_loss_weighted / self.log_interval
         
         for task in self.criterion_keys:
@@ -319,6 +318,7 @@ class Trainer(BaseProcessor):
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
                 
                 with torch.no_grad():
                     task_weights = {task: torch.exp(-s_param).item() for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items()}
@@ -379,8 +379,14 @@ class Trainer(BaseProcessor):
         return epoch_metrics
     
     def train(self) -> Dict[str, float]:
-        logger.header('Starting Training Loop')
+        logger.header('Training Loop')
         
+        logger.info('Get pretrained Baseline')
+        val_epoch_metrics = self._validate_epoch(epoch=0)
+        mlflow.log_metric('epoch_validation', 0, step=self.metrics_tracker.global_step)
+        mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
+        
+        logger.info('Start Training')
         best_val_epoch = -1
         best_val_loss = float('inf')
         best_val_dice = float('-inf')
@@ -396,11 +402,8 @@ class Trainer(BaseProcessor):
             self._train_epoch(epoch=epoch)
             
             val_epoch_metrics = self._validate_epoch(epoch=epoch)
+            mlflow.log_metric('epoch_validation', epoch, step=self.metrics_tracker.global_step)
             mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
-            
-            val_loss = val_epoch_metrics['optimization/validation/loss/auto_weighted_sum']
-            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau): self.scheduler.step(val_loss)
-            else: self.scheduler.step()
             
             if 'segmentation' in self.tasks:
                 val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
@@ -443,11 +446,6 @@ class Trainer(BaseProcessor):
         epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
         for epoch in epochs_tqdm:
             self._train_epoch(epoch=epoch)
-            
-            if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                self.scheduler.step(self.metrics_tracker.loss_for_scheduler)
-            else:
-                self.scheduler.step()
             
             log_vram(f'Full Trainer Epoch {epoch}')
             
