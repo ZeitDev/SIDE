@@ -8,6 +8,7 @@ import yaml
 import torch.nn as nn
 from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
+from data.transforms import build_transforms
 from utils import helpers
 from utils.helpers import load
 from processors.trainer import Trainer
@@ -18,7 +19,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'segmentation_teacher'
+EXPERIMENT = 'debug'
 START_LR = 1e-7
 END_LR = 10
 NUM_ITER = 100
@@ -77,10 +78,8 @@ class MultiTaskIter(TrainDataLoaderIter):
 # %%
 print(f'LR Finder for configuration: {EXPERIMENT}')
 
-dataset_class = load(config['data']['dataset'])
-train_transforms = helpers.build_transforms(config, mode='train')
 
-trainer = Trainer(config, train_subsets=dataset_class(mode='train', config=config, transforms=train_transforms))
+trainer = Trainer(config)
 model = ModelInputWrapper(trainer.model)
 raw_criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
 criterion = AutomaticWeightedLossWraper(raw_criterion).to('cuda')
@@ -115,7 +114,6 @@ lr_finder.reset()
    10^-3 = 1e-3 = 0.001
 
 2. MINOR TICKS (The Multipliers):
-   The little unlabeled lines between major ticks DO NOT change the exponent.
    They are linear multipliers (2x, 3x, 4x...) of the major tick to their left.
    
    Example: Reading the space between 10^-4 and 10^-3:
@@ -136,4 +134,8 @@ RULE OF THUMB (Leslie Smith):
 Find the absolute lowest loss value before the graph spikes upwards. 
 Take that learning rate and divide it by 10. 
 (Or find the steepest, longest downward slope and pick the middle point).
+
+
+DIFFERENT BATCH SIZES:
+Rule of thumb: LR_new = LR_old * (BatchSize_new / BatchSize_old)
 """

@@ -20,7 +20,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Debug running per step loss and metric logging in MLflow
+# TODO: Split dynamic UNet into a Segmentation UNet and a Disparity UNet with a cost volume, cause disparity task is failing
 # TODO: FIX TEST METRIC CASES
 
 def main():
@@ -51,16 +51,16 @@ def main():
             tags = {}
             tags['parent_name'] = experiment_name
             tags['run_type'] = 'root'
+            tags['description'] = config['description']
             helpers.mlflow_log_run(config, tags=tags)
-            mlflow.set_tag('mlflow.note.content', config['description'])
 
             logger.header('Mode: Val Training' if config['data']['validation'] else 'Mode: Full Training')
             with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
                 tags['parent_name'] = run.info.run_name
                 tags['run_type'] = 'train'
                 tags['run_mode'] = 'validation' if config['data']['validation'] else 'full'
+                tags['description'] = config['description']
                 helpers.mlflow_log_run(config, tags=tags)
-                mlflow.set_tag('mlflow.note.content', config['description'])
                     
                 trainer = Trainer(config)
                 if config['data']['validation']: trainer.train()
@@ -70,8 +70,8 @@ def main():
             with mlflow.start_run(run_name=f'{run.info.run_name}/test', nested=True) as test_run:
                 tags['parent_name'] = run.info.run_name
                 tags['run_type'] = 'test'
+                tags['description'] = config['description']
                 helpers.mlflow_log_run(config, tags=tags)
-                mlflow.set_tag('mlflow.note.content', config['description'])
                 
                 log_vram('Testing Start')
                 tester = Tester(config, run_id=train_run.info.run_id)

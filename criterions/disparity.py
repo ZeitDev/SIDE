@@ -2,29 +2,34 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils.helpers import logits2disparity
 
+class MaskedL1Loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, outputs, targets):
+        valid_mask = targets > 0
+        valid_outputs = outputs[valid_mask]# * 512.0
+        valid_targets = targets[valid_mask]# * 512.0
+        
+        loss = F.l1_loss(valid_outputs, valid_targets, reduction='mean')
+        
+        return loss
+
 class MaskedSmoothL1Loss(nn.Module):
-    def __init__(self, max_disparity: float = 512, ignore_value: float = 0, reduction: str = 'mean', beta: float = 1.0):
+    def __init__(self, max_disparity: float = 512, ignore_value: float = 0, beta: float = 1.0):
         super().__init__()
         self.max_disparity = max_disparity
         self.ignore_value = ignore_value
-        self.reduction = reduction
         self.beta = beta
 
-    def forward(self, outputs, targets):
-        outputs_px = outputs * self.max_disparity
-        targets_px = targets * self.max_disparity
-        
-        valid_mask = (targets_px != self.ignore_value).float()
-        loss = F.smooth_l1_loss(outputs_px, targets_px, reduction='none', beta=self.beta)
+    def forward(self, outputs, targets):      
+        valid_mask = (targets != self.ignore_value).float()
+        loss = F.smooth_l1_loss(outputs, targets, reduction='none', beta=self.beta)
         loss = loss * valid_mask
         
-        if self.reduction == 'mean':
-            valid_count = valid_mask.sum()
-            return loss.sum() / valid_count
-        elif self.reduction == 'sum':
-            return loss.sum()
-        else:
-            return loss
+        valid_count = valid_mask.sum()
+        loss = loss.sum() / valid_count
+        return loss
         
 class PixelWiseKLDivLoss(nn.Module):
     def __init__(self, temperature: float = 1.0):

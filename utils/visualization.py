@@ -92,7 +92,7 @@ def _get_disparity_error_overlay(image: np.ndarray, target: np.ndarray, output: 
     # We want Red to indicate a specific error in PIXELS (e.g., 10px).
     # Since input maps are normalized [0, 1], we map the pixel threshold to this range.
     error_threshold_pixels = 3.0
-    max_vis_error = error_threshold_pixels / max_disparity if max_disparity > 0 else 0.1
+    max_vis_error = error_threshold_pixels / max_disparity
     
     error_normalized = np.clip(error_map / max_vis_error, 0, 1)
     
@@ -115,7 +115,7 @@ def _get_disparity_error_overlay(image: np.ndarray, target: np.ndarray, output: 
         
     return overlay
 
-def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], num_of_segmentation_classes: int = 2, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 1.0) -> Figure:
+def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor], num_of_segmentation_classes: int = 2, epoch: Optional[int] = None, index: Optional[int] = None, max_disparity: float = 512.0) -> Figure:
     tasks = [t for t in ['segmentation', 'disparity'] if t in targets]
     n_rows = len(tasks)
     
@@ -131,7 +131,7 @@ def get_multitask_visuals(image: torch.Tensor, targets: Dict[str, torch.Tensor],
     
     if n_rows == 1: ax = np.expand_dims(ax, axis=0)
 
-    fig.suptitle(f'Validation Overlay | Epoch {epoch} | Index {index}', fontsize=16)
+    fig.suptitle(f'Overlay | Epoch {epoch} | Index {index}', fontsize=16)
     
     for i, task in enumerate(tasks):
         if task == 'segmentation':

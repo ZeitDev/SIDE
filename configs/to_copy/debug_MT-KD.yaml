@@ -2,10 +2,9 @@ description: Debugging Multi Task Segmentation and Disparity with Knowledge Dist
 
 data:
   dataset: data.datasets.EndoVis17
-  batch_size: 2
 
 training:
-  epochs: 1
+  epochs: 25
 
   optimizer:
     name: torch.optim.AdamW
@@ -16,8 +15,8 @@ training:
     name: torch.optim.lr_scheduler.OneCycleLR
     params:
       max_lr: 2.0e-4
-      epochs: 50
-      steps_per_epoch: 400
+      epochs: 25
+      steps_per_epoch: 675
       pct_start: 0.3
       anneal_strategy: cos
 

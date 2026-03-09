@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from typing import Dict
 
@@ -39,13 +40,13 @@ class AttachHead(nn.Module):
             self.intercept_head = nn.Sequential(
                 nn.Conv2d(n_output_channels, intercept_channels, kernel_size=3, padding=1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(intercept_channels, intercept_channels, kernel_size=1)
+                nn.Conv2d(intercept_channels, intercept_channels, kernel_size=1),
             )
             
     
     def forward(self, features, feature_right=None) -> torch.Tensor:
         if not self.is_stereo:
-            x = self.decoder(features, feature_right)
+            x = self.decoder(features)
             x = self.head(x)
             
             return x
@@ -53,6 +54,7 @@ class AttachHead(nn.Module):
             x, intercept_features = self.decoder(features, feature_right)
             
             x = self.head(x)
+            x = F.relu(x, inplace=True)
             intercept_features = self.intercept_head(intercept_features)
             
             return {

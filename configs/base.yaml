@@ -80,7 +80,7 @@ training:
           to_onehot_y: true
           include_background: false
       decoder:
-        name: models.decoders.dynamic_unet.Decoder
+        name: models.decoders.segmentation.SegmentationDecoder
         params: {}
       knowledge_distillation:
         enabled: false
@@ -98,13 +98,12 @@ training:
         params:
           max_disparity: 512
           ignore_value: 0
-          reduction: mean
           beta: 1.0
       decoder:
-        name: models.decoders.dynamic_unet.Decoder
+        name: models.decoders.disparity.DisparityDecoder
         params:
           is_stereo: true
-          stop_increases_at: 1
+          max_disparity: 512
           intercept_at: 4
           intercept_channels: 128 # matching FoundationStereo V'_c logits
       knowledge_distillation:

@@ -249,6 +249,7 @@ class Trainer(BaseProcessor):
             **optimizer_config['params'])
         logger.info(f'Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
         
+        # TODO: fix that scheduler works with OneCycleLR
         scheduler_config = self.config['training']['scheduler']
         SchedulerClass = load(scheduler_config['name'])
         self.scheduler = SchedulerClass(
@@ -401,8 +402,8 @@ class Trainer(BaseProcessor):
             
             self._train_epoch(epoch=epoch)
             
-            val_epoch_metrics = self._validate_epoch(epoch=epoch)
-            mlflow.log_metric('epoch_validation', epoch, step=self.metrics_tracker.global_step)
+            val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
+            mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
             mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
             
             if 'segmentation' in self.tasks:
@@ -411,7 +412,7 @@ class Trainer(BaseProcessor):
                     best_val_dice = val_dice
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
-                    mlflow.log_metric('best/segmentation/epoch', epoch, step=self.metrics_tracker.global_step)
+                    mlflow.log_metric('best/segmentation/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'disparity' in self.tasks:
@@ -420,7 +421,7 @@ class Trainer(BaseProcessor):
                     best_val_bad3 = val_bad3
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
-                    mlflow.log_metric('best/disparity/epoch', epoch, step=self.metrics_tracker.global_step)
+                    mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'segmentation' in self.tasks and 'disparity' in self.tasks:
@@ -429,7 +430,7 @@ class Trainer(BaseProcessor):
                     best_val_heuristic = val_heuristic
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
-                    mlflow.log_metric('best/combined/epoch', epoch, step=self.metrics_tracker.global_step)
+                    mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
             
             log_vram(f'Trainer Epoch {epoch}')

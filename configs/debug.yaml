@@ -2,32 +2,36 @@ description: Debugging Multi Task Segmentation and Disparity with Knowledge Dist
 
 data:
   dataset: data.datasets.EndoVis17
+  max_disparity: 512
 
 training:
-  epochs: 25
+  epochs: 150
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 2.0e-4
+      lr: 1.0e-4
+    encoder_lr_mod: 1.0
 
   scheduler:
-    name: torch.optim.lr_scheduler.OneCycleLR
+    name: torch.optim.lr_scheduler.LinearLR
     params:
-      max_lr: 2.0e-4
-      epochs: 25
-      steps_per_epoch: 675
-      pct_start: 0.3
-      anneal_strategy: cos
+      start_factor: 0.5
+      total_iters: 675
 
   tasks:
-    segmentation:
-      enabled: true
-      knowledge_distillation:
-        enabled: true
-        name: offline
     disparity:
       enabled: true
-      knowledge_distillation:
-        enabled: true
-        name: offline
+      criterion:
+        name: criterions.disparity.MaskedL1Loss
+        params: {}
+      decoder:
+        name: models.decoders.disparity.DisparityDecoder
+        params:
+          is_stereo: true
+          max_disparity: 512
+          intercept_at: 4
+          intercept_channels: 128 # matching FoundationStereo V'_c logits
+
+logging:
+  n_validation_images: 0

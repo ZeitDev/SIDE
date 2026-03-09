@@ -11,10 +11,13 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 import json
+import random
 import logging
 import datetime
 from tqdm import tqdm
 from typing import cast
+import numpy as np
+
 
 import mlflow
 from mlflow.models.signature import infer_signature
@@ -135,6 +138,14 @@ scheduler = SchedulerClass(
     **config['training']['scheduler']['params']
 )
 
+torch.cuda.empty_cache()
+seed = 42
+os.environ['PYTHONHASHSEED'] = str(seed)
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+
 # %%
 # Find Learning Rate
 if False:
@@ -212,8 +223,8 @@ with mlflow.start_run(run_name=run_datetime) as run:
     tags = {}
     tags['parent_name'] = config_name
     tags['run_type'] = 'root'
+    tags['description'] = config['description']
     helpers.mlflow_log_run(config, tags=tags)
-    mlflow.set_tag('mlflow.note.content', config['description'])
     
     with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
         tags['parent_name'] = run.info.run_name
@@ -248,7 +259,7 @@ with mlflow.start_run(run_name=run_datetime) as run:
                     average_loss = train_loss_running / train_log_interval
                     current_lr = optimizer.param_groups[0]['lr']
                     
-                    mlflow.log_metric('epoch', fractional_epoch, step=global_step)
+                    mlflow.log_metric('epoch_train', fractional_epoch, step=global_step)
                     mlflow.log_metric('optimization/training/loss', average_loss, step=global_step)
                     mlflow.log_metric('optimization/training/learning_rate', current_lr, step=global_step)
                     train_batch_tqdm.set_postfix({'loss': average_loss, 'lr': current_lr})
@@ -301,19 +312,20 @@ with mlflow.start_run(run_name=run_datetime) as run:
                 if dice_instrument > best_val_dice:
                     best_epoch = epoch
                     best_val_dice = dice_instrument
-                    best_metrics = {f'best/{k}': v for k, v in val_metrics.items()}
-                    best_metrics['best/optimization/validation/epoch'] = best_epoch
+                    best_metrics = {f'best/segmentation/{k.replace("/", "_")}': v for k, v in val_metrics.items()}
+                    best_metrics['best/segmentation/epoch'] = best_epoch + 1
+                    mlflow.log_metrics(best_metrics, step=global_step)
                     
                     torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
                     print(f'New best model saved with DICE Instrument: {best_val_dice:.4f}')
             else:
                 if epoch == EPOCHS - 1:
                     torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
-                    best_metrics = {'best/optimization/validation/epoch': epoch}
+                    best_metrics = {'best/segmentation/epoch': epoch + 1}
+                    mlflow.log_metrics(best_metrics, step=global_step)
                     print('No validation - model from last epoch saved as best model.')
             
-            mlflow.log_metric('epoch_raw', epoch, step=global_step)
-            mlflow.log_metric('epoch', float(epoch + 1), step=global_step)
+            mlflow.log_metric('epoch_validation', epoch + 1, step=global_step)
             print()
 
         state_dict = torch.load(os.path.join('.temp', 'model_state.pth'))
@@ -331,11 +343,8 @@ with mlflow.start_run(run_name=run_datetime) as run:
             code_paths=['models/'],
             signature=signature
         )
-        
-        mlflow.log_metrics(best_metrics)
 
     print('Training completed and best model logged to MLflow.')
-    
 
     with mlflow.start_run(run_name=f'{run.info.run_name}/test', nested=True) as test_run:
         tags['parent_name'] = run.info.run_name

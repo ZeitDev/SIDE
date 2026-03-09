@@ -60,8 +60,6 @@ class Bad3(DisparityMetric):
 
 class MAE(DisparityMetric):
     def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
-        if predictions.sum() == 0: predictions = predictions + 1e-6
-        
         depth_predictions = (focal_length * baseline) / predictions
         depth_targets = (focal_length * baseline) / targets
 
