@@ -322,6 +322,6 @@ def test_disparity_metrics():
     # Sum = 0.0 + 2.0 + 4.0 = 6.0
     # MAE = Sum / N_valid = 6.0 / 3 = 2.0
     
-    assert math.isclose(epe_result['EPE_pixel'], 64.0)
+    assert math.isclose(epe_result['EPE_px'], 64.0)
     assert math.isclose(bad3_result['Bad3_rate'], 2/3, rel_tol=1e-4)
     assert math.isclose(mae_result['MAE_mm'], 2.0)

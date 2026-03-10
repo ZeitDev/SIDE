@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.helpers import logits2disparity
@@ -8,6 +9,10 @@ class MaskedL1Loss(nn.Module):
 
     def forward(self, outputs, targets):
         valid_mask = targets > 0
+        
+        if valid_mask.sum() == 0:
+            return (outputs * 0.0).sum() 
+        
         valid_outputs = outputs[valid_mask]# * 512.0
         valid_targets = targets[valid_mask]# * 512.0
         
@@ -16,14 +21,17 @@ class MaskedL1Loss(nn.Module):
         return loss
 
 class MaskedSmoothL1Loss(nn.Module):
-    def __init__(self, max_disparity: float = 512, ignore_value: float = 0, beta: float = 1.0):
+    def __init__(self, max_disparity: float = 512, beta: float = 1.0):
         super().__init__()
         self.max_disparity = max_disparity
-        self.ignore_value = ignore_value
         self.beta = beta
 
     def forward(self, outputs, targets):      
-        valid_mask = (targets != self.ignore_value).float()
+        valid_mask = (targets > 0).float()
+        
+        if valid_mask.sum() == 0:
+            return (outputs * 0.0).sum() 
+        
         loss = F.smooth_l1_loss(outputs, targets, reduction='none', beta=self.beta)
         loss = loss * valid_mask
         
@@ -43,6 +51,9 @@ class PixelWiseKLDivLoss(nn.Module):
         
         targets = F.interpolate(targets, size=(H, W), mode='nearest-exact') # Sample down to 1/4 resolution
         valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
+        
+        if valid.sum() == 0:
+            return (student_logits * 0.0).sum()
         
         raw_teacher_probabilities = F.softmax(teacher_logits, dim=1)
         teacher_confidence = raw_teacher_probabilities.max(dim=1, keepdim=True)[0]

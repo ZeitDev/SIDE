@@ -39,6 +39,7 @@ class AutomaticWeightedLoss(nn.Module):
                 # logarithmic_variance = s [paper] = log(sigma_i^2): trainable, more numerically stable, avoids division by zero than only using sigma_i^2
                 # 0.5 * logarithmic_variance = log(sigma_i) [paper]: power rule of logarithms
                 # precision = 1/(sigma_i^2) [paper] = exp(-s): confidence in task i, exp conversion to ensure positivity and avoid division by zero
+                # ! precision==confidence: automatic weight in dashboard
                 # ! Important: Paper uses 1 * precision for classification tasks, and 0.5 * precision for regression tasks. Here we use 0.5 for all tasks for simplicity and because precision is trainable anyways.
                 # ! Important: Weight Decay should not be applied as optimizer wants to force logarithmic_variance to zero otherwise.
                 logarithmic_variance = self.logarithmic_variances[task]

@@ -54,7 +54,7 @@ class BaseProcessor:
             
         if tasks_config['disparity']['enabled']:
             self.metrics['disparity'] = {}
-            self.metrics['disparity']['EPE_pixel'] = EPE(max_disparity=self.config['data']['max_disparity'], device=self.device)
+            self.metrics['disparity']['EPE_px'] = EPE(max_disparity=self.config['data']['max_disparity'], device=self.device)
             self.metrics['disparity']['Bad3_rate'] = Bad3(max_disparity=self.config['data']['max_disparity'], device=self.device)
             self.metrics['disparity']['MAE_mm'] = MAE(max_disparity=self.config['data']['max_disparity'], device=self.device)
             logger.info('Initialized EPE, Bad3, and MAE metrics for disparity.')

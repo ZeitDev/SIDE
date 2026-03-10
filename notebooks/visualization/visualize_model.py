@@ -19,13 +19,14 @@ setup_environment(skip_cuda=True)
 
 # %%
 # Settings
-run = 'segmentation_teacher/260226:1718/train'
+run = 'debug/260309:1146/train'
+task_mode = 'disparity'
 
 # %%
 # Load model
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 model_run_id = helpers.get_model_run_id(run)
-model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model').to(device)
+model = mlflow.pytorch.load_model(f'runs:/{model_run_id}/best_model_{task_mode}').to(device)
 
 # %%
 # Load data
@@ -56,23 +57,27 @@ helpers.check_dataleakage('test', dataset_test)
 
 # %%
 # Visualize
-index = 400
+index = 500
 
 sample = dataset_test[index]
-outputs = model(sample['image'].unsqueeze(0).to(device), None)
-upsampled_logits = F.interpolate(
-    outputs.logits,
-    size=sample['segmentation'].shape[-2:],
-    mode='bilinear',
-    align_corners=False
-)
+# Segmentation Teacher
+# outputs = model(sample['image'].unsqueeze(0).to(device), None)
+# upsampled_logits = F.interpolate(
+#     outputs.logits,
+#     size=sample['segmentation'].shape[-2:],
+#     mode='bilinear',
+#     align_corners=False
+# )
+
+outputs = model(sample['image'].unsqueeze(0).to(device), sample['right_image'].unsqueeze(0).to(device))
 
 sample_targets = {}
 if 'segmentation' in sample: sample_targets['segmentation'] = sample['segmentation']
 if 'disparity' in sample: sample_targets['disparity'] = sample['disparity']
 
 sample_outputs = {}
-sample_outputs['segmentation'] = upsampled_logits.cpu().detach().squeeze()
+# sample_outputs['segmentation'] = upsampled_logits.cpu().detach().squeeze()
+sample_outputs['disparity'] = outputs['disparity'].cpu().detach().squeeze()
 
 sample_image = sample['image'].cpu().detach()
 

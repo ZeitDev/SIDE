@@ -18,10 +18,10 @@ class DisparityMetric:
         focal_length: Focal length in [px].
         """
         with torch.no_grad():
+            valid_mask = targets > 0
+            
             outputs_px = outputs * self.max_disparity
             targets_px = targets * self.max_disparity
-
-            valid_mask = targets_px != 0
 
             batch_error_sum = self.get_batch_error_sum(outputs_px, targets_px, valid_mask, baseline, focal_length)
 
@@ -42,17 +42,18 @@ class DisparityMetric:
 class EPE(DisparityMetric):
     def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
         diff = torch.abs(predictions - targets)
-        return diff[valid_mask].sum()
+        epe = diff[valid_mask].sum()
+        return epe
 
     def compute(self) -> Dict[str, float]:
-        return {'EPE_pixel': (self.total_error / self.total_valid_pixels).item()}
+        return {'EPE_px': (self.total_error / self.total_valid_pixels).item()}
 
 
 class Bad3(DisparityMetric):
     def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
         diff = torch.abs(predictions - targets)
-        bad_pixels = (diff > 3) & valid_mask
-        return bad_pixels.float().sum()
+        bad_pixels = ((diff > 3) & valid_mask).float().sum()
+        return bad_pixels
 
     def compute(self) -> Dict[str, float]:
         return {'Bad3_rate': (self.total_error / self.total_valid_pixels).item()}
@@ -60,13 +61,13 @@ class Bad3(DisparityMetric):
 
 class MAE(DisparityMetric):
     def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
-        depth_predictions = (focal_length * baseline) / predictions
+        depth_predictions = torch.clamp(((focal_length * baseline) / predictions), max=300.0)
         depth_targets = (focal_length * baseline) / targets
 
         abs_diff = torch.abs(depth_predictions - depth_targets)
-        batch_mae = abs_diff[valid_mask].sum()
+        mae = abs_diff[valid_mask].sum()
         
-        return batch_mae
+        return mae
 
     def compute(self) -> Dict[str, float]:
         return {'MAE_mm': (self.total_error / self.total_valid_pixels).item()}
