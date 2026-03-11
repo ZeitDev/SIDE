@@ -20,7 +20,8 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 
 # * TASKS
-# TODO: Split dynamic UNet into a Segmentation UNet and a Disparity UNet with a cost volume, cause disparity task is failing
+# TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall
+# TODO: Implement multi-scale cost volumes at every skip connection for disparity estimation
 # TODO: FIX TEST METRIC CASES
 
 def main():

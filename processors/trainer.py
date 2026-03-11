@@ -14,6 +14,7 @@ from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
 from criterions.automatic_weighted_loss import AutomaticWeightedLoss
+from criterions.automatic_weighted_loss import UnweightedSumLoss
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -225,6 +226,8 @@ class Trainer(BaseProcessor):
                 self.criterions[f'{task}_teacher'] = KdCriterionClass(**kd_criterion_config['params'])
                 logger.info(f'KD Criterion for task {task}: {kd_criterion_config["name"]} with params {kd_criterion_config["params"]}')
 
+        # *
+        self.unweighted_sum_loss = UnweightedSumLoss(self.criterions).to(self.device)
         self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
         optimizer_config = self.config['training']['optimizer']
         base_lr = optimizer_config['params']['lr']
@@ -314,7 +317,7 @@ class Trainer(BaseProcessor):
                         outputs[f'{task}_teacher'] = outputs[task]
                         targets[f'{task}_teacher'] = teacher_outputs
                 
-                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
+                loss, raw_task_losses = self.unweighted_sum_loss(outputs, targets)
                         
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -322,8 +325,9 @@ class Trainer(BaseProcessor):
                 self.scheduler.step()
                 
                 with torch.no_grad():
-                    task_weights = {task: torch.exp(-s_param).item() for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items()}
-                
+                    #task_weights = {task: torch.exp(-s_param).item() for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items()}
+                    task_weights = {task: 1.0 for task in self.tasks}
+                    
                 self.metrics_tracker.update(loss.item(), raw_task_losses, task_weights)
             
             if self.metrics_tracker.should_log():
@@ -350,7 +354,7 @@ class Trainer(BaseProcessor):
             with torch.no_grad():
                 outputs = self.model(left_images, right_images)
                 
-                loss, raw_task_losses = self.automatic_weighted_loss(outputs, targets)
+                loss, raw_task_losses = self.unweighted_sum_loss(outputs, targets)
                 total_loss_weighted += loss.item()
                 
                 self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
@@ -368,8 +372,9 @@ class Trainer(BaseProcessor):
                     total_raw_task_losses[task] += raw_task_loss
                 with torch.no_grad():
                     for task in self.tasks:
-                        s_param = self.automatic_weighted_loss.logarithmic_variances[task]
-                        total_task_weights[task] += torch.exp(-s_param).item()
+                        #s_param = self.automatic_weighted_loss.logarithmic_variances[task]
+                        #total_task_weights[task] += torch.exp(-s_param).item()
+                        total_task_weights[task] += 1.0
         
         epoch_metrics = self._compute_metrics(mode='validation')
         epoch_metrics['optimization/validation/loss/auto_weighted_sum'] = total_loss_weighted / len(self.dataloader_val)

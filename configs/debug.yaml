@@ -20,18 +20,14 @@ training:
       total_iters: 675
 
   tasks:
+    segmentation:
+      enabled: true
+      knowledge_distillation:
+        enabled: true
     disparity:
       enabled: true
-      criterion:
-        name: criterions.disparity.MaskedL1Loss
-        params: {}
-      decoder:
-        name: models.decoders.disparity.DisparityDecoder
-        params:
-          is_stereo: true
-          max_disparity: 512
-          intercept_at: 4
-          intercept_channels: 128 # matching FoundationStereo V'_c logits
+      knowledge_distillation:
+        enabled: true
 
 logging:
   n_validation_images: 0

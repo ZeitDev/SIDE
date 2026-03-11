@@ -51,11 +51,11 @@ training:
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 1.0e-3 # decoder and task heads learning rate
-    encoder_lr_mod: 0.1 # dont let pretrained encoder explode
+      lr: 1.0e-3 # decoder and task heads learning rate // [optuna]
+    encoder_lr_mod: 0.1 # dont let pretrained encoder explode [optuna]
 
   scheduler:
-    name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+    name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts # [change to cosine annealing with warmup?]
     params:
       T_0: 50
       T_mult: 1
@@ -94,11 +94,8 @@ training:
     disparity: 
       enabled: false
       criterion:
-        name: criterions.disparity.MaskedSmoothL1Loss
-        params:
-          max_disparity: 512
-          ignore_value: 0
-          beta: 1.0
+        name: criterions.disparity.MaskedL1Loss
+        params: {}
       decoder:
         name: models.decoders.disparity.DisparityDecoder
         params:

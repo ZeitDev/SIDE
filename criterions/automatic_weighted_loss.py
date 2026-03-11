@@ -47,3 +47,31 @@ class AutomaticWeightedLoss(nn.Module):
                 total_loss += (0.5 * precision * raw_task_loss) + (0.5 * logarithmic_variance)
                 
         return total_loss, raw_task_losses
+    
+class UnweightedSumLoss(nn.Module):
+    def __init__(self, criterions):
+        super().__init__()
+        self.criterions = criterions
+
+    def forward(self, outputs, targets):
+        total_loss = 0.0
+        raw_task_losses = {}
+        
+        for task, task_output in outputs.items():
+            if task in self.criterions and task in targets:
+                criterion = self.criterions[task]
+                
+                # Keep your exact same custom logic for the teacher
+                if 'disparity_teacher' in task:
+                    intercept_features = outputs['disparity_intercept_features']
+                    true_targets = targets['disparity']
+                    raw_task_loss = criterion(intercept_features, targets[task], true_targets)
+                else:
+                    raw_task_loss = criterion(task_output, targets[task])
+                    
+                raw_task_losses[task] = raw_task_loss.item()
+                
+                # No weights! Just standard addition
+                total_loss += raw_task_loss 
+                
+        return total_loss, raw_task_losses
