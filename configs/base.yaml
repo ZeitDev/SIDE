@@ -43,7 +43,6 @@ data:
           std: [0.229, 0.224, 0.225]
 
 
-
 # --- Training Configuration ---
 training:
   epochs: 10
@@ -99,7 +98,7 @@ training:
       decoder:
         name: models.decoders.disparity.DisparityDecoder
         params:
-          is_stereo: true
+          is_disparity: true
           max_disparity: 512
           intercept_at: 4
           intercept_channels: 128 # matching FoundationStereo V'_c logits

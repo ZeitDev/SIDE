@@ -1,42 +1,58 @@
 import torch
 import torch.nn as nn
 
+class ConvNeXtBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.gamma = nn.Parameter(1e-6 * torch.ones(channels, 1, 1))
+        self.block = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=7, padding=3, groups=channels, bias=False),
+            LayerNorm2d(channels),
+            nn.Conv2d(channels, channels * 4, kernel_size=1, bias=True),
+            nn.GELU(),
+            nn.Conv2d(channels * 4, channels, kernel_size=1, bias=True),
+        )
+        
+    def forward(self, x):
+        return x + self.gamma * self.block(x) # Residual connection with learnable scaling factor gamma
+    
 class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip connections
     def __init__(self, n_input_channels, n_skip_channels, n_output_channels):
         super().__init__()
+        self.gamma = nn.Parameter(1e-6 * torch.ones(n_output_channels, 1, 1))
         
-        # deviating from U-Net paper using nn.ConvTranspose2d to avoid checkerboard artifacts
-        # bilinear for smooth slopes to descent on (makes optimization easier vs nearest which is steppy)
-        # align_corner to prevent pixel shift
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True) 
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         
-        self.double_conv = nn.Sequential(
-            # n_input_channels + n_skip_channels: number of channels from previous layer
-            # out_channels: desired output channels after convolution
-            # kernel_size=3x3 and padding=1: Maintain spatial dimensions, 2x 3x3 convs gives same receptive field than 1x 5x5 , but with less parameters
-            # bias false: because of BatchNorm adding its own bias
-            nn.Conv2d(n_input_channels + n_skip_channels, n_output_channels, kernel_size=3, padding=1, bias=False), 
-            # prevent neural network being a drama queen (exploding/vanishing gradients)
-            nn.BatchNorm2d(n_output_channels), 
-            # Non-linearity
-            # inplace saves memory
-            nn.ReLU(inplace=True), 
-            # Conv again, because U-Net paper uses double convs in each block
-            # Behaves like giving the model more thinking steps
-            # Retain n_output_channels as first conv already reduced channels
-            nn.Conv2d(n_output_channels, n_output_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(n_output_channels),
-            nn.ReLU(inplace=True),
-        )
+        # Depthwise convolution doesn't mix channels, so we need to mix it before
+        self.mix_channels = nn.Conv2d(n_input_channels + n_skip_channels, n_output_channels, kernel_size=1, bias=False) 
+        
+        self.convnext_block = ConvNeXtBlock(n_output_channels)
         
     def forward(self, x, skip_features=None):
         x = self.up(x)
         
-        if skip_features is not None: # if skip connection exists
-            # Concat upsampled features with skip connection features along channel dimension
-            # Expects both tensors to have same spatial dimensions -> divisible by 2 accordingly
+        if skip_features is not None:
             x = torch.cat([x, skip_features], dim=1)
             
-        x = self.double_conv(x)
+        x = self.mix_channels(x)
+        x = self.convnext_block(x) 
         
+        return x
+    
+class LayerNorm2d(nn.Module):
+    """Official LayerNorm implementation from the ConvNeXt paper (Channels First).
+    Calculates the mean and variance strictly across the channel dimension, 
+    perfectly preserving the spatial structure and contrast of the image.
+    """
+    def __init__(self, normalized_shape, eps=1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+        self.eps = eps
+
+    def forward(self, x):
+        u = x.mean(1, keepdim=True)
+        s = (x - u).pow(2).mean(1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.eps)
+        x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x

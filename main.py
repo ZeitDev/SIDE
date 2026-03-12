@@ -21,7 +21,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 # * TASKS
 # TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall
-# TODO: Implement multi-scale cost volumes at every skip connection for disparity estimation
+# TODO: Implement Unext for segmentation as well
 # TODO: FIX TEST METRIC CASES
 
 def main():

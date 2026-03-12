@@ -252,13 +252,14 @@ class Trainer(BaseProcessor):
             **optimizer_config['params'])
         logger.info(f'Optimizer: {optimizer_config["name"]} with params {optimizer_config["params"]}')
         
-        # TODO: fix that scheduler works with OneCycleLR
         scheduler_config = self.config['training']['scheduler']
         SchedulerClass = load(scheduler_config['name'])
         self.scheduler = SchedulerClass(
             self.optimizer,
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
+        
+        self.scaler = torch.cuda.amp.GradScaler()
         
         train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
         self.metrics_tracker = MetricsTracker(
@@ -304,7 +305,7 @@ class Trainer(BaseProcessor):
             right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
 
-            with torch.set_grad_enabled(True):
+            with torch.set_grad_enabled(True) and torch.autocast(device_type='cuda', dtype=torch.float16):
                 outputs = self.model(left_images, right_images)
                 
                 if self.kd_models:
@@ -320,8 +321,11 @@ class Trainer(BaseProcessor):
                 loss, raw_task_losses = self.unweighted_sum_loss(outputs, targets)
                         
                 self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                self.scaler.scale(loss).backward()
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0) # !!! THIS DOESNT WORK WITH DISPARITY RANGE IN PIXELS !!!
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
                 self.scheduler.step()
                 
                 with torch.no_grad():

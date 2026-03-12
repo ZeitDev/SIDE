@@ -42,9 +42,9 @@ class DecoderBlock(nn.Module): # A single decoder block with upsampling and skip
         return x
     
 class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel list
-    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_stereo=False, stop_increases_at=1, intercept_at=1, **kwargs):
+    def __init__(self, all_n_encoder_channels, all_encoder_reductions, is_disparity=False, stop_increases_at=1, intercept_at=1, **kwargs):
         super().__init__()
-        self.is_stereo = is_stereo
+        self.is_disparity = is_disparity
         self.stop_increases_at = stop_increases_at
         self.intercept_at = intercept_at
         
@@ -66,7 +66,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             # For stereo input, double input channels for the first block to accommodate right image features
             # because both left and right features are concatenated
             # For other blocks, input channels remain the same
-            n_input_multiplier = 2 if self.is_stereo and i == 0 else 1
+            n_input_multiplier = 2 if self.is_disparity and i == 0 else 1
             
             # Number of decoder channels for this block 
             # Mono [i==0: 320, i==1: 112, i==2: 40, i==3: 24]
@@ -74,7 +74,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
             n_decoder_channels = self.all_n_decoder_channels[i] * n_input_multiplier
             
             # For stereo, always double skip connection channels because skip features come from both left and right images
-            n_skip_multiplier = 2 if self.is_stereo else 1
+            n_skip_multiplier = 2 if self.is_disparity else 1
             
             # Skip connection channels coming from the next layer of the reversed encoder (falsely named, but kept for consistency)
             # Mono [i==0: 112, i==1: 40, i==2: 24, i==3: 16]
@@ -115,7 +115,7 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
     def forward(self, encoder_features, encoder_features_right=None):
         # Reverse encoder features to start from the deepest layer
         reversed_encoder_features = encoder_features[::-1]
-        if not self.is_stereo:
+        if not self.is_disparity:
             # Start with the deepest features
             x = reversed_encoder_features[0]
         else:
@@ -129,20 +129,20 @@ class Decoder(nn.Module): # Assembles decoder blocks based on encoder channel li
         for i, block in enumerate(self.blocks):
             # Skip features come from the next layer in the reversed encoder features
             skip_features = reversed_encoder_features[i + 1]
-            if self.is_stereo:
+            if self.is_disparity:
                 skip_features_right = reversed_encoder_features_right[i + 1]
                 # Stereo: concate left and right skip features along channel dimension
                 skip_features = torch.cat([skip_features, skip_features_right], dim=1)
             
             x = block(x, skip_features)
             
-            if self.is_stereo and self.all_decoder_increases[i+1] == self.intercept_at:
+            if self.is_disparity and self.all_decoder_increases[i+1] == self.intercept_at:
                 intercept_features = x # Intercept features at 1/stop_increases_at resolution for disparity head
             
         # Final upsampling to original resolution    
         x = self.final_block(x)
         
-        if self.is_stereo:
+        if self.is_disparity:
             return x, intercept_features
         
         return x

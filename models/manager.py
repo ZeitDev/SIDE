@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.decoders.unext import LayerNorm2d
+
 
 from typing import Dict
 
@@ -30,22 +32,25 @@ class AttachHead(nn.Module):
         self.decoder = decoder_class(encoder_channels, encoder_reductions, **kwargs)
         self.head = nn.Conv2d(self.decoder.all_n_decoder_channels[-1], n_classes, kernel_size=1)
         
-        self.is_stereo = kwargs.get('is_stereo', False)
-        if self.is_stereo:
+        self.is_disparity = kwargs.get('is_disparity', False)
+        if self.is_disparity:
             intercept_at = kwargs.get('intercept_at', 4)
             intercept_channels = kwargs.get('intercept_channels', 128)
             idx = self.decoder.all_decoder_increases.index(intercept_at)
             n_output_channels = self.decoder.all_n_decoder_channels[idx]
             
             self.intercept_head = nn.Sequential(
-                nn.Conv2d(n_output_channels, intercept_channels, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(intercept_channels, intercept_channels, kernel_size=1),
+                # Swap to depthwise convolution, nn.Conv2d(n_output_channels, intercept_channels, kernel_size=3, padding=1),
+                nn.Conv2d(n_output_channels, n_output_channels, kernel_size=7, padding=3, groups=n_output_channels, bias=False), # Spatial Mixing, If OOM change to kernel_size=5, padding=2
+                LayerNorm2d(n_output_channels),
+                nn.Conv2d(n_output_channels, intercept_channels * 4, kernel_size=1), # Inverted Bottleneck with width expansion 4
+                nn.GELU(),
+                nn.Conv2d(intercept_channels * 4, intercept_channels, kernel_size=1),
             )
             
     
     def forward(self, features, feature_right=None) -> torch.Tensor:
-        if not self.is_stereo:
+        if not self.is_disparity:
             x = self.decoder(features)
             x = self.head(x)
             

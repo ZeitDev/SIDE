@@ -10,7 +10,7 @@ training:
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 1.0e-4
+      lr: 5.0e-4
     encoder_lr_mod: 1.0
 
   scheduler:
@@ -23,11 +23,11 @@ training:
     segmentation:
       enabled: true
       knowledge_distillation:
-        enabled: true
+        enabled: false
     disparity:
-      enabled: true
+      enabled: false
       knowledge_distillation:
-        enabled: true
+        enabled: false
 
 logging:
   n_validation_images: 0
