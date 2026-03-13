@@ -139,3 +139,4 @@ Take that learning rate and divide it by 10.
 DIFFERENT BATCH SIZES:
 Rule of thumb: LR_new = LR_old * (BatchSize_new / BatchSize_old)
 """
+# %%

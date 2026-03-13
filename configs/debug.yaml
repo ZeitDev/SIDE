@@ -5,13 +5,13 @@ data:
   max_disparity: 512
 
 training:
-  epochs: 250
+  epochs: 20
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 5.0e-4
-    encoder_lr_mod: 1.0
+      lr: 1.0e-3
+    encoder_lr_mod: 1
 
   scheduler:
     name: torch.optim.lr_scheduler.LinearLR
@@ -21,11 +21,11 @@ training:
 
   tasks:
     segmentation:
-      enabled: true
+      enabled: false
       knowledge_distillation:
         enabled: false
     disparity:
-      enabled: false
+      enabled: true
       knowledge_distillation:
         enabled: false
 

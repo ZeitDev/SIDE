@@ -40,12 +40,9 @@ class AttachHead(nn.Module):
             n_output_channels = self.decoder.all_n_decoder_channels[idx]
             
             self.intercept_head = nn.Sequential(
-                # Swap to depthwise convolution, nn.Conv2d(n_output_channels, intercept_channels, kernel_size=3, padding=1),
-                nn.Conv2d(n_output_channels, n_output_channels, kernel_size=7, padding=3, groups=n_output_channels, bias=False), # Spatial Mixing, If OOM change to kernel_size=5, padding=2
-                LayerNorm2d(n_output_channels),
-                nn.Conv2d(n_output_channels, intercept_channels * 4, kernel_size=1), # Inverted Bottleneck with width expansion 4
-                nn.GELU(),
-                nn.Conv2d(intercept_channels * 4, intercept_channels, kernel_size=1),
+                nn.Conv2d(n_output_channels, intercept_channels, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(intercept_channels, intercept_channels, kernel_size=1),
             )
             
     
@@ -59,7 +56,7 @@ class AttachHead(nn.Module):
             x, intercept_features = self.decoder(features, feature_right)
             
             x = self.head(x)
-            x = F.relu(x, inplace=True)
+            x = F.sigmoid(x) # TODO: or ReLU or softplus or nothing? 
             intercept_features = self.intercept_head(intercept_features)
             
             return {

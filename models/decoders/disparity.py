@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from models.decoders.dynamic_unet import DecoderBlock
-from models.decoders.unext import DecoderBlock, LayerNorm2d, ConvNeXtBlock
+from models.decoders.dynamic_unet import DecoderBlock
 
 class CorrelationVolume(nn.Module):
     def __init__(self, max_displacement: int):
@@ -50,15 +49,15 @@ class DisparityDecoder(nn.Module):
         # Equalize left features and cost volume before concatenation to prevent one from dominating the other
         self.squeeze_left = nn.Sequential(
             nn.Conv2d(self.all_n_decoder_channels[0], max_displacement, kernel_size=1, bias=False),
-            LayerNorm2d(max_displacement),
-            nn.GELU()
+            nn.BatchNorm2d(max_displacement),
+            nn.ReLU(inplace=True)
         )
         
         # Adapter reduced the [Left Features + Cost Volume] channels back to the original number of decoder channels expected by the rest of the decoder blocks
         self.cost_volume_adapter = nn.Sequential(
             nn.Conv2d(max_displacement + max_displacement, self.all_n_decoder_channels[0], kernel_size=3, padding=1, bias=False),
-            LayerNorm2d(self.all_n_decoder_channels[0]),
-            nn.GELU(),
+            nn.BatchNorm2d(self.all_n_decoder_channels[0]),
+            nn.ReLU(inplace=True),
         )
         
         self.blocks = nn.ModuleList()
@@ -76,7 +75,8 @@ class DisparityDecoder(nn.Module):
             last_channels = self.all_n_decoder_channels[-1]
             while current_stride > 1:
                 upsample_layers.append(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True))
-                upsample_layers.append(ConvNeXtBlock(last_channels))
+                upsample_layers.append(nn.Conv2d(last_channels, last_channels, kernel_size=3, padding=1))
+                upsample_layers.append(nn.ReLU(inplace=True))
                 current_stride //= 2
                 
             self.final_block = nn.Sequential(*upsample_layers)

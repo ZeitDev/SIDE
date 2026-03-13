@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from models.decoders.dynamic_unet import DecoderBlock
+#from models.decoders.dynamic_unet import DecoderBlock
+from models.decoders.unext import DecoderBlock, LayerNorm2d, ConvNeXtBlock
     
 class SegmentationDecoder(nn.Module):
     """
@@ -23,12 +24,12 @@ class SegmentationDecoder(nn.Module):
         current_stride = self.all_decoder_increases[-1]
         if current_stride > 1:
             upsample_layers = []
+            last_channels = self.all_n_decoder_channels[-1]
             while current_stride > 1:
                 upsample_layers.append(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True))
-                last_channels = self.all_n_decoder_channels[-1]
-                upsample_layers.append(nn.Conv2d(last_channels, last_channels, kernel_size=3, padding=1))
-                upsample_layers.append(nn.ReLU(inplace=True))
+                upsample_layers.append(ConvNeXtBlock(last_channels))
                 current_stride //= 2
+                
             self.final_block = nn.Sequential(*upsample_layers)
         else:
             self.final_block = nn.Identity()

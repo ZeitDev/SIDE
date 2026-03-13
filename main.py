@@ -18,10 +18,10 @@ from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
-
+# ! Gradient clipping expects normalized input ranges, if disparity is changed to raw pixels we need to accomodate
 # * TASKS
+# TODO: Disparity in pixel vs normalized range, what about multi task balancing?
 # TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall
-# TODO: Implement Unext for segmentation as well
 # TODO: FIX TEST METRIC CASES
 
 def main():
