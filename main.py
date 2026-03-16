@@ -21,7 +21,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 # ! Gradient clipping expects normalized input ranges, if disparity is changed to raw pixels we need to accomodate
 # * TASKS
 # TODO: Disparity in pixel vs normalized range, what about multi task balancing?
-# TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall
+# TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall, no not DWA, try DTP, before that compare different methods
 # TODO: FIX TEST METRIC CASES
 
 def main():

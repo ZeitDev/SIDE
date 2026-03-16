@@ -4,9 +4,7 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 import torch
-import cv2
 from utils import helpers
-from utils.helpers import load, logits2disparity
 from torch.utils.data import DataLoader
 from data.transforms import build_transforms
 

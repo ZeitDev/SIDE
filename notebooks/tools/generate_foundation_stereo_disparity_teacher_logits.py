@@ -43,7 +43,6 @@ class EndoVisTeacherDataset(Dataset):
         self.left_image_paths = []
         self.right_image_paths = []
         for subset in self.subsets:
-            if '6' not in subset: continue # Test
             for file_name in self.file_names:
                 self.left_image_paths.append(os.path.join(self.root_dir, subset, 'input', 'left_images', file_name))
                 self.right_image_paths.append(os.path.join(self.root_dir, subset, 'input', 'right_images', file_name))
@@ -76,18 +75,21 @@ model.to('cuda')
 model.eval()
 
 # %% Save Disparity Maps
-if True:
-    mode = 'train'  # ! Do both train and test
-    config['data']['transforms'][mode] = [
-        {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}}, # Test
-        {'name': 'Resize', 'params': {'height': 512, 'width': 512}}, # Test
+if False:
+    mode = 'test'  # ! Do train, val and test
+    
+    transform_mode = 'train' if mode == 'train' else 'test'
+    config['data']['transforms'][transform_mode] = [
+        # {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
+        # {'name': 'Resize', 'params': {'height': 1024, 'width': 1024}},
         {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
     ]
-    transforms_disparity = build_transforms(config, mode=mode)
+    transforms_disparity = build_transforms(config, mode=transform_mode)
 
     dataset_disparity = EndoVisTeacherDataset(
         mode=mode,
-        transforms=transforms_disparity)
+        transforms=transforms_disparity
+    )
 
     dataloader_disparity = DataLoader(
         dataset_disparity,
@@ -107,7 +109,7 @@ if True:
             disparity = model.get_disparity(left_image, right_image)
             
             image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity_512') # Test 'disparity')
+            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
             disp = disparity.squeeze().cpu().numpy()
@@ -121,16 +123,18 @@ if True:
 if False:
     mode = 'test'
     
-    config['data']['transforms'][mode] = [
-        {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
-        {'name': 'Resize', 'params': {'height': 1024, 'width': 1024}},
+    transform_mode = 'train' if mode == 'train' else 'test'
+    config['data']['transforms'][transform_mode] = [
+        # {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
+        # {'name': 'Resize', 'params': {'height': 1024, 'width': 1024}},
         {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
     ]
-    train_transform = build_transforms(config, mode=mode)
+    train_transform = build_transforms(config, mode=transform_mode)
 
     dataset_train = EndoVisTeacherDataset(
         mode=mode,
-        transforms=train_transform)
+        transforms=train_transform
+    )
 
     dataloader_train = DataLoader(
         dataset_train,
@@ -163,38 +167,20 @@ if False:
 
 
 # %% Saving Right Disparity Maps
-def left_right_consistency_check(left_disp, right_disp, threshold=1.0):
-    left_disp = left_disp.detach().cpu()
-    right_disp = right_disp.detach().cpu()
-    
-    B, C, H, W = left_disp.shape
-    x_grid = torch.linspace(-1, 1, W, device=left_disp.device)
-    y_grid = torch.linspace(-1, 1, H, device=left_disp.device)
-    y, x = torch.meshgrid(y_grid, x_grid, indexing='ij')
-    grid = torch.stack((x, y), dim=-1).unsqueeze(0).repeat(B, 1, 1, 1)
-    
-    normalized_disp = (left_disp.squeeze(1) / (W / 2)).unsqueeze(-1)
-    shifted_grid = grid.clone()
-    shifted_grid[..., 0] -= normalized_disp[..., 0]
-    
-    warped_disp_right = F.grid_sample(right_disp, shifted_grid, align_corners=True)
-    diff = torch.abs(left_disp - warped_disp_right)
-    
-    valid_mask = (diff < threshold).float()
-    
-    return valid_mask
 
 if False:
-    mode = 'train' # ! Do both train and test
+    mode = 'test' # ! Do both train and test
     
-    config['data']['transforms'][mode] = [
+    transform_mode = 'train' if mode == 'train' else 'test'
+    config['data']['transforms'][transform_mode] = [
         {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
     ]
-    transforms_disparity = build_transforms(config, mode=mode)
+    transforms_disparity = build_transforms(config, mode=transform_mode)
 
     dataset_disparity = EndoVisTeacherDataset(
         mode=mode,
-        transforms=transforms_disparity)
+        transforms=transforms_disparity
+    )
 
     dataloader_disparity = DataLoader(
         dataset_disparity,
@@ -218,11 +204,6 @@ if False:
             right_disparity_flipped = model.get_disparity(right_image_flipped, left_image_flipped)
             right_disparity = torch.flip(right_disparity_flipped, dims=[3])
             
-            # valid_mask = left_right_consistency_check(left_disparity, right_disparity)
-            # valid_percentage = (valid_mask.sum() / valid_mask.numel()).item() * 100
-            # valid_percentages.append(valid_percentage)
-            #print((valid_mask.sum() / valid_mask.numel()).item() * 100)
-            
             image_path = data['image_path'][0]
             save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity_right')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -234,5 +215,4 @@ if False:
                 
             cv2.imwrite(save_path, disp_scaled)
             
-    # avg_valid_percentage = sum(valid_percentages) / len(valid_percentages)
-    # print(f'Average Left-Right Consistency Valid Percentage: {avg_valid_percentage:.2f}%')
+# %%

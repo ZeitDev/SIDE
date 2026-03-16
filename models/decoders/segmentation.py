@@ -1,7 +1,5 @@
-import torch
 import torch.nn as nn
-#from models.decoders.dynamic_unet import DecoderBlock
-from models.decoders.unext import DecoderBlock, LayerNorm2d, ConvNeXtBlock
+from models.decoders.unext import DecoderBlock, ConvNeXtBlock
     
 class SegmentationDecoder(nn.Module):
     """

@@ -3,14 +3,11 @@ import os, sys
 sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
-import random
 
 import torch
-from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from utils import helpers, visualization
 
-import mlflow
 from tqdm import tqdm
 import plotly.express as px
 
@@ -19,7 +16,6 @@ import numpy as np
 
 from data.transforms import build_transforms
 
-from utils import helpers
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -109,8 +105,7 @@ def load_disparity(path):
     return torch.from_numpy(raw_disp).float().permute(2, 0, 1)
             
     
-def left_right_consistency_check(left_disp, right_disp, threshold=1.0):
-    left_disp_valid = left_disp > 0
+def left_right_consistency_check(left_disp, right_disp, threshold=3.0):
     
     B, C, H, W = left_disp.shape
     x_grid = torch.linspace(-1, 1, W, device=left_disp.device)
@@ -122,11 +117,16 @@ def left_right_consistency_check(left_disp, right_disp, threshold=1.0):
     shifted_grid = grid.clone()
     shifted_grid[..., 0] -= normalized_disp[..., 0]
     
-    warped_disp_right = F.grid_sample(right_disp, shifted_grid, align_corners=True)
+    warped_disp_right = F.grid_sample(right_disp, shifted_grid, align_corners=True, padding_mode='zeros')
+    
     diff = torch.abs(left_disp - warped_disp_right)
     
     valid_mask = (diff < threshold).float()
+    
+    left_disp_valid = left_disp > 0
     valid_mask[~left_disp_valid] = torch.nan
+    valid_warped_right = warped_disp_right > 0
+    valid_mask[~valid_warped_right] = torch.nan
     
     return valid_mask
 
@@ -135,7 +135,7 @@ def get_valid_percentage(valid_mask):
     possible_count = (~torch.isnan(valid_mask)).sum()
     return (agreed_count / possible_count).item() * 100
 
-
+# %%
 image_dict = {
     'left_paths': [],
     'right_paths': [],
@@ -229,5 +229,118 @@ for left_path, right_path, std in zip(image_dict['left_paths'], image_dict['righ
         
         plt.show()
         i += 1
+# %%
+import os
+from pathlib import Path
+import pandas as pd
+from tqdm import tqdm
+import plotly.express as px
+import torch
+
+DATA_PATH = Path('/data/Zeitler/SIDED/EndoVis17/processed')
+MODES = ['train', 'val', 'test']
+
+# Unwrapped execution with aggregation to prevent OOM
+num_bins = 50
+pixel_bins = torch.linspace(0, 1.0, num_bins + 1)
+bin_centers = (pixel_bins[:-1] + pixel_bins[1:]) / 2.0
+
+image_records = []
+pixel_hist_accum = {} # (mode, seq) -> count tensor
+
+for mode in MODES:
+    mode_path = DATA_PATH / mode
+    if not mode_path.exists():
+        print(f"Path does not exist: {mode_path}")
+        continue
+        
+    for seq_path in mode_path.iterdir():
+        if not seq_path.is_dir():
+            continue
+            
+        seq = seq_path.name
+        left_dir = seq_path / 'ground_truth' / 'disparity'
+        right_dir = seq_path / 'ground_truth' / 'disparity_right'
+        
+        if not left_dir.exists() or not right_dir.exists():
+            print(f"Disparity path not found for: {seq_path}")
+            continue
+            
+        images = sorted(list(left_dir.glob('*.png')))
+        pixel_hist_accum[(mode, seq)] = torch.zeros(num_bins, dtype=torch.float64)
+        
+        for img_path in tqdm(images, desc=f"Consistency {mode}/{seq}"):
+            right_path = right_dir / img_path.name
+            if not right_path.exists():
+                continue
+            
+            left_disp = load_disparity(str(img_path)).unsqueeze(0)
+            right_disp = load_disparity(str(right_path)).unsqueeze(0)
+            
+            valid_mask = left_right_consistency_check(left_disp, right_disp, threshold=3.0)
+            
+            agreed_count = valid_mask.nansum()
+            possible_count = (~torch.isnan(valid_mask)).sum()
+            if possible_count > 0:
+                img_mean_consistency = (agreed_count / possible_count).item()
+            else:
+                img_mean_consistency = float('nan')
+                
+            image_records.append({
+                'Mean Consistency': img_mean_consistency,
+                'Sequence': seq,
+                'Mode': mode
+            })
+            
+            valid_mask_flat = valid_mask.flatten()
+            valid_mask_flat = valid_mask_flat[~torch.isnan(valid_mask_flat)]
+            
+            if len(valid_mask_flat) > 0:
+                counts = torch.histogram(valid_mask_flat.type(torch.float32).cpu(), bins=pixel_bins).hist
+                pixel_hist_accum[(mode, seq)] += counts
+
+pixel_agg_records = []
+for (mode, seq), counts in pixel_hist_accum.items():
+    for bin_ctr, count in zip(bin_centers.tolist(), counts.tolist()):
+        if count > 0:
+            pixel_agg_records.append({
+                'Consistency': bin_ctr,
+                'Count': count,
+                'Sequence': seq,
+                'Mode': mode
+            })
+
+# %%
+df_pixels = pd.DataFrame(pixel_agg_records)
+df_images = pd.DataFrame(image_records)
+
+# if not df_pixels.empty:
+#     fig1 = px.bar(
+#         df_pixels, 
+#         x='Consistency', 
+#         y='Count',
+#         color='Sequence', 
+#         facet_col='Mode',
+#         barmode='overlay',
+#         title='Pixel-level Consistency Distribution per Sequence (Aggregated histograms)'
+#     )
+#     fig1.update_layout(bargap=0)
+#     fig1.show()
+# else:
+#     print("No pixel data.")
+
+if not df_images.empty:
+    fig2 = px.histogram(
+        df_images, 
+        x='Mean Consistency', 
+        color='Sequence', 
+        facet_col='Mode',
+        barmode='overlay',
+        nbins=50,
+        title='Image-level Mean Consistency Distribution per Sequence'
+    )
+    fig2.show()
+else:
+    print("No image data.")
 
 # %%
