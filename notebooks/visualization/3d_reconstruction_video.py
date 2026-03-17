@@ -212,7 +212,7 @@ def generate_3d_reconstruction_video(
 
     # %
     norm_disp = cv2.normalize(disp, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    color_disp = cv2.applyColorMap(norm_disp, cv2.COLORMAP_JET)
+    color_disp = cv2.applyColorMap(norm_disp, cv2.COLORMAP_MAGMA) 
                     
     # Option B: Overlay
     disp_overlay = cv2.addWeighted(left_image, 0.6, color_disp, 0.4, 0)

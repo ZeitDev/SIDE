@@ -67,7 +67,7 @@ def _get_disparity_raw_overlay(image: np.ndarray, disparity_map: np.ndarray, alp
 
     overlay = image.copy()
     disparity_normalized = (disparity_map - disparity_map.min()) / (disparity_map.max() - disparity_map.min())
-    disparity_colored = plt.cm.jet(disparity_normalized)[:, :, :3]
+    disparity_colored = plt.cm.magma(disparity_normalized)[:, :, :3]
     disparity_colored = (disparity_colored * 255).astype(np.uint8)
 
     overlay_region = disparity_map > 0

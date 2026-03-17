@@ -21,11 +21,14 @@ BRIGHT_RYG_LUT = np.stack([_lut_b, _lut_g, _lut_r], axis=1).astype(np.uint8) # B
 # Global setting for visualization colormap scaling
 max_disparity = 512.0 #128.0
 
-# Global setting for segmentation color (BGR format) - using Magenta to contrast with JET
-seg_color = [255, 0, 255]
+# Global setting for segmentation color (BGR format) - using Magenta to contrast with MAGMA
+seg_color = [255, 255, 0]
 
 # Global setting to toggle disparity overlay (True = blend with image, False = solid colormap where valid)
 overlay_disparity = False
+
+fps = 5
+
 
 # %%
 # Dataset Videos
@@ -54,7 +57,7 @@ for subset in sorted(os.listdir(dataset_path)):
     video_out = cv2.VideoWriter(
         os.path.join(output_video_path, f'{subset}.mp4'),
         cv2.VideoWriter_fourcc(*'mp4v'),
-        15, # Adjust FPS to your preference
+        fps, # Adjust FPS to your preference
         (w * 2, h * 2)
     )
     
@@ -95,7 +98,7 @@ for subset in sorted(os.listdir(dataset_path)):
             disp_norm_full = np.zeros(disp_img.shape, dtype=np.uint8)
             disp_norm_full[valid_disp_mask] = np.clip(valid_vals * (255.0 / max_disparity), 0, 255).astype(np.uint8)
                 
-            disp_color = cv2.applyColorMap(disp_norm_full, cv2.COLORMAP_JET)
+            disp_color = cv2.applyColorMap(disp_norm_full, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color, 0.4, 0)
                 disp_overlay = np.where(valid_disp_mask[:, :, None], blended, left_img)
@@ -155,7 +158,7 @@ for subset in sorted(os.listdir(dataset_path)):
     video_out = cv2.VideoWriter(
         os.path.join(teacher_output_video_path, f'{subset}.mp4'),
         cv2.VideoWriter_fourcc(*'mp4v'),
-        15,
+        fps,
         (crop_w * 2, crop_h * 2)
     )
     
@@ -225,7 +228,7 @@ for subset in sorted(os.listdir(dataset_path)):
             # Use max_disparity scaling to make disparity visible
             disp_norm_full[valid_disp_gt] = np.clip(valid_vals * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color = cv2.applyColorMap(disp_norm_full, cv2.COLORMAP_JET)
+            disp_color = cv2.applyColorMap(disp_norm_full, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color, 0.4, 0)
                 disp_gt_overlay = np.where(valid_disp_gt[:, :, None], blended, left_img)
@@ -243,7 +246,7 @@ for subset in sorted(os.listdir(dataset_path)):
             # Use max_disparity scaling to make disparity visible
             disp_norm_full_t[valid_disp_t] = np.clip(valid_vals_t * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_t = cv2.applyColorMap(disp_norm_full_t, cv2.COLORMAP_JET)
+            disp_color_t = cv2.applyColorMap(disp_norm_full_t, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_t, 0.4, 0)
                 disp_t_overlay = np.where(valid_disp_t[:, :, None], blended, left_img)
@@ -303,7 +306,7 @@ for subset in sorted(os.listdir(dataset_path)):
     video_out = cv2.VideoWriter(
         os.path.join(sttr_output_video_path, f'{subset}.mp4'),
         cv2.VideoWriter_fourcc(*'mp4v'),
-        15,
+        fps,
         (crop_w * 2, crop_h * 2)
     )
     
@@ -364,7 +367,7 @@ for subset in sorted(os.listdir(dataset_path)):
             disp_norm_fs = np.zeros(fs_disp.shape, dtype=np.uint8)
             disp_norm_fs[valid_disp_fs] = np.clip(valid_vals_fs * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_JET)
+            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_fs, 0.4, 0)
                 fs_disp_overlay = np.where(valid_disp_fs[:, :, None], blended, left_img)
@@ -380,7 +383,7 @@ for subset in sorted(os.listdir(dataset_path)):
             disp_norm_sttr = np.zeros(sttr_disp.shape, dtype=np.uint8)
             disp_norm_sttr[valid_disp_sttr] = np.clip(valid_vals_sttr * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_sttr = cv2.applyColorMap(disp_norm_sttr, cv2.COLORMAP_JET)
+            disp_color_sttr = cv2.applyColorMap(disp_norm_sttr, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_sttr, 0.4, 0)
                 sttr_disp_overlay = np.where(valid_disp_sttr[:, :, None], blended, left_img)
@@ -390,14 +393,14 @@ for subset in sorted(os.listdir(dataset_path)):
             sttr_disp_overlay = left_img.copy() if overlay_disparity else np.zeros_like(left_img)
         
         # --- 3. FoundationStereo Disparity Logit Overlay ---
-        # Same as disparity teacher logits in other videos - use JET colormap
+        # Same as disparity teacher logits in other videos - use MAGMA colormap
         valid_disp_fs = (teach_disp_np > 0)
         if valid_disp_fs.any():
             valid_vals_fs = teach_disp_np[valid_disp_fs]
             disp_norm_fs = np.zeros(teach_disp_np.shape, dtype=np.uint8)
             disp_norm_fs[valid_disp_fs] = np.clip(valid_vals_fs * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_JET)
+            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_fs, 0.4, 0)
                 fs_logit_overlay = np.where(valid_disp_fs[:, :, None], blended, left_img)
@@ -432,7 +435,7 @@ for subset in sorted(os.listdir(dataset_path)):
 # %%
 # FoundationStereo Teacher Confidence Comparison
 
-mode = 'test' # 'train' or 'test'
+mode = 'train' # 'train' or 'test'
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
 fs_conf_output_video_path = f'/data/Zeitler/Visualization/videos/FoundationStereo_Confidence/{mode}'
 os.makedirs(fs_conf_output_video_path, exist_ok=True)
@@ -461,7 +464,7 @@ for subset in sorted(os.listdir(dataset_path)):
     video_out = cv2.VideoWriter(
         os.path.join(fs_conf_output_video_path, f'{subset}.mp4'),
         cv2.VideoWriter_fourcc(*'mp4v'),
-        15,
+        fps,
         (crop_w * 2, crop_h * 2)
     )
     
@@ -505,7 +508,7 @@ for subset in sorted(os.listdir(dataset_path)):
             disp_norm_fs = np.zeros(disp_img.shape, dtype=np.uint8)
             disp_norm_fs[valid_disp_fs] = np.clip(valid_vals_fs * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_JET)
+            disp_color_fs = cv2.applyColorMap(disp_norm_fs, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_fs, 0.4, 0)
                 disp_overlay = np.where(valid_disp_fs[:, :, None], blended, left_img)
@@ -521,7 +524,7 @@ for subset in sorted(os.listdir(dataset_path)):
             disp_norm_t = np.zeros(teach_disp_np.shape, dtype=np.uint8)
             disp_norm_t[valid_disp_t] = np.clip(valid_vals_t * (255.0 / max_disparity), 0, 255).astype(np.uint8)
             
-            disp_color_t = cv2.applyColorMap(disp_norm_t, cv2.COLORMAP_JET)
+            disp_color_t = cv2.applyColorMap(disp_norm_t, cv2.COLORMAP_MAGMA)
             if overlay_disparity:
                 blended = cv2.addWeighted(left_img, 0.6, disp_color_t, 0.4, 0)
                 logit_overlay = np.where(valid_disp_t[:, :, None], blended, left_img)
@@ -539,14 +542,154 @@ for subset in sorted(os.listdir(dataset_path)):
         # Add labels
         font = cv2.FONT_HERSHEY_SIMPLEX
         left_labeled = left_img.copy()
+        mean_conf = conf_np.mean()
         cv2.putText(left_labeled, 'Left Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(disp_overlay, 'FoundationStereo Disparity GT', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(disp_overlay, 'FoundationStereo Disparity Pseudo Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(logit_overlay, 'FoundationStereo Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(conf_overlay, 'FoundationStereo Confidence Map', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(conf_overlay, f'FoundationStereo Confidence Map (Mean: {mean_conf:.0%})', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         
         # 2x2 Grid: [Left Image | FS Disp] \n [FS Logit | FS Conf]
         top_row = np.hstack((left_labeled, disp_overlay))
         bottom_row = np.hstack((logit_overlay, conf_overlay))
+        combined_frame = np.vstack((top_row, bottom_row))
+        
+        video_out.write(combined_frame)
+        
+    video_out.release()
+    
+
+# %%
+# Consistency Check Videos
+
+def left_right_consistency_check(left_disp, right_disp, threshold=3.0):
+    B, C, H, W = left_disp.shape
+    x_grid = torch.linspace(-1, 1, W, device=left_disp.device)
+    y_grid = torch.linspace(-1, 1, H, device=left_disp.device)
+    y, x = torch.meshgrid(y_grid, x_grid, indexing='ij')
+    grid = torch.stack((x, y), dim=-1).unsqueeze(0).repeat(B, 1, 1, 1)
+    
+    normalized_disp = (left_disp.squeeze(1) / (W / 2)).unsqueeze(-1)
+    shifted_grid = grid.clone()
+    shifted_grid[..., 0] -= normalized_disp[..., 0]
+    
+    warped_disp_right = torch.nn.functional.grid_sample(right_disp, shifted_grid, align_corners=True, padding_mode='zeros')
+    
+    diff = torch.abs(left_disp - warped_disp_right)
+    
+    valid_mask = (diff < threshold).float()
+    
+    left_disp_valid = left_disp > 0
+    valid_mask[~left_disp_valid] = torch.nan
+    valid_warped_right = warped_disp_right > 0
+    valid_mask[~valid_warped_right] = torch.nan
+    
+    return valid_mask
+
+mode = 'test' # 'train' or 'test'
+dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
+consistency_output_video_path = f'/data/Zeitler/Visualization/videos/FoundationStereo_Consistency/{mode}'
+os.makedirs(consistency_output_video_path, exist_ok=True)
+
+for subset in sorted(os.listdir(dataset_path)):
+    subset_path = os.path.join(dataset_path, subset)
+    if not os.path.isdir(subset_path):
+        continue
+    
+    left_dir = os.path.join(subset_path, 'input', 'left_images')
+    right_dir = os.path.join(subset_path, 'input', 'right_images')
+    disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
+    disp_right_dir = os.path.join(subset_path, 'ground_truth', 'disparity_right')
+    
+    left_images = sorted(os.listdir(left_dir))
+    if not left_images:
+        continue
+        
+    sample_img = cv2.imread(os.path.join(left_dir, left_images[0]))
+    h, w = sample_img.shape[:2]
+    
+    video_out = cv2.VideoWriter(
+        os.path.join(consistency_output_video_path, f'{subset}.mp4'),
+        cv2.VideoWriter_fourcc(*'mp4v'),
+        fps,
+        (w * 2, h * 2)
+    )
+    
+    for image_name in tqdm(left_images, desc=f'Processing {subset} Consistency'): 
+        left_img = cv2.imread(os.path.join(left_dir, image_name))
+        right_img = cv2.imread(os.path.join(right_dir, image_name))
+        disp_img = cv2.imread(os.path.join(disp_dir, image_name), cv2.IMREAD_UNCHANGED)
+        disp_right_img = cv2.imread(os.path.join(disp_right_dir, image_name), cv2.IMREAD_UNCHANGED)
+        
+        if left_img is None or right_img is None or disp_img is None or disp_right_img is None:
+            continue
+            
+        # Format left and right disparity for PyTorch
+        left_disp_pt = torch.from_numpy(np.where(disp_img > 0, disp_img.astype(np.float32) / 128.0, 0.0)).unsqueeze(0).unsqueeze(0)
+        right_disp_pt = torch.from_numpy(np.where(disp_right_img > 0, disp_right_img.astype(np.float32) / 128.0, 0.0)).unsqueeze(0).unsqueeze(0)
+
+        # Calculate consistency map
+        valid_mask = left_right_consistency_check(left_disp_pt, right_disp_pt, threshold=3.0)
+        agreed_count = valid_mask.nansum()
+        possible_count = (~torch.isnan(valid_mask)).sum()
+        
+        if possible_count > 0:
+            mean_consistency = (agreed_count / possible_count).item()
+        else:
+            mean_consistency = float('nan')
+            
+        # --- 1. Left Image Overlay ---
+        left_labeled = left_img.copy()
+        
+        # --- 2. Right Image Overlay ---
+        right_labeled = right_img.copy()
+        
+        # --- 3. Left Disparity Overlay ---
+        valid_disp_left = (disp_img > 0)
+        if valid_disp_left.any():
+            valid_vals_left = disp_img[valid_disp_left].astype(np.float32) / 128.0
+            disp_norm_left = np.zeros(disp_img.shape, dtype=np.uint8)
+            disp_norm_left[valid_disp_left] = np.clip(valid_vals_left * (255.0 / max_disparity), 0, 255).astype(np.uint8)
+            
+            disp_color_left = cv2.applyColorMap(disp_norm_left, cv2.COLORMAP_MAGMA)
+            if overlay_disparity:
+                blended = cv2.addWeighted(left_img, 0.6, disp_color_left, 0.4, 0)
+                disp_left_overlay = np.where(valid_disp_left[:, :, None], blended, left_img)
+            else:
+                disp_left_overlay = np.where(valid_disp_left[:, :, None], disp_color_left, np.zeros_like(left_img))
+        else:
+            disp_left_overlay = left_img.copy() if overlay_disparity else np.zeros_like(left_img)
+            
+        # --- 4. Right Disparity Overlay ---
+        valid_disp_right = (disp_right_img > 0)
+        if valid_disp_right.any():
+            valid_vals_right = disp_right_img[valid_disp_right].astype(np.float32) / 128.0
+            disp_norm_right = np.zeros(disp_right_img.shape, dtype=np.uint8)
+            disp_norm_right[valid_disp_right] = np.clip(valid_vals_right * (255.0 / max_disparity), 0, 255).astype(np.uint8)
+            
+            disp_color_right = cv2.applyColorMap(disp_norm_right, cv2.COLORMAP_MAGMA)
+            if overlay_disparity:
+                blended = cv2.addWeighted(right_img, 0.6, disp_color_right, 0.4, 0)
+                disp_right_overlay = np.where(valid_disp_right[:, :, None], blended, right_img)
+            else:
+                disp_right_overlay = np.where(valid_disp_right[:, :, None], disp_color_right, np.zeros_like(right_img))
+        else:
+            disp_right_overlay = right_img.copy() if overlay_disparity else np.zeros_like(right_img)
+            
+        # Add labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(left_labeled, 'Left Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(right_labeled, 'Right Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        if np.isnan(mean_consistency):
+            cv2.putText(disp_left_overlay, 'FoundationStereo Pseudo GT Left-Sided', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        else:
+            cv2.putText(disp_left_overlay, f'FoundationStereo Pseudo GT Left-Sided (3px-Consistency: {mean_consistency:.0%})', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+            
+        cv2.putText(disp_right_overlay, 'FoundationStereo Pseudo GT Right-Sided', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        # 2x2 Grid: [Left Image | Right Image] \n [Left Disp | Right Disp]
+        top_row = np.hstack((left_labeled, right_labeled))
+        bottom_row = np.hstack((disp_left_overlay, disp_right_overlay))
         combined_frame = np.vstack((top_row, bottom_row))
         
         video_out.write(combined_frame)

@@ -337,7 +337,7 @@ if not df_images.empty:
         facet_col='Mode',
         barmode='overlay',
         nbins=50,
-        title='Image-level Mean Consistency Distribution per Sequence'
+        title='Image-level Mean 3px-Consistency Distribution per Sequence'
     )
     fig2.show()
 else:

@@ -13,8 +13,8 @@ from utils.helpers import load, log_vram, get_model_run_id
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
-from criterions.automatic_weighted_loss import AutomaticWeightedLoss
-from criterions.automatic_weighted_loss import UnweightedSumLoss
+from criterions.weighting import AutomaticWeightedLoss
+from criterions.weighting import UnweightedSumLoss
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
