@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 from typing import Dict, Any, List, Optional, Tuple
@@ -12,7 +13,7 @@ class BaseWeighting(nn.Module):
         """Combines N losses into a single scalar loss."""
         raise NotImplementedError
     
-    def step(self, metrics: Optional[Dict[str, Any]] = None):
+    def step(self, metrics: Dict[str, Any]):
         """Hook to be called at the end of an epoch or validation pass."""
         pass
     
@@ -50,4 +51,77 @@ class Uncertainty(BaseWeighting):
             combined_loss += (0.5 * precision * loss) + (0.5 * logarithmic_variance)
             weights[key] = precision.item()
         
-        return combined_loss, weights    
+        return combined_loss, weights
+    
+class CompetenceDecay(BaseWeighting):
+    def __init__(self, keys: List[str], params: Optional[Dict[str, Any]] = None):
+        super().__init__(keys, params)
+        
+        self.alpha = self.params['alpha'] # How fast the competence decay reacts to changes in student performance, higher alpha means faster reaction
+        self.teacher_performance = self.params['teacher_performance']
+        self.inverse = self.params['inverse']
+        self.metric_key = self.params['metric_key']
+        self.metric_is_score = self.params['metric_is_score']
+        
+        self.weight_distillation = 1.0 if not self.inverse else 0.0
+        self.weight_target = 0.0 if not self.inverse else 1.0
+        
+        self.eps = 1e-8
+        self.student_error_ema = None
+        
+    def combine(self, losses: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+        combined_loss = (self.weight_target * losses['target']) + (self.weight_distillation * losses['distillation'])
+        weights = {'target': self.weight_target, 'distillation': self.weight_distillation}
+        
+        return combined_loss, weights
+    
+    def step(self, metrics: Dict[str, Any]):
+        student_performance = metrics[self.metric_key]
+        teacher_performance = self.teacher_performance
+        
+        if self.metric_is_score:
+            student_error = 1 - student_performance
+            teacher_error = 1 - teacher_performance
+        else:
+            student_error = student_performance
+            teacher_error = teacher_performance
+            
+        if self.student_error_ema is None: self.student_error_ema = student_error
+        else: self.student_error_ema = (self.alpha * student_error) + ((1.0 - self.alpha) * self.student_error_ema)
+        self.student_error_ema = max(self.student_error_ema, self.eps)    
+        
+        gap = (self.student_error_ema - teacher_error) / self.student_error_ema
+        self.weight_distillation = max(0.0, gap) if not self.inverse else min(1.0, 1 - gap)
+        self.weight_target = 1.0 - self.weight_distillation      
+        
+        
+class DynamicTaskPriority(BaseWeighting):
+    def __init__(self, keys: List[str], params: Optional[Dict[str, Any]] = None):
+        super().__init__(keys, params)
+        
+        self.alpha = self.params['alpha'] # Moving average reacts faster to changes with higher alpha
+        self.gamma = self.params['gamma'] # Attenuation factor, weight^gamma, penalizes easy task more
+        self.metric_keys = {key: self.params[f'metric_key_{key}'] for key in keys}
+        self.metric_is_score = {key: self.params[f'metric_is_score_{key}'] for key in keys}
+        self.eps = 1e-8
+        self.kappa_ema = {key: 0.5 for key in keys}
+    
+    def step(self, metrics: Dict[str, Any]):
+        for key in self.keys:
+            if self.metric_is_score[key]: current_kappa = metrics[self.metric_keys[key]]
+            else: current_kappa = 1 - metrics[self.metric_keys[key]]
+            
+            self.kappa_ema[key] = (self.alpha * current_kappa) + ((1.0 - self.alpha) * self.kappa_ema[key])
+        
+    def combine(self, losses: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+        combined_loss = 0
+        weights = {}
+        
+        for key in self.keys:
+            kappa_bar = max(self.kappa_ema[key], self.eps)
+            weight = -1.0 * (1.0 - kappa_bar) ** self.gamma * math.log(kappa_bar)
+            
+            weights[key] = weight
+            combined_loss += weight * losses[key]
+        
+        return combined_loss, weights

@@ -5,29 +5,56 @@ data:
   max_disparity: 512
 
 training:
-  epochs: 4
+  epochs: 250
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 1.0e-3
+      lr: 1.0e-4
     encoder_lr_mod: 1
 
   scheduler:
     name: torch.optim.lr_scheduler.LinearLR
     params:
-      start_factor: 0.5
+      start_factor: 0.1
       total_iters: 675
 
   tasks:
     segmentation:
       enabled: true
-      knowledge_distillation:
+      distillation:
         enabled: true
     disparity:
       enabled: true
-      knowledge_distillation:
+      distillation:
         enabled: true
+
+  weighting:
+    inter:
+      name: criterions.weighting.DynamicTaskPriority
+      params:
+        alpha: 0.1
+        gamma: 1.0
+        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
+        metric_is_score_segmentation: true
+        metric_key_disparity: 'performance/validation/disparity/EPE_px_normalized'
+        metric_is_score_disparity: false
+    intra_segmentation:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1
+        teacher_performance: 0.96
+        inverse: false
+        metric_key: 'performance/validation/segmentation/DICE_score/instrument'
+        metric_is_score: true
+    intra_disparity:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1
+        teacher_performance: 22.33
+        inverse: false
+        metric_key: 'performance/validation/disparity/EPE_px'
+        metric_is_score: false
 
 logging:
   n_validation_images: 0

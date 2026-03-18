@@ -201,7 +201,7 @@ class Trainer(BaseProcessor):
         self.kd_models = {}
         for task, task_config in self.config['training']['tasks'].items():
             if task_config['enabled']:
-                kd_config = task_config['knowledge_distillation']
+                kd_config = task_config['distillation']
                 if kd_config['enabled']:
                     if kd_config['name'] == 'offline':
                         logger.subheader(f'Loading offline teacher outputs from disk for {task}')
@@ -237,7 +237,7 @@ class Trainer(BaseProcessor):
                 self.criterions[task] = CriterionClass(**criterion_config['params'])
                 logger.info(f'Criterion for task {task}: {criterion_config["name"]} with params {criterion_config["params"]}')
                 
-            kd_task_config = task_config['knowledge_distillation']
+            kd_task_config = task_config['distillation']
             if kd_task_config['enabled']:
                 kd_criterion_config = kd_task_config['criterion']
                 KdCriterionClass = load(kd_criterion_config['name'])
@@ -248,7 +248,8 @@ class Trainer(BaseProcessor):
             config=self.config,
             criterions=self.criterions,
             tasks=self.tasks
-        )
+        ).to(self.device)
+        
         optimizer_config = self.config['training']['optimizer']
         base_lr = optimizer_config['params']['lr']
         model_parameter_groups = [
@@ -409,6 +410,7 @@ class Trainer(BaseProcessor):
         
         logger.info('Get pretrained Baseline')
         val_epoch_metrics = self._validate_epoch(epoch=0)
+        self.baseline_epe = val_epoch_metrics['performance/validation/disparity/EPE_px'] if 'disparity' in self.tasks else None
         mlflow.log_metric('epoch_validation', 0, step=self.metrics_tracker.global_step)
         mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
         
@@ -416,7 +418,7 @@ class Trainer(BaseProcessor):
         best_val_epoch = -1
         best_val_loss = float('inf')
         best_val_dice = float('-inf')
-        best_val_bad3 = float('inf')
+        best_val_epe_norm = float('inf')
         best_val_heuristic = float('inf')
         best_val_epoch_metrics = {}
         
@@ -428,11 +430,6 @@ class Trainer(BaseProcessor):
             self._train_epoch(epoch=epoch)
             
             val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
-            self.loss_composer.step_weighting(metrics=val_epoch_metrics)
-            
-            mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
-            mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
-            
             if 'segmentation' in self.tasks:
                 val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
                 if val_dice > best_val_dice:
@@ -443,22 +440,29 @@ class Trainer(BaseProcessor):
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'disparity' in self.tasks:
-                val_bad3 = val_epoch_metrics['performance/validation/disparity/Bad3_rate']
-                if val_bad3 < best_val_bad3:
-                    best_val_bad3 = val_bad3
+                val_epe = val_epoch_metrics['performance/validation/disparity/EPE_px']
+                val_epe_norm = val_epe / self.baseline_epe
+                val_epoch_metrics['performance/validation/disparity/EPE_px_normalized'] = val_epe_norm
+                if val_epe_norm < best_val_epe_norm:
+                    best_val_epe_norm = val_epe_norm
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
                     mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                     
             if 'segmentation' in self.tasks and 'disparity' in self.tasks:
-                val_heuristic = ((1 - val_dice) ** 2 + val_bad3 ** 2) ** 0.5
+                val_heuristic = ((1 - val_dice) ** 2 + val_epe_norm ** 2) ** 0.5
+                val_epoch_metrics['performance/validation/combined/heuristic'] = val_heuristic
                 if val_heuristic < best_val_heuristic:
                     best_val_heuristic = val_heuristic
                     
                     torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
                     mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                     for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
+            
+            mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
+            mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
+            self.loss_composer.step_weighting(metrics=val_epoch_metrics)
             
             log_vram(f'Trainer Epoch {epoch}')
             

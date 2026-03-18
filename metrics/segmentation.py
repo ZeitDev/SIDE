@@ -8,6 +8,10 @@ class SegmentationMetric:
         self.confusion_matrix = torch.zeros((n_classes, n_classes), dtype=torch.int64, device=device)
 
     def update(self, output_logits: torch.Tensor, targets: torch.Tensor) -> None:
+        """
+        output_logits: Raw model outputs (logits)
+        targets: Ground truth segmentation masks
+        """
         with torch.no_grad():
             predictions = torch.argmax(output_logits, dim=1)
             

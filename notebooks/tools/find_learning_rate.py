@@ -12,7 +12,7 @@ from data.transforms import build_transforms
 from utils import helpers
 from utils.helpers import load
 from processors.trainer import Trainer
-from criterions.weighting import AutomaticWeightedLoss
+from criterions.manager import LossComposer
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -28,17 +28,18 @@ NUM_ITER = 100
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
 with open(f'./configs/{EXPERIMENT}.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
-config['data']['batch_size'] = 2
+config['data']['batch_size'] = 1
 
 # %%
-class AutomaticWeightedLossWraper(nn.Module):
-    def __init__(self, automatic_weighted_loss):
+class LossComposerWrapper(nn.Module):
+    def __init__(self, loss_composer):
         super().__init__()
-        self.automatic_weighted_loss = automatic_weighted_loss
+        self.loss_composer = loss_composer
         
     def forward(self, outputs, targets):
-        total_loss, _ = self.automatic_weighted_loss(outputs, targets)
-        return total_loss
+        # LossComposer returns: inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
+        inter_loss, _, _, _, _ = self.loss_composer(outputs, targets)
+        return inter_loss
 
 class ModelInputWrapper(nn.Module):
     def __init__(self, model):
@@ -81,8 +82,12 @@ print(f'LR Finder for configuration: {EXPERIMENT}')
 
 trainer = Trainer(config)
 model = ModelInputWrapper(trainer.model)
-raw_criterion = AutomaticWeightedLoss(trainer.criterions, freeze=True).to('cuda')
-criterion = AutomaticWeightedLossWraper(raw_criterion).to('cuda')
+
+loss_composer = trainer.loss_composer
+for param in loss_composer.parameters():
+    param.requires_grad = False
+    
+criterion = LossComposerWrapper(loss_composer).to('cuda')
 train_iter = MultiTaskIter(trainer.dataloader_train)
 
 optimizer_config = config['training']['optimizer']

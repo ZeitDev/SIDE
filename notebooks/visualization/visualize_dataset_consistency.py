@@ -34,9 +34,9 @@ dataset_name = 'EndoVis17'
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: config = yaml.safe_load(f)
 config['data']['dataset'] = f'data.datasets.{dataset_name}'
 config['training']['tasks']['segmentation']['enabled'] = True
-config['training']['tasks']['segmentation']['knowledge_distillation']['enabled'] = True
+config['training']['tasks']['segmentation']['distillation']['enabled'] = True
 config['training']['tasks']['disparity']['enabled'] = True
-config['training']['tasks']['disparity']['knowledge_distillation']['enabled'] = True
+config['training']['tasks']['disparity']['distillation']['enabled'] = True
 
 data_config = config['data']
 dataset_class = helpers.load(data_config['dataset'])

@@ -15,16 +15,19 @@ class LossComposer(nn.Module):
         self.criterions = criterions
         self.tasks = tasks
 
-        self.intra = load(
-            config['training']['weighting']['intra_task']['name'],
-            keys=['target', 'distillation'],
-            params=config['training']['weighting']['intra_task']['params']
-        )
         self.inter = load(
-            config['training']['weighting']['inter_task']['name'],
+            config['training']['weighting']['inter']['name'],
             keys=self.tasks,
-            params=config['training']['weighting']['inter_task']['params']
+            params=config['training']['weighting']['inter']['params']
         )
+        
+        self.intras = nn.ModuleDict()
+        for task in self.tasks:
+            self.intras[task] = load(
+                config['training']['weighting'][f'intra_{task}']['name'],
+                keys=['target', 'distillation'],
+                params=config['training']['weighting'][f'intra_{task}']['params']
+            )
         
     def _compute_raw_losses(self, outputs: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         raw_losses = {}
@@ -50,7 +53,7 @@ class LossComposer(nn.Module):
         intra_loss_weights = {}
         for task in self.tasks:
             if f'{task}_distillation' in raw_losses:
-                intra_losses[task], intra_loss_weights[task] = self.intra.combine(
+                intra_losses[task], intra_loss_weights[task] = self.intras[task].combine(
                     {'target': raw_losses[task], 'distillation': raw_losses[f'{task}_distillation']}
                 )
             else:
@@ -63,8 +66,10 @@ class LossComposer(nn.Module):
         return inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
     
     def step_weighting(self, metrics: Optional[Dict[str, Any]] = None):
-        if hasattr(self.intra, 'step'):
-            self.intra.step(metrics)
-            
         if hasattr(self.inter, 'step'):
             self.inter.step(metrics)
+            
+        for intra in self.intras.values():
+            if hasattr(intra, 'step'):
+                intra.step(metrics)
+            

@@ -23,11 +23,11 @@ training:
   tasks:
     segmentation:
       enabled: true
-      knowledge_distillation:
+      distillation:
         enabled: true
         name: offline
     disparity:
       enabled: true
-      knowledge_distillation:
+      distillation:
         enabled: true
         name: offline

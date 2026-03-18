@@ -2,7 +2,7 @@ training:
   tasks:
     segmentation:
       enabled: true
-      knowledge_distillation:
+      distillation:
         enabled: false
 
     disparity: 

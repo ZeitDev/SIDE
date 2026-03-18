@@ -47,7 +47,6 @@ class EndoVisTeacherDataset(Dataset):
                 self.left_image_paths.append(os.path.join(self.root_dir, subset, 'input', 'left_images', file_name))
                 self.right_image_paths.append(os.path.join(self.root_dir, subset, 'input', 'right_images', file_name))
         
-        # convert list of left_image_paths to list of dict with 'left_image' as key
         self.sample_paths = []
         for left_path, right_path in zip(self.left_image_paths, self.right_image_paths):
             self.sample_paths.append({'left_image': left_path, 'right_image': right_path})

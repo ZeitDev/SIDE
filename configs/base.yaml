@@ -81,7 +81,7 @@ training:
       decoder:
         name: models.decoders.segmentation.SegmentationDecoder
         params: {}
-      knowledge_distillation:
+      distillation:
         enabled: false
         name: offline # mlflow
         state: null # debug/260211:1659/train
@@ -102,7 +102,7 @@ training:
           max_disparity: 512
           intercept_at: 4
           intercept_channels: 128 # matching FoundationStereo V'_c logits
-      knowledge_distillation:
+      distillation:
         enabled: false
         name: offline # models.teachers.foundation_stereo.FoundationStereoWrapper
         state: null
@@ -112,10 +112,13 @@ training:
             temperature: 1.0
 
   weighting:
-    inter_task:
+    inter:
       name: criterions.weighting.Unweighted
       params: {}
-    intra_task:
+    intra_segmentation:
+      name: criterions.weighting.Unweighted
+      params: {}
+    intra_disparity:
       name: criterions.weighting.Unweighted
       params: {}
 
