@@ -44,8 +44,8 @@ for subset in sorted(os.listdir(dataset_path)):
     
     left_dir = os.path.join(subset_path, 'input', 'left_images')
     right_dir = os.path.join(subset_path, 'input', 'right_images')
-    seg_dir = os.path.join(subset_path, 'ground_truth', 'segmentation')
-    disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
+    seg_dir = os.path.join(subset_path, 'target', 'segmentation')
+    disp_dir = os.path.join(subset_path, 'target', 'disparity')
     
     left_images = sorted(os.listdir(left_dir))
     if not left_images:
@@ -111,8 +111,8 @@ for subset in sorted(os.listdir(dataset_path)):
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(left_img, 'Left Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(right_img, 'Right Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(seg_overlay, 'Segmentation Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(disp_overlay, 'Disparity FoundationStereo Pseudo Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(seg_overlay, 'Segmentation Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(disp_overlay, 'Disparity FoundationStereo Pseudo Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         
         # Make a 2x2 grid view
         top_row = np.hstack((left_img, right_img))
@@ -137,8 +137,8 @@ for subset in sorted(os.listdir(dataset_path)):
         continue
     
     left_dir = os.path.join(subset_path, 'input', 'left_images')
-    seg_dir = os.path.join(subset_path, 'ground_truth', 'segmentation')
-    disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
+    seg_dir = os.path.join(subset_path, 'target', 'segmentation')
+    disp_dir = os.path.join(subset_path, 'target', 'disparity')
     
     teach_seg_dir = os.path.join(subset_path, 'teacher', 'segmentation_2_256_256')
     teach_disp_dir = os.path.join(subset_path, 'teacher', 'disparity_128_256_256')
@@ -257,9 +257,9 @@ for subset in sorted(os.listdir(dataset_path)):
 
         # Add labels to the images before stacking
         font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(seg_gt_overlay, 'Segmentation Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(seg_gt_overlay, 'Segmentation Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(seg_t_overlay, 'Segmentation SegFormer-B4 Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(disp_gt_overlay, 'Disparity FoundationStereo Pseudo Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(disp_gt_overlay, 'Disparity FoundationStereo Pseudo Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(disp_t_overlay, 'Disparity FoundationStereo Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
 
         # 2x2 Grid: [Seg GT | Seg Teacher] \n [Disp GT | Disp Teacher]
@@ -287,8 +287,8 @@ for subset in sorted(os.listdir(dataset_path)):
     left_dir = os.path.join(subset_path, 'input', 'left_images')
     
     teach_disp_dir = os.path.join(subset_path, 'teacher', 'disparity_128_256_256')
-    fs_disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
-    sttr_disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity_sttr')
+    fs_disp_dir = os.path.join(subset_path, 'target', 'disparity')
+    sttr_disp_dir = os.path.join(subset_path, 'target', 'disparity_sttr')
     sttr_conf_dir = os.path.join(subset_path, 'teacher', 'disparity_confidence_sttr')
     
     left_images = sorted(os.listdir(left_dir))
@@ -319,7 +319,7 @@ for subset in sorted(os.listdir(dataset_path)):
         # Center crop the image
         left_img = left_img[top:top+crop_h, left:left+crop_w]
         
-        # Load FoundationStereo ground truth disparity (not teacher)
+        # Load FoundationStereo Target disparity (not teacher)
         fs_disp_path = os.path.join(fs_disp_dir, image_name)
         fs_disp = None
         if os.path.exists(fs_disp_path):
@@ -446,7 +446,7 @@ for subset in sorted(os.listdir(dataset_path)):
         continue
     
     left_dir = os.path.join(subset_path, 'input', 'left_images')
-    disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
+    disp_dir = os.path.join(subset_path, 'target', 'disparity')
     teach_disp_dir = os.path.join(subset_path, 'teacher', 'disparity_128_256_256')
     
     left_images = sorted(os.listdir(left_dir))
@@ -544,7 +544,7 @@ for subset in sorted(os.listdir(dataset_path)):
         left_labeled = left_img.copy()
         mean_conf = conf_np.mean()
         cv2.putText(left_labeled, 'Left Image', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(disp_overlay, 'FoundationStereo Disparity Pseudo Ground Truth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(disp_overlay, 'FoundationStereo Disparity Pseudo Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(logit_overlay, 'FoundationStereo Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(conf_overlay, f'FoundationStereo Confidence Map (Mean: {mean_conf:.0%})', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         
@@ -597,8 +597,8 @@ for subset in sorted(os.listdir(dataset_path)):
     
     left_dir = os.path.join(subset_path, 'input', 'left_images')
     right_dir = os.path.join(subset_path, 'input', 'right_images')
-    disp_dir = os.path.join(subset_path, 'ground_truth', 'disparity')
-    disp_right_dir = os.path.join(subset_path, 'ground_truth', 'disparity_right')
+    disp_dir = os.path.join(subset_path, 'target', 'disparity')
+    disp_right_dir = os.path.join(subset_path, 'target', 'disparity_right')
     
     left_images = sorted(os.listdir(left_dir))
     if not left_images:

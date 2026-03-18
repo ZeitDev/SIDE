@@ -149,9 +149,9 @@ for subset in sorted(os.listdir(dataset_path)):
     if not os.path.isdir(subset_path):
         continue
     
-    for image_name in tqdm(sorted(os.listdir(os.path.join(subset_path, 'ground_truth', 'disparity')))):
-        left_disparity_path = os.path.join(subset_path, 'ground_truth', 'disparity', image_name)
-        right_disparity_path = os.path.join(subset_path, 'ground_truth', 'disparity_right', image_name)
+    for image_name in tqdm(sorted(os.listdir(os.path.join(subset_path, 'target', 'disparity')))):
+        left_disparity_path = os.path.join(subset_path, 'target', 'disparity', image_name)
+        right_disparity_path = os.path.join(subset_path, 'target', 'disparity_right', image_name)
         
         left_disp = load_disparity(left_disparity_path).unsqueeze(0)
         right_disp = load_disparity(right_disparity_path).unsqueeze(0)
@@ -259,8 +259,8 @@ for mode in MODES:
             continue
             
         seq = seq_path.name
-        left_dir = seq_path / 'ground_truth' / 'disparity'
-        right_dir = seq_path / 'ground_truth' / 'disparity_right'
+        left_dir = seq_path / 'target' / 'disparity'
+        right_dir = seq_path / 'target' / 'disparity_right'
         
         if not left_dir.exists() or not right_dir.exists():
             print(f"Disparity path not found for: {seq_path}")

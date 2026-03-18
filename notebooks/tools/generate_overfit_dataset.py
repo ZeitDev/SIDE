@@ -12,8 +12,8 @@ for mode in ['train', 'val', 'test']:
     
     source_left_images_path = source_subset / 'input' / 'left_images'
     source_right_images_path = source_subset / 'input' / 'right_images'
-    source_segmentation_path = source_subset / 'ground_truth' / 'segmentation'
-    source_disparity_path = source_subset / 'ground_truth' / 'disparity'
+    source_segmentation_path = source_subset / 'target' / 'segmentation'
+    source_disparity_path = source_subset / 'target' / 'disparity'
     source_teacher_segmentation_path = source_subset / 'teacher' / 'segmentation_2_256_256'
     source_teacher_disparity_path = source_subset / 'teacher' / 'disparity_128_256_256'
     
@@ -28,8 +28,8 @@ for mode in ['train', 'val', 'test']:
     for target_subset in target_subsets:
         (target_subset / 'input' / 'left_images').mkdir(parents=True, exist_ok=True)
         (target_subset / 'input' / 'right_images').mkdir(parents=True, exist_ok=True)
-        (target_subset / 'ground_truth' / 'segmentation').mkdir(parents=True, exist_ok=True)
-        (target_subset / 'ground_truth' / 'disparity').mkdir(parents=True, exist_ok=True)
+        (target_subset / 'target' / 'segmentation').mkdir(parents=True, exist_ok=True)
+        (target_subset / 'target' / 'disparity').mkdir(parents=True, exist_ok=True)
         (target_subset / 'teacher' / 'segmentation_2_256_256').mkdir(parents=True, exist_ok=True)
         (target_subset / 'teacher' / 'disparity_128_256_256').mkdir(parents=True, exist_ok=True)
         
@@ -40,8 +40,8 @@ for mode in ['train', 'val', 'test']:
         for selected_file_name in selected_file_names:
             target_left_image_path = target_subset / 'input' / 'left_images' / selected_file_name.name
             target_right_image_path = target_subset / 'input' / 'right_images' / selected_file_name.name
-            target_segmentation_path = target_subset / 'ground_truth' / 'segmentation' / selected_file_name.name
-            target_disparity_path = target_subset / 'ground_truth' / 'disparity' / selected_file_name.name
+            target_segmentation_path = target_subset / 'target' / 'segmentation' / selected_file_name.name
+            target_disparity_path = target_subset / 'target' / 'disparity' / selected_file_name.name
             target_teacher_segmentation_path = target_subset / 'teacher' / 'segmentation_2_256_256' / selected_file_name.name.replace('.png', '.pt')
             target_teacher_disparity_path = target_subset / 'teacher' / 'disparity_128_256_256' / selected_file_name.name.replace('.png', '.pt')
             

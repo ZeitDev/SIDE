@@ -102,7 +102,7 @@ if True:
             disparity, confidence_map = model(left_image, right_image)
             
             image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity_sttr')
+            save_path = image_path.replace('input', 'target').replace('left_images', 'disparity_sttr')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
             disp = disparity.squeeze().cpu().numpy()
@@ -183,7 +183,7 @@ if False:
             #print((valid_mask.sum() / valid_mask.numel()).item() * 100)
             
             image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'ground_truth').replace('left_images', 'disparity_right')
+            save_path = image_path.replace('input', 'target').replace('left_images', 'disparity_right')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
             disp = right_disparity.squeeze().cpu().numpy()

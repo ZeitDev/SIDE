@@ -41,7 +41,7 @@ def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFra
     sequence_dirs = sorted([d for d in dataset_dir.iterdir() if d.is_dir()])
 
     for seq_dir in tqdm(sequence_dirs, desc=f"Processing {dataset_dir.name}"):
-        gt_dir = seq_dir / "ground_truth"
+        gt_dir = seq_dir / "target"
         if not gt_dir.is_dir():
             continue
 
@@ -49,7 +49,7 @@ def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFra
         # to aggregate left/right versions before adding to records.
         sequence_pixel_counts = {name: 0 for name in base_instrument_names}
 
-        # Iterate over actual instrument folders in the ground_truth directory
+        # Iterate over actual instrument folders in the target directory
         instrument_folders = [d for d in gt_dir.iterdir() if d.is_dir()]
         for instrument_dir in instrument_folders:
             folder_name_str = instrument_dir.name.replace('_', ' ')

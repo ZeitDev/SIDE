@@ -5,7 +5,7 @@ data:
   max_disparity: 512
 
 training:
-  epochs: 20
+  epochs: 4
 
   optimizer:
     name: torch.optim.AdamW
@@ -21,13 +21,13 @@ training:
 
   tasks:
     segmentation:
-      enabled: false
+      enabled: true
       knowledge_distillation:
-        enabled: false
+        enabled: true
     disparity:
       enabled: true
       knowledge_distillation:
-        enabled: false
+        enabled: true
 
 logging:
   n_validation_images: 0

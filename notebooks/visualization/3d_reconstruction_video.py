@@ -21,8 +21,8 @@ setup_environment()
 # frame_num = '199'
 
 # left_image_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/input/left_images/image{frame_num}.png')
-# segmentation_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/ground_truth/segmentation/image{frame_num}.png')
-# disparity_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/ground_truth/disparity/image{frame_num}.png')
+# segmentation_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/target/segmentation/image{frame_num}.png')
+# disparity_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/target/disparity/image{frame_num}.png')
 # intrinsic_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/train/{sequence_name}/input/foundation_stereo_calibration.txt')
 # output_path = Path('/data/Zeitler/debug')
 # 
@@ -232,8 +232,8 @@ for mode in ['train', 'test']:
             for frame_num in tqdm(range(0, 200)):
                 frame_num_str = str(frame_num).zfill(3)
                 left_image_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/input/left_images/image{frame_num_str}.png')
-                segmentation_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/ground_truth/segmentation/image{frame_num_str}.png')
-                disparity_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/ground_truth/disparity/image{frame_num_str}.png')
+                segmentation_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/target/segmentation/image{frame_num_str}.png')
+                disparity_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/target/disparity/image{frame_num_str}.png')
                 intrinsic_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{sequence_name}/calibration/foundation_stereo_calibration.txt')
                 
                 name = f'{mode}_{sequence_name}_{frame_num_str}'

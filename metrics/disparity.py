@@ -13,7 +13,7 @@ class DisparityMetric:
     def update(self, outputs: torch.Tensor, targets: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> None:
         """
         output_logits: Predicted disparity in logits.
-        targets: Ground truth disparity in [px].
+        targets: Target disparity in [px].
         baseline: Stereo baseline. The unit used here millimeters defines the unit of the calculated depth.
         focal_length: Focal length in [px].
         """

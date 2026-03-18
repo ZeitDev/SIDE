@@ -15,7 +15,7 @@ for mode in ['train', 'test']:
             
 # %%
 for sequence in sorted(sequences):
-    binary_masks_path = os.path.join(sequence, 'ground_truth', 'segmentation')
+    binary_masks_path = os.path.join(sequence, 'target', 'segmentation')
     binary_masks_output_path = os.path.join(output_path, os.path.basename(sequence), 'instrument_masks')
     os.makedirs(binary_masks_output_path, exist_ok=True)
     # load the png binary mask and save it as a jpg binary mask, replace 'image' with 'frame'

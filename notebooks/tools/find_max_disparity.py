@@ -23,7 +23,7 @@ for mode in ['train', 'test']:
     sequences = sorted([p for p in Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}').iterdir() if p.is_dir()])
     
     for sequence_name in tqdm(sequences, desc=f"Processing {mode}"):
-        frames = sorted((sequence_name / 'ground_truth' / 'disparity').iterdir())
+        frames = sorted((sequence_name / 'target' / 'disparity').iterdir())
         
         for frame in tqdm(frames, desc="Frames", leave=False):
             disparity_map = np.array(Image.open(frame)).astype(float)

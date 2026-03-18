@@ -177,12 +177,12 @@ sequences = sorted([path for path in source_path.iterdir() if path.is_dir()])
 for sequence in sequences:
     output_left_images_path = output_path / sequence.name / 'input' / 'left_images'
     output_right_images_path = output_path / sequence.name / 'input' / 'right_images'
-    output_ground_truth_segmentation_path = output_path / sequence.name / 'ground_truth' / 'segmentation'
-    output_ground_truth_disparity_path = output_path / sequence.name / 'ground_truth' / 'disparity'
+    output_target_segmentation_path = output_path / sequence.name / 'target' / 'segmentation'
+    output_target_disparity_path = output_path / sequence.name / 'target' / 'disparity'
     
     output_left_images_path.mkdir(parents=True, exist_ok=True)
     output_right_images_path.mkdir(parents=True, exist_ok=True)
-    if SEGMENTATION: output_ground_truth_segmentation_path.mkdir(parents=True, exist_ok=True)
+    if SEGMENTATION: output_target_segmentation_path.mkdir(parents=True, exist_ok=True)
     
     calibration_path = sequence / 'camera_calibration.txt'
     calibration = get_calibration(calibration_path)
@@ -222,13 +222,13 @@ for sequence in sequences:
     # 3. Rectify
     # 4. Combine into single mask with different instrument types
     if SEGMENTATION:
-        source_ground_truth_segmentation_instruments = sorted([ path for path in (sequence / 'ground_truth').iterdir() if path.is_dir()])
-        source_ground_truth_segmentation_instruments_paths = [sorted((sequence / 'ground_truth' / instrument).glob('*.png')) for instrument in sorted([p.name for p in source_ground_truth_segmentation_instruments])]
-        for ground_truth_segmentation in tqdm(zip(*source_ground_truth_segmentation_instruments_paths)):
-            ground_truth_list_with_type = []
-            filename = ground_truth_segmentation[0].name.replace('frame', 'image')
+        source_target_segmentation_instruments = sorted([ path for path in (sequence / 'target').iterdir() if path.is_dir()])
+        source_target_segmentation_instruments_paths = [sorted((sequence / 'target' / instrument).glob('*.png')) for instrument in sorted([p.name for p in source_target_segmentation_instruments])]
+        for target_segmentation in tqdm(zip(*source_target_segmentation_instruments_paths)):
+            target_list_with_type = []
+            filename = target_segmentation[0].name.replace('frame', 'image')
             
-            for segmentation_mask_path in ground_truth_segmentation:
+            for segmentation_mask_path in target_segmentation:
                 instrument_name = segmentation_mask_path.parent.name
                 if instrument_name == 'binary': continue
                 instrument_type = None
@@ -247,14 +247,14 @@ for sequence in sequences:
                 segmentation_mask_cropped = segmentation_mask[first_crop_y:first_crop_y+first_crop_h, first_crop_x:first_crop_x+first_crop_w]
                 segmentation_mask_resized = cv2.resize(segmentation_mask_cropped, (first_crop_w, first_crop_h), interpolation=cv2.INTER_NEAREST)
                 segmentation_mask_rectified, _ = rectifier.rectify(segmentation_mask_resized, segmentation_mask_resized, alpha=RECT_ALPHA, interpolation=cv2.INTER_NEAREST)
-                ground_truth_list_with_type.append((segmentation_mask_rectified, instrument_type_id))
+                target_list_with_type.append((segmentation_mask_rectified, instrument_type_id))
                 
-            first_segmentation_mask = ground_truth_list_with_type[0][0]
+            first_segmentation_mask = target_list_with_type[0][0]
             combined_segmentation_mask = np.zeros(first_segmentation_mask.shape, dtype=np.uint8)    
-            for segmentation_mask_rectified, instrument_type_id in ground_truth_list_with_type:
+            for segmentation_mask_rectified, instrument_type_id in target_list_with_type:
                 combined_segmentation_mask[segmentation_mask_rectified > 0] = instrument_type_id
                 
-            cv2.imwrite(str(output_ground_truth_segmentation_path / filename), combined_segmentation_mask)
+            cv2.imwrite(str(output_target_segmentation_path / filename), combined_segmentation_mask)
 
     shutil.copy(source_path / sequence.name / 'camera_calibration.txt', output_path / sequence.name / 'original_calibration.txt')
 shutil.copy(source_path.parent / mappings_name, output_path / mappings_name)

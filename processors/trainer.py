@@ -13,37 +13,48 @@ from utils.helpers import load, log_vram, get_model_run_id
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
-from criterions.weighting import AutomaticWeightedLoss
-from criterions.weighting import UnweightedSumLoss
+from criterions.manager import LossComposer
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 
 
 class MetricsTracker:
-    def __init__(self, criterion_keys: List[str], log_interval: int, dataloader_len: int):
-        self.log_interval = log_interval
-        self.dataloader_len = dataloader_len
+    def __init__(self, tasks: List[str], criterion_keys: List[str], log_interval: int, dataloader_length: int):
+        self.tasks = tasks
         self.criterion_keys = criterion_keys
+        self.log_interval = log_interval
+        self.dataloader_length = dataloader_length
         self.global_step = 0
         
         self._reset()
     
     def _reset(self):
-        self.running_loss_weighted = 0.0
+        self.running_inter_loss = 0.0
+        self.running_inter_loss_weights = {task: 0.0 for task in self.tasks}
+        
+        self.running_intra_losses = {task: 0.0 for task in self.tasks}
+        self.running_intra_loss_weights = {task: {'target': 0.0, 'distillation': 0.0} for task in self.tasks}
+        
         self.running_raw_task_losses = {task: 0.0 for task in self.criterion_keys}
-        self.running_task_weights = {task: 0.0 for task in self.criterion_keys}
+        
         self.loss_for_scheduler = 0.0
     
-    def update(self, loss: float, raw_task_losses: Dict[str, float], task_weights: Dict[str, float]):
-        self.running_loss_weighted += loss
-        
+    def update(self, inter_loss: float, inter_loss_weights: Dict[str, float], intra_losses: Dict[str, float], intra_loss_weights: Dict[str, Dict[str, float]], raw_task_losses: Dict[str, float]):
+        self.running_inter_loss += inter_loss
+        for task, weight in inter_loss_weights.items():
+            self.running_inter_loss_weights[task] += weight
+            
+        for task, intra_loss in intra_losses.items():
+            self.running_intra_losses[task] += intra_loss.item()
+            
+        for task, weights in intra_loss_weights.items():
+            for intra_type, weight in weights.items():
+                self.running_intra_loss_weights[task][intra_type] += weight
+
         for task, raw_loss in raw_task_losses.items():
             self.running_raw_task_losses[task] += raw_loss
-            
-        for task, weight in task_weights.items():
-            self.running_task_weights[task] += weight
-            
+        
         self.global_step += 1
     
     def should_log(self) -> bool:
@@ -51,15 +62,22 @@ class MetricsTracker:
     
     def get_metrics(self, epoch: int, batch_idx: int, lr: float) -> Dict[str, float]:
         metrics = {}
-        metrics['epoch_train'] = epoch + (batch_idx / self.dataloader_len)
-        metrics['optimization/training/loss/auto_weighted_sum'] = self.running_loss_weighted / self.log_interval
+        metrics['epoch_train'] = epoch + (batch_idx / self.dataloader_length)
+        metrics['optimization/training/loss/inter'] = self.running_inter_loss / self.log_interval
         
-        for task in self.criterion_keys:
-            metrics[f'optimization/training/loss/raw/{task}'] = self.running_raw_task_losses[task] / self.log_interval
-            metrics[f'optimization/training/loss/auto_weights/{task}'] = self.running_task_weights[task] / self.log_interval
+        for task in self.tasks:
+            metrics[f'optimization/training/loss/intra_{task}'] = self.running_intra_losses[task] / self.log_interval
+            
+            metrics[f'optimization/training/loss/weights/inter_{task}'] = self.running_inter_loss_weights[task] / self.log_interval
+            metrics[f'optimization/training/loss/weights/intra_{task}_target'] = self.running_intra_loss_weights[task]['target'] / self.log_interval
+            metrics[f'optimization/training/loss/weights/intra_{task}_distillation'] = self.running_intra_loss_weights[task]['distillation'] / self.log_interval
+        
+        for key in self.criterion_keys:
+            metrics[f'optimization/training/loss/raw_{key}'] = self.running_raw_task_losses[key] / self.log_interval
+        
         metrics['optimization/training/learning_rate'] = lr
         
-        self.loss_for_scheduler = self.running_loss_weighted / self.log_interval
+        self.loss_for_scheduler = self.running_inter_loss / self.log_interval
         self._reset()
         
         return metrics
@@ -223,12 +241,14 @@ class Trainer(BaseProcessor):
             if kd_task_config['enabled']:
                 kd_criterion_config = kd_task_config['criterion']
                 KdCriterionClass = load(kd_criterion_config['name'])
-                self.criterions[f'{task}_teacher'] = KdCriterionClass(**kd_criterion_config['params'])
+                self.criterions[f'{task}_distillation'] = KdCriterionClass(**kd_criterion_config['params'])
                 logger.info(f'KD Criterion for task {task}: {kd_criterion_config["name"]} with params {kd_criterion_config["params"]}')
 
-        # *
-        self.unweighted_sum_loss = UnweightedSumLoss(self.criterions).to(self.device)
-        self.automatic_weighted_loss = AutomaticWeightedLoss(self.criterions).to(self.device)
+        self.loss_composer = LossComposer(
+            config=self.config,
+            criterions=self.criterions,
+            tasks=self.tasks
+        )
         optimizer_config = self.config['training']['optimizer']
         base_lr = optimizer_config['params']['lr']
         model_parameter_groups = [
@@ -239,13 +259,17 @@ class Trainer(BaseProcessor):
             {
                 'params': [p for n, p in self.model.named_parameters() if 'encoder' not in n and p.requires_grad],
                 'lr': base_lr
-            },
-            {
-                'params': self.automatic_weighted_loss.parameters(),
-                'lr': base_lr,
-                'weight_decay': 0.0
             }
         ]
+        
+        composer_params = [p for p in self.loss_composer.parameters() if p.requires_grad]
+        if composer_params:
+            model_parameter_groups.append({
+                'params': composer_params,
+                'lr': base_lr,
+                'weight_decay': 0.0
+            })
+        
         OptimizerClass = load(optimizer_config['name'])
         self.optimizer = OptimizerClass(
             model_parameter_groups,
@@ -263,9 +287,10 @@ class Trainer(BaseProcessor):
         
         train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
         self.metrics_tracker = MetricsTracker(
+            tasks=self.tasks,
             criterion_keys=list(self.criterions.keys()),
             log_interval=train_log_interval,
-            dataloader_len=len(self.dataloader_train)
+            dataloader_length=len(self.dataloader_train)
         )
 
     def _save_model(self):
@@ -315,24 +340,20 @@ class Trainer(BaseProcessor):
                         else:
                             with torch.no_grad():
                                 teacher_outputs = kd_teacher(left_images, right_images)[task]
-                        outputs[f'{task}_teacher'] = outputs[task]
-                        targets[f'{task}_teacher'] = teacher_outputs
+                        outputs[f'{task}_distillation'] = outputs[task]
+                        targets[f'{task}_distillation'] = teacher_outputs
                 
-                loss, raw_task_losses = self.unweighted_sum_loss(outputs, targets)
+                inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
                         
                 self.optimizer.zero_grad()
-                self.scaler.scale(loss).backward()
+                self.scaler.scale(inter_loss).backward()
                 self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0) # !!! THIS DOESNT WORK WITH DISPARITY RANGE IN PIXELS !!!
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.scheduler.step()
-                
-                with torch.no_grad():
-                    #task_weights = {task: torch.exp(-s_param).item() for task, s_param in self.automatic_weighted_loss.logarithmic_variances.items()}
-                    task_weights = {task: 1.0 for task in self.tasks}
-                    
-                self.metrics_tracker.update(loss.item(), raw_task_losses, task_weights)
+                                   
+                self.metrics_tracker.update(inter_loss.item(), inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses)
             
             if self.metrics_tracker.should_log():
                 lr = self.optimizer.param_groups[0]['lr']
@@ -358,8 +379,8 @@ class Trainer(BaseProcessor):
             with torch.no_grad():
                 outputs = self.model(left_images, right_images)
                 
-                loss, raw_task_losses = self.unweighted_sum_loss(outputs, targets)
-                total_loss_weighted += loss.item()
+                inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
+                total_loss_weighted += inter_loss.item()
                 
                 self._log_visuals(epoch=epoch, images=left_images, targets=targets, outputs=outputs)
                 
@@ -371,20 +392,15 @@ class Trainer(BaseProcessor):
                     for metric in self.metrics['disparity'].values():
                         metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
                         
-                batch_tqdm.set_postfix({'batch_loss': f'{loss.item():.4f}'})
                 for task, raw_task_loss in raw_task_losses.items():
                     total_raw_task_losses[task] += raw_task_loss
-                with torch.no_grad():
-                    for task in self.tasks:
-                        #s_param = self.automatic_weighted_loss.logarithmic_variances[task]
-                        #total_task_weights[task] += torch.exp(-s_param).item()
-                        total_task_weights[task] += 1.0
-        
+                    total_task_weights[task] += inter_loss_weights[task]
+                    
         epoch_metrics = self._compute_metrics(mode='validation')
-        epoch_metrics['optimization/validation/loss/auto_weighted_sum'] = total_loss_weighted / len(self.dataloader_val)
+        epoch_metrics['optimization/validation/loss/inter'] = total_loss_weighted / len(self.dataloader_val)
         for task in self.tasks:
-            epoch_metrics[f'optimization/validation/loss/raw/{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
-            epoch_metrics[f'optimization/validation/loss/auto_weights/{task}'] = total_task_weights[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
+            epoch_metrics[f'optimization/validation/loss/weights/inter_{task}'] = total_task_weights[task] / len(self.dataloader_val)
                 
         return epoch_metrics
     
@@ -412,6 +428,8 @@ class Trainer(BaseProcessor):
             self._train_epoch(epoch=epoch)
             
             val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
+            self.loss_composer.step_weighting(metrics=val_epoch_metrics)
+            
             mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
             mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
             

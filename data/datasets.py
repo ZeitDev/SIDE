@@ -147,14 +147,14 @@ class OverfitDataset(BaseDataset):
         sample_paths['left_image'] = os.path.join(subset_path, 'input', 'left_images', file_name)
         
         if self.config['training']['tasks']['segmentation']['enabled']:
-            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'target', 'segmentation', file_name)
             
             if self.config['training']['tasks']['segmentation']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['segmentation']['knowledge_distillation']['name'] == 'offline':
                 sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', 'segmentation_2_256_256', file_name.replace('.png', '.pt'))
             
         if self.config['training']['tasks']['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
-            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'target', 'disparity', file_name)
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             if self.config['training']['tasks']['disparity']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['disparity']['knowledge_distillation']['name'] == 'offline':
@@ -184,14 +184,14 @@ class EndoVis17(BaseDataset):
         sample_paths['left_image'] = os.path.join(subset_path, 'input', 'left_images', file_name)
         
         if self.config['training']['tasks']['segmentation']['enabled']:
-            sample_paths['segmentation'] = os.path.join(subset_path, 'ground_truth', 'segmentation', file_name)
+            sample_paths['segmentation'] = os.path.join(subset_path, 'target', 'segmentation', file_name)
             
             if self.config['training']['tasks']['segmentation']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['segmentation']['knowledge_distillation']['name'] == 'offline':
                 sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', 'segmentation_2_256_256', file_name.replace('.png', '.pt'))
             
         if self.config['training']['tasks']['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
-            sample_paths['disparity'] = os.path.join(subset_path, 'ground_truth', 'disparity', file_name)
+            sample_paths['disparity'] = os.path.join(subset_path, 'target', 'disparity', file_name)
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             #if self.config['training']['tasks']['disparity']['knowledge_distillation']['enabled'] and self.config['training']['tasks']['disparity']['knowledge_distillation']['name'] == 'offline':

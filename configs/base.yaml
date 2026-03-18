@@ -47,6 +47,9 @@ data:
 training:
   epochs: 10
 
+  checkpoint: null # continue training from this checkpoint
+  finetune: null # finetune from this pre-trained model with frozen encoder
+
   optimizer:
     name: torch.optim.AdamW
     params:
@@ -59,9 +62,6 @@ training:
       T_0: 50
       T_mult: 1
       eta_min: 1.0e-7
-
-  checkpoint: null # continue training from this checkpoint
-  finetune: null # finetune from this pre-trained model with frozen encoder
 
   encoder:
     name: models.encoders.timm.Encoder
@@ -110,6 +110,14 @@ training:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
             temperature: 1.0
+
+  weighting:
+    inter_task:
+      name: criterions.weighting.Unweighted
+      params: {}
+    intra_task:
+      name: criterions.weighting.Unweighted
+      params: {}
 
 logging:
   log_interval: 0.05
