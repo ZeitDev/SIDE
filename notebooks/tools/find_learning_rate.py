@@ -8,11 +8,9 @@ import yaml
 import torch.nn as nn
 from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
-from data.transforms import build_transforms
 from utils import helpers
 from utils.helpers import load
 from processors.trainer import Trainer
-from criterions.manager import LossComposer
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -28,7 +26,7 @@ NUM_ITER = 100
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
 with open(f'./configs/{EXPERIMENT}.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
-config['data']['batch_size'] = 1
+config['data']['batch_size'] = 2
 
 # %%
 class LossComposerWrapper(nn.Module):

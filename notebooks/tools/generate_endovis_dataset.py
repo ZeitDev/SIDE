@@ -1,7 +1,8 @@
 # %% Import
 # Import
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+import os, sys
+sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 from pathlib import Path
 import numpy as np
@@ -14,7 +15,8 @@ import matplotlib.pyplot as plt
 import math
 
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 # %% Settings
 # Settings

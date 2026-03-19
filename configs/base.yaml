@@ -9,6 +9,7 @@ data:
     segmentation: 2
     disparity: 1
   max_disparity: 512
+  baseline_epe: 20
 
   batch_size:  2
   num_workers: 4

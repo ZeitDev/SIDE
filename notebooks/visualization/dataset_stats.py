@@ -11,7 +11,8 @@ import plotly.express as px
 from tqdm import tqdm
 
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 #%%
 # --- Configuration ---

@@ -2,6 +2,14 @@ import os
 import shutil
 import atexit
 
+def cleanup(local_tmp):
+    if os.path.exists(local_tmp):
+        try:
+            shutil.rmtree(local_tmp)
+            print(f'Cleaned up temp directory: {local_tmp}')
+        except Exception as e:
+            print('Warning: Could not clean up {local_tmp}: {e}')
+            
 def setup_environment(skip_cuda=False):
     if not skip_cuda:
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -18,12 +26,6 @@ def setup_environment(skip_cuda=False):
     os.environ['MLFLOW_TMP_DIR'] = local_tmp
     print(f'Redirected TMPDIR to local folder: {local_tmp}')
 
-    def cleanup():
-        if os.path.exists(local_tmp):
-            try:
-                shutil.rmtree(local_tmp)
-                print(f'Cleaned up temp directory: {local_tmp}')
-            except Exception as e:
-                print('Warning: Could not clean up {local_tmp}: {e}')
+    cleanup(local_tmp)
 
-    atexit.register(cleanup)
+    #atexit.register(cleanup)

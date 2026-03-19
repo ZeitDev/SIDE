@@ -60,13 +60,18 @@ class LossComposer(nn.Module):
                 intra_losses[task] = raw_losses[task]
                 intra_loss_weights[task] = {'target': 1.0, 'distillation': 0.0}
 
-        inter_loss, inter_loss_weights = self.inter.combine(intra_losses)
+        if len(self.tasks) > 1:
+            inter_loss, inter_loss_weights = self.inter.combine(intra_losses)
+        else:
+            inter_loss = intra_losses[self.tasks[0]]
+            inter_loss_weights = {self.tasks[0]: 1.0}
+            
         raw_task_losses = {k: float(v.detach().item()) for k, v in raw_losses.items()}
         
         return inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
     
     def step_weighting(self, metrics: Optional[Dict[str, Any]] = None):
-        if hasattr(self.inter, 'step'):
+        if len(self.tasks) > 1 and hasattr(self.inter, 'step'):
             self.inter.step(metrics)
             
         for intra in self.intras.values():

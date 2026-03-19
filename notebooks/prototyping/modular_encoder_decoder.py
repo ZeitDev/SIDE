@@ -8,7 +8,8 @@ import torch.nn.functional as F
 import timm
 
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 # %% Print encoder feature shapes
 model_name = 'efficientnet_b0'

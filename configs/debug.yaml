@@ -5,12 +5,12 @@ data:
   max_disparity: 512
 
 training:
-  epochs: 250
+  epochs: 25
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 1.0e-4
+      lr: 1.4e-4
     encoder_lr_mod: 1
 
   scheduler:
@@ -25,9 +25,9 @@ training:
       distillation:
         enabled: true
     disparity:
-      enabled: true
+      enabled: false
       distillation:
-        enabled: true
+        enabled: false
 
   weighting:
     inter:
@@ -37,7 +37,7 @@ training:
         gamma: 1.0
         metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
         metric_is_score_segmentation: true
-        metric_key_disparity: 'performance/validation/disparity/EPE_px_normalized'
+        metric_key_disparity: 'performance/validation/disparity/normalized_EPE_px'
         metric_is_score_disparity: false
     intra_segmentation:
       name: criterions.weighting.CompetenceDecay

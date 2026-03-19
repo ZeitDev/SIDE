@@ -1,11 +1,12 @@
 # %%
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import json
 from pathlib import Path
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 # %%
 dataset_path = Path('/data/Zeitler/SIDED/EndoVis17/processed')

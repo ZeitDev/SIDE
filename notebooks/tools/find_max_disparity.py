@@ -13,7 +13,8 @@ from tqdm.notebook import tqdm
 from collections import Counter
 
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 # %%
 global_max = 0.0

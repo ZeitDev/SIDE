@@ -12,7 +12,7 @@ from processors.trainer import Trainer
 
 from utils import helpers
 from utils.setup import setup_environment
-from utils.helpers import load, log_vram
+from utils.helpers import load
 
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -74,10 +74,8 @@ def main():
                 tags['description'] = config['description']
                 helpers.mlflow_log_run(config, tags=tags)
                 
-                log_vram('Testing Start')
                 tester = Tester(config, run_id=train_run.info.run_id)
                 tester.test()
-                log_vram('Testing End')
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')
@@ -86,7 +84,6 @@ def main():
         raise error
     finally:
         if mlflow.active_run(): mlflow.end_run()
-        log_vram('End')
         logger.single('MLflow run cleaned up')
             
 if __name__ == "__main__":

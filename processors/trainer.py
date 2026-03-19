@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 from mlflow.models.signature import infer_signature
 
 from utils import helpers
-from utils.helpers import load, log_vram, get_model_run_id
+from utils.helpers import load, get_model_run_id
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
@@ -91,7 +91,6 @@ class Trainer(BaseProcessor):
         self._load_teachers()
         self._load_components()
         self._init_metrics()
-        log_vram('Trainer Initialized')
         
     def _load_data(self) -> None:
         logger.subheader('Load Data')
@@ -406,85 +405,89 @@ class Trainer(BaseProcessor):
         return epoch_metrics
     
     def train(self) -> Dict[str, float]:
-        logger.header('Training Loop')
-        
-        logger.info('Get pretrained Baseline')
-        val_epoch_metrics = self._validate_epoch(epoch=0)
-        self.baseline_epe = val_epoch_metrics['performance/validation/disparity/EPE_px'] if 'disparity' in self.tasks else None
-        mlflow.log_metric('epoch_validation', 0, step=self.metrics_tracker.global_step)
-        mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
-        
-        logger.info('Start Training')
-        best_val_epoch = -1
-        best_val_loss = float('inf')
-        best_val_dice = float('-inf')
-        best_val_epe_norm = float('inf')
-        best_val_heuristic = float('inf')
-        best_val_epoch_metrics = {}
-        
-        epochs = self.config['training']['epochs']
-        epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
-        for epoch in epochs_tqdm:
-            self.n_logged_images = 0
+        try:
+            logger.header('Training Loop')
             
-            self._train_epoch(epoch=epoch)
-            
-            val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
-            if 'segmentation' in self.tasks:
-                val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
-                if val_dice > best_val_dice:
-                    best_val_dice = val_dice
-                    
-                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
-                    mlflow.log_metric('best/segmentation/epoch', epoch + 1, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
-                    
-            if 'disparity' in self.tasks:
-                val_epe = val_epoch_metrics['performance/validation/disparity/EPE_px']
-                val_epe_norm = val_epe / self.baseline_epe
-                val_epoch_metrics['performance/validation/disparity/EPE_px_normalized'] = val_epe_norm
-                if val_epe_norm < best_val_epe_norm:
-                    best_val_epe_norm = val_epe_norm
-                    
-                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
-                    mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
-                    
-            if 'segmentation' in self.tasks and 'disparity' in self.tasks:
-                val_heuristic = ((1 - val_dice) ** 2 + val_epe_norm ** 2) ** 0.5
-                val_epoch_metrics['performance/validation/combined/heuristic'] = val_heuristic
-                if val_heuristic < best_val_heuristic:
-                    best_val_heuristic = val_heuristic
-                    
-                    torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
-                    mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)
-                    for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
-            
-            mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
+            logger.info('Get pretrained Baseline')
+            val_epoch_metrics = self._validate_epoch(epoch=0)
+            mlflow.log_metric('epoch_validation', 0, step=self.metrics_tracker.global_step)
             mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
-            self.loss_composer.step_weighting(metrics=val_epoch_metrics)
             
-            log_vram(f'Trainer Epoch {epoch}')
+            logger.info('Start Training')
+            baseline_epe = self.config['data']['baseline_epe'] if 'disparity' in self.tasks else None
+            best_val_epoch = -1
+            best_val_loss = float('inf')
+            best_val_dice = float('-inf')
+            best_val_epe_norm = float('inf')
+            best_val_heuristic = float('inf')
+            best_val_epoch_metrics = {}
             
-        self._save_model()
-        del self.model
-        del self.optimizer
-        del self.scheduler
+            epochs = self.config['training']['epochs']
+            epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
+            for epoch in epochs_tqdm:
+                self.n_logged_images = 0
+                
+                self._train_epoch(epoch=epoch)
+                
+                val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
+                if 'segmentation' in self.tasks:
+                    val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
+                    if val_dice > best_val_dice:
+                        best_val_dice = val_dice
+                        
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
+                        mlflow.log_metric('best/segmentation/epoch', epoch + 1, step=self.metrics_tracker.global_step)
+                        for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
+                        
+                if 'disparity' in self.tasks:
+                    val_epe = val_epoch_metrics['performance/validation/disparity/EPE_px']
+                    val_epe_norm = min(1.0, val_epe / baseline_epe)
+                    val_epoch_metrics['performance/validation/misc/normalized_EPE_px'] = val_epe_norm
+                    if val_epe_norm < best_val_epe_norm:
+                        best_val_epe_norm = val_epe_norm
+                        
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
+                        mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
+                        for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
+                        
+                if 'segmentation' in self.tasks and 'disparity' in self.tasks:
+                    val_heuristic = ((1 - val_dice) ** 2 + val_epe_norm ** 2) ** 0.5
+                    val_epoch_metrics['performance/validation/misc/heuristic'] = val_heuristic
+                    if val_heuristic < best_val_heuristic:
+                        best_val_heuristic = val_heuristic
+                        
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
+                        mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)
+                        for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
+                
+                mlflow.log_metric('epoch_validation', epoch + 1, step=self.metrics_tracker.global_step)
+                mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
+                self.loss_composer.step_weighting(metrics=val_epoch_metrics)
+                
+        except KeyboardInterrupt:
+            logger.warning('Training interrupted. Saving current model...')
+        finally:
+            self._save_model()
+            if hasattr(self, 'model'): del self.model
+            if hasattr(self, 'optimizer'): del self.optimizer
+            if hasattr(self, 'scheduler'): del self.scheduler
             
     def full_train(self) -> None:
-        logger.header('Starting Full Training Loop without Validation')
-        
-        epochs = self.config['training']['epochs']
-        epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
-        for epoch in epochs_tqdm:
-            self._train_epoch(epoch=epoch)
+        try:
+            logger.header('Starting Full Training Loop without Validation')
             
-            log_vram(f'Full Trainer Epoch {epoch}')
-            
+            epochs = self.config['training']['epochs']
+            epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
+            for epoch in epochs_tqdm:
+                self._train_epoch(epoch=epoch)
         
-        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
-        self._save_model()
-        del self.model
-        del self.optimizer
-        del self.scheduler
+            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+        except KeyboardInterrupt:
+            logger.warning('Training interrupted. Saving current model...')
+            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+        finally:
+            self._save_model()
+            if hasattr(self, 'model'): del self.model
+            if hasattr(self, 'optimizer'): del self.optimizer
+            if hasattr(self, 'scheduler'): del self.scheduler
 

@@ -1,7 +1,7 @@
 # %% Imports
 # Imports
 import os, sys
-sys.path.append(os.path.dirname(os.getcwd()))
+sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 
@@ -14,11 +14,12 @@ from processors.tester import Tester
 from utils import helpers
 
 from utils.setup import setup_environment
-setup_environment()
+os.chdir('/data/Zeitler/code/SIDE')
+setup_environment(skip_cuda=True)
 
 # %% Settings
 # Settings
-state_path = 'debug/260212:1518/train' # '260206:1650/train/fold_1'
+state_path = 'debug/260318:1748/train' # '260206:1650/train/fold_1'
 
 show_n_images = None # None for all images
 
@@ -28,7 +29,7 @@ state_path_parts = state_path.split('/')
 experiment = state_path_parts[0]
 run_path = '/'.join(state_path_parts[1:])
 
-mlflow.set_tracking_uri('../mlruns')
+#mlflow.set_tracking_uri('../mlruns')
 mlflow_experiment = mlflow.get_experiment_by_name(experiment)
 mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f"run_name = '{state_path_parts[1]}'").iloc[0] 
 
@@ -48,17 +49,17 @@ model_run_id = mlflow.search_runs(
     max_results=1
 ).iloc[0].run_id
 
-# %%
-model_run_metrics = mlflow.get_run(model_run_id).data.metrics
-iou_metric_key = None
-# Find the specific key for the folds
-for key in model_run_metrics.keys():
-    if 'auto_weighted_sum' in key and 'folds' in key:
-        iou_metric_key = key
-        break
+# %% Extract metric
+# model_run_metrics = mlflow.get_run(model_run_id).data.metrics
+# iou_metric_key = None
+# # Find the specific key for the folds
+# for key in model_run_metrics.keys():
+#     if 'auto_weighted_sum' in key and 'folds' in key:
+#         iou_metric_key = key
+#         break
     
-client = MlflowClient()
-model_run_metrics = client.get_metric_history(model_run_id, iou_metric_key)
+# client = MlflowClient()
+# model_run_metrics = client.get_metric_history(model_run_id, iou_metric_key)
 
 
 # %%

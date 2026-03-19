@@ -111,17 +111,26 @@ class DynamicTaskPriority(BaseWeighting):
             if self.metric_is_score[key]: current_kappa = metrics[self.metric_keys[key]]
             else: current_kappa = 1 - metrics[self.metric_keys[key]]
             
+            current_kappa = max(0.0, min(1.0, current_kappa))
+            
             self.kappa_ema[key] = (self.alpha * current_kappa) + ((1.0 - self.alpha) * self.kappa_ema[key])
         
     def combine(self, losses: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
         combined_loss = 0
+        raw_weights = {}
         weights = {}
         
         for key in self.keys:
             kappa_bar = max(self.kappa_ema[key], self.eps)
-            weight = -1.0 * (1.0 - kappa_bar) ** self.gamma * math.log(kappa_bar)
+            kappa_bar = min(kappa_bar, 1.0 - self.eps)
+            raw_weights[key] = -1.0 * (1.0 - kappa_bar) ** self.gamma * math.log(kappa_bar)
             
-            weights[key] = weight
-            combined_loss += weight * losses[key]
+        sum_weights = sum(raw_weights.values())
+        for key in self.keys:
+            if sum_weights < self.eps: norm_weight = 1.0
+            else: norm_weight = (raw_weights[key] / sum_weights) * len(self.keys)
+            
+            weights[key] = norm_weight
+            combined_loss += norm_weight * losses[key]
         
         return combined_loss, weights
