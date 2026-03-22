@@ -17,7 +17,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'debug'
+EXPERIMENT = 'DISP'
 START_LR = 1e-7
 END_LR = 10
 NUM_ITER = 100
@@ -140,6 +140,7 @@ Take that learning rate and divide it by 10.
 
 
 DIFFERENT BATCH SIZES:
-Rule of thumb: LR_new = LR_old * (BatchSize_new / BatchSize_old)
+Rule of thumb: LR_new = LR_old * sqrt(BS_new / BS_old)
+LR_new = 3.85e-5 * sqrt(2 / 1) = 5.44e-5
 """
 # %%

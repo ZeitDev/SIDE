@@ -14,10 +14,13 @@ training:
     encoder_lr_mod: 1
 
   scheduler:
-    name: torch.optim.lr_scheduler.LinearLR
+    name: schedulers.custom.WarmupCosineAnnealingLR
     params:
-      start_factor: 0.1
-      total_iters: 675
+      warmup_epochs: 1
+      total_epochs: 150
+      steps_per_epoch: 675
+      start_factor: 0.01
+      eta_min: 5.5e-8
 
   tasks:
     segmentation:
@@ -55,6 +58,3 @@ training:
         inverse: false
         metric_key: 'performance/validation/disparity/EPE_px'
         metric_is_score: false
-
-logging:
-  n_validation_images: 0

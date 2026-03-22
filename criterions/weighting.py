@@ -24,6 +24,18 @@ class Unweighted(BaseWeighting):
         
         return combined_loss, weights
     
+class Fixed(BaseWeighting):
+    def __init__(self, keys: List[str], params: Optional[Dict[str, Any]] = None):
+        super().__init__(keys, params)
+        self.weights = self.params['weights']
+        
+    def combine(self, losses: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+        combined_loss = 0
+        for key in self.keys:
+            combined_loss += self.weights[key] * losses[key]
+        
+        return combined_loss, self.weights
+    
 class Uncertainty(BaseWeighting):
     """
     # Uncertainty Formula from paper:

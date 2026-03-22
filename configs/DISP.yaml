@@ -1,0 +1,32 @@
+description: SEG Baseline
+
+data:
+  dataset: data.datasets.EndoVis17
+
+training:
+  epochs: 150
+
+  optimizer:
+    name: torch.optim.AdamW
+    params:
+      lr: 7.0e-4
+    encoder_lr_mod: 1.0
+
+  scheduler:
+    name: schedulers.custom.WarmupCosineAnnealingLR
+    params:
+      warmup_epochs: 1
+      total_epochs: 150
+      steps_per_epoch: 675
+      start_factor: 0.01
+      eta_min: 7.0e-7 # lr / 1000
+
+  tasks:
+    segmentation:
+      enabled: false
+      distillation:
+        enabled: false
+    disparity:
+      enabled: true
+      distillation:
+        enabled: false

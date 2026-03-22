@@ -13,8 +13,8 @@ class MaskedL1Loss(nn.Module):
         if valid_mask.sum() == 0:
             return (outputs * 0.0).sum() 
         
-        valid_outputs = outputs[valid_mask]# * 512.0
-        valid_targets = targets[valid_mask]# * 512.0
+        valid_outputs = outputs[valid_mask]
+        valid_targets = targets[valid_mask]
         
         loss = F.l1_loss(valid_outputs, valid_targets, reduction='mean')
         

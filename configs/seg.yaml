@@ -1,9 +1,0 @@
-training:
-  tasks:
-    segmentation:
-      enabled: true
-      distillation:
-        enabled: false
-
-    disparity: 
-      enabled: false

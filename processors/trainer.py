@@ -283,8 +283,6 @@ class Trainer(BaseProcessor):
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
         
-        self.scaler = torch.cuda.amp.GradScaler()
-        
         train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
         self.metrics_tracker = MetricsTracker(
             tasks=self.tasks,
@@ -330,7 +328,7 @@ class Trainer(BaseProcessor):
             right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
 
-            with torch.set_grad_enabled(True) and torch.autocast(device_type='cuda', dtype=torch.float16):
+            with torch.set_grad_enabled(True), torch.amp.autocast(str(self.device), dtype=torch.bfloat16):
                 outputs = self.model(left_images, right_images)
                 
                 if self.kd_models:
@@ -345,15 +343,12 @@ class Trainer(BaseProcessor):
                 
                 inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
                         
-                self.optimizer.zero_grad()
-                self.scaler.scale(inter_loss).backward()
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0) # !!! THIS DOESNT WORK WITH DISPARITY RANGE IN PIXELS !!!
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.scheduler.step()
-                                   
-                self.metrics_tracker.update(inter_loss.item(), inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses)
+            self.optimizer.zero_grad()
+            inter_loss.backward()
+            self.optimizer.step()
+            self.scheduler.step()
+                                
+            self.metrics_tracker.update(inter_loss.item(), inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses)
             
             if self.metrics_tracker.should_log():
                 lr = self.optimizer.param_groups[0]['lr']
