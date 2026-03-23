@@ -66,7 +66,7 @@ training:
   encoder:
     name: models.encoders.timm.Encoder
     params:
-      model_name: convnextv2_tiny #nano
+      model_name: convnextv2_tiny # nano
       pretrained: true
 
   tasks:

@@ -10,7 +10,7 @@ def cleanup(local_tmp):
         except Exception as e:
             print('Warning: Could not clean up {local_tmp}: {e}')
             
-def setup_environment(skip_cuda=False):
+def setup_environment(skip_cuda=False, delete_temp=False):
     if not skip_cuda:
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
         print(f'Restricting to GPU {os.environ.get("CUDA_VISIBLE_DEVICES")}')
@@ -26,6 +26,6 @@ def setup_environment(skip_cuda=False):
     os.environ['MLFLOW_TMP_DIR'] = local_tmp
     print(f'Redirected TMPDIR to local folder: {local_tmp}')
 
-    cleanup(local_tmp)
+    if delete_temp: cleanup(local_tmp)
 
     #atexit.register(cleanup)

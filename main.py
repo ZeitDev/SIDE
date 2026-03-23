@@ -26,7 +26,7 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 def main():
     try:
-        setup_environment()
+        setup_environment(delete_temp=True)
         parser = argparse.ArgumentParser(description='SIDE Training and Testing')
         parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
         args = parser.parse_args()

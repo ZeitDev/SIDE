@@ -54,7 +54,7 @@ class AttachHead(nn.Module):
             x, intercept_features = self.decoder(features, feature_right)
             
             x = self.head(x)
-            x = F.sigmoid(x) # TODO: or ReLU or softplus or nothing? 
+            x = F.relu(x, inplace=True) # x = F.leaky_relu(x, negative_slope=0.01, inplace=True) #F.relu(x, inplace=True) # TODO: sigmoid or ReLU or softplus or nothing? # AFTER EATING, TRY SIGMOID                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
             intercept_features = self.intercept_head(intercept_features)
             
             return {

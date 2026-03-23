@@ -1,25 +1,25 @@
-description: SEG Baseline
+description: DISP Baseline
 
 data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 150
+  epochs: 250
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 7.0e-4
+      lr: 1.0e-4
     encoder_lr_mod: 1.0
 
   scheduler:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
       warmup_epochs: 1
-      total_epochs: 150
+      total_epochs: 250
       steps_per_epoch: 675
-      start_factor: 0.01
-      eta_min: 7.0e-7 # lr / 1000
+      start_factor: 0.5
+      eta_min: 1.0e-7 # lr / 1000
 
   tasks:
     segmentation:

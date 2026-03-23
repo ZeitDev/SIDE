@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 
+import torch
 import torch.nn as nn
 from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
@@ -17,10 +18,10 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'DISP'
-START_LR = 1e-7
-END_LR = 10
-NUM_ITER = 100
+EXPERIMENT = 'debug'
+START_LR = 1e-8
+END_LR = 1.0
+NUM_ITER = 200
 
 # %%
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
@@ -35,6 +36,8 @@ class LossComposerWrapper(nn.Module):
         self.loss_composer = loss_composer
         
     def forward(self, outputs, targets):
+        targets = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in targets.items()}
+        
         # LossComposer returns: inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
         inter_loss, _, _, _, _ = self.loss_composer(outputs, targets)
         return inter_loss
@@ -45,10 +48,15 @@ class ModelInputWrapper(nn.Module):
         self.model = model
         
     def forward(self, inputs):
-        if isinstance(inputs, dict):
-            return self.model(inputs['image'], inputs.get('right_image'))
+        with torch.amp.autocast('cuda', dtype=torch.float16):
+            if isinstance(inputs, dict):
+                return self.model(inputs['image'], inputs.get('right_image'))
+            else:
+                outputs = self.model(inputs)
         
-        return self.model(inputs)
+        outputs = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in outputs.items()}
+        
+        return outputs
 
 class DictToDevice:
     def __init__(self, data_dict):
@@ -90,6 +98,7 @@ train_iter = MultiTaskIter(trainer.dataloader_train)
 
 optimizer_config = config['training']['optimizer']
 optimizer_config['params']['lr'] = START_LR
+optimizer_config['params']['weight_decay'] = 0.0
 optimizer_class = load(optimizer_config['name'])
 optimizer = optimizer_class(
     model.parameters(),
@@ -104,7 +113,7 @@ lr_finder.range_test(
     train_loader=train_iter,
     end_lr=END_LR,
     num_iter=NUM_ITER)
-lr_finder.plot(suggest_lr=True)
+lr_finder.plot(suggest_lr=False)
 lr_finder.reset()
 
 # %%
