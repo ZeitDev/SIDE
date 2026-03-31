@@ -1,26 +1,26 @@
-description: Debugging Multi Task Segmentation and Disparity with Knowledge Distillation
+description: weighted Multi-Task
 
 data:
   dataset: data.datasets.EndoVis17
   max_disparity: 512
 
 training:
-  epochs: 150
+  epochs: 80
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 1.42e-4
-    encoder_lr_mod: 1
+      lr: 3.0e-4
+    encoder_lr_mod: 1.0
 
   scheduler:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
       warmup_epochs: 1
-      total_epochs: 150
-      steps_per_epoch: 675
-      start_factor: 0.01
-      eta_min: 5.5e-8
+      total_epochs: 80
+      steps_per_epoch: 169
+      start_factor: 0.5
+      eta_min: 3.0e-7 # lr / 1000
 
   tasks:
     segmentation:
@@ -36,9 +36,9 @@ training:
     inter:
       name: criterions.weighting.DynamicTaskPriority
       params:
-        alpha: 0.1
+        alpha: 0.3
         gamma: 1.0
         metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
         metric_is_score_segmentation: true
-        metric_key_disparity: 'performance/validation/misc/normalized_EPE_px'
+        metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false

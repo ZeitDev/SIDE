@@ -18,16 +18,16 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'debug'
+EXPERIMENT = 'wMT-KD'
 START_LR = 1e-8
 END_LR = 1.0
-NUM_ITER = 200
+NUM_ITER = 100
 
 # %%
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
 with open(f'./configs/{EXPERIMENT}.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
-config['data']['batch_size'] = 2
+#config['data']['batch_size'] = 1
 
 # %%
 class LossComposerWrapper(nn.Module):
@@ -36,7 +36,7 @@ class LossComposerWrapper(nn.Module):
         self.loss_composer = loss_composer
         
     def forward(self, outputs, targets):
-        targets = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in targets.items()}
+        #targets = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in targets.items()}
         
         # LossComposer returns: inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
         inter_loss, _, _, _, _ = self.loss_composer(outputs, targets)
@@ -48,13 +48,13 @@ class ModelInputWrapper(nn.Module):
         self.model = model
         
     def forward(self, inputs):
-        with torch.amp.autocast('cuda', dtype=torch.float16):
-            if isinstance(inputs, dict):
-                return self.model(inputs['image'], inputs.get('right_image'))
-            else:
-                outputs = self.model(inputs)
+        #with torch.amp.autocast('cuda', dtype=torch.float16):
+        if isinstance(inputs, dict):
+            return self.model(inputs['image'], inputs.get('right_image'))
+        else:
+            outputs = self.model(inputs)
         
-        outputs = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in outputs.items()}
+        #outputs = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in outputs.items()}
         
         return outputs
 
@@ -84,7 +84,6 @@ class MultiTaskIter(TrainDataLoaderIter):
 
 # %%
 print(f'LR Finder for configuration: {EXPERIMENT}')
-
 
 trainer = Trainer(config)
 model = ModelInputWrapper(trainer.model)
@@ -150,6 +149,6 @@ Take that learning rate and divide it by 10.
 
 DIFFERENT BATCH SIZES:
 Rule of thumb: LR_new = LR_old * sqrt(BS_new / BS_old)
-LR_new = 3.85e-5 * sqrt(2 / 1) = 5.44e-5
+LR_new = 2.0e-4 * sqrt(2 / 1) = 2.8e-4
 """
 # %%

@@ -5,11 +5,12 @@ from typing import cast, Any, List, Dict
 
 import torch
 import mlflow
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, ConcatDataset
 from mlflow.models.signature import infer_signature
 
 from utils import helpers
-from utils.helpers import load, get_model_run_id
+from utils.helpers import load, get_model_run_id, logits2disparity
 from models.manager import AttachHead
 from processors.base import BaseProcessor
 from data.transforms import build_transforms
@@ -60,7 +61,7 @@ class MetricsTracker:
     def should_log(self) -> bool:
         return self.global_step % self.log_interval == 0
     
-    def get_metrics(self, epoch: int, batch_idx: int, lr: float) -> Dict[str, float]:
+    def get_metrics(self, epoch: int, batch_idx: int, lr_encoder: float, lr_decoders: float) -> Dict[str, float]:
         metrics = {}
         metrics['epoch_train'] = epoch + (batch_idx / self.dataloader_length)
         metrics['optimization/training/loss/inter'] = self.running_inter_loss / self.log_interval
@@ -75,7 +76,8 @@ class MetricsTracker:
         for key in self.criterion_keys:
             metrics[f'optimization/training/loss/raw_{key}'] = self.running_raw_task_losses[key] / self.log_interval
         
-        metrics['optimization/training/learning_rate'] = lr
+        metrics['optimization/training/learning_rate_encoder'] = lr_encoder
+        metrics['optimization/training/learning_rate_decoders'] = lr_decoders
         
         self.loss_for_scheduler = self.running_inter_loss / self.log_interval
         self._reset()
@@ -283,7 +285,7 @@ class Trainer(BaseProcessor):
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
         
-        self.scaler = torch.amp.GradScaler(str(self.device).split(':')[0])
+        self.accumulation_steps = self.config['data']['accumulate_grad_batches']
         
         train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
         self.metrics_tracker = MetricsTracker(
@@ -324,14 +326,14 @@ class Trainer(BaseProcessor):
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()
         
+        self.optimizer.zero_grad()
         batch_tqdm = tqdm(self.dataloader_train, desc='Training', position=1, leave=False)
         for idx, data in enumerate(batch_tqdm):
             left_images = data['image'].to(self.device)
             right_images = data['right_image'].to(self.device) if 'right_image' in data else None
             targets = {task: data[task].to(self.device) for task in self.tasks}
 
-            self.optimizer.zero_grad()
-            with torch.autocast(device_type=str(self.device).split(':')[0], dtype=torch.float16):
+            with torch.set_grad_enabled(True):
                 outputs = self.model(left_images, right_images)
                 
                 if self.kd_models:
@@ -344,24 +346,22 @@ class Trainer(BaseProcessor):
                         outputs[f'{task}_distillation'] = outputs[task]
                         targets[f'{task}_distillation'] = teacher_outputs
                 
-            
-            outputs = {k: v.float() for k, v in outputs.items()}
-            targets = {k: v.float() for k, v in targets.items()}
-                
             inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
+            accumulated_loss = inter_loss / self.accumulation_steps
+            accumulated_loss.backward()
             
-            self.scaler.scale(inter_loss).backward()
-            self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.scheduler.step()
+            if (idx + 1) % self.accumulation_steps == 0 or (idx + 1) == len(self.dataloader_train):
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                self.optimizer.step()
+                self.scheduler.step()
+                self.optimizer.zero_grad()
                                 
             self.metrics_tracker.update(inter_loss.item(), inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses)
             
             if self.metrics_tracker.should_log():
-                lr = self.optimizer.param_groups[0]['lr']
-                metrics = self.metrics_tracker.get_metrics(epoch, idx, lr)
+                lr_encoder = self.optimizer.param_groups[0]['lr']
+                lr_decoders = self.optimizer.param_groups[1]['lr']
+                metrics = self.metrics_tracker.get_metrics(epoch, idx, lr_encoder, lr_decoders)
                 mlflow.log_metrics(metrics, step=self.metrics_tracker.global_step)
     
     def _validate_epoch(self, epoch: int) -> Dict[str, float]:
@@ -381,11 +381,7 @@ class Trainer(BaseProcessor):
             targets = {task: data[task].to(self.device) for task in self.tasks}
             
             with torch.no_grad():
-                with torch.autocast(device_type=str(self.device).split(':')[0], dtype=torch.float16):
-                    outputs = self.model(left_images, right_images)
-                
-                outputs = {k: v.float() for k, v in outputs.items()}
-                targets = {k: v.float() for k, v in targets.items()}
+                outputs = self.model(left_images, right_images)
                 
                 inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
                 total_loss_weighted += inter_loss.item()
@@ -395,11 +391,20 @@ class Trainer(BaseProcessor):
                 if 'segmentation' in outputs:
                     for metric in self.metrics['segmentation'].values():
                         metric.update(outputs['segmentation'], targets['segmentation'])
+                    
+                    intercept_segmentation_logits = outputs['segmentation_intercept_features']
+                    segmentation_targets = F.interpolate(targets['segmentation'], size=intercept_segmentation_logits.shape[2:], mode='nearest-exact')
+                    self.misc_metrics['interceptDICE'].update(intercept_segmentation_logits, segmentation_targets)
+                        
                 if 'disparity' in outputs:
                     baseline, focal_length = data['baseline'].to(self.device), data['focal_length'].to(self.device)
                     for metric in self.metrics['disparity'].values():
                         metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
                         
+                    intercept_disparity = logits2disparity(outputs['disparity_intercept_features'], size=outputs['disparity_intercept_features'].shape[2:])
+                    disparity_targets = F.interpolate(targets['disparity'], size=outputs['disparity_intercept_features'].shape[2:], mode='nearest-exact')
+                    self.misc_metrics['interceptAbsRel'].update(intercept_disparity, disparity_targets, baseline, focal_length)
+                            
                 for task, raw_task_loss in raw_task_losses.items():
                     total_raw_task_losses[task] += raw_task_loss
                     total_task_weights[task] += inter_loss_weights[task]
@@ -409,6 +414,11 @@ class Trainer(BaseProcessor):
         for task in self.tasks:
             epoch_metrics[f'optimization/validation/loss/raw_{task}'] = total_raw_task_losses[task] / len(self.dataloader_val)
             epoch_metrics[f'optimization/validation/loss/weights/inter_{task}'] = total_task_weights[task] / len(self.dataloader_val)
+            
+        if self.config['training']['tasks']['segmentation']['enabled']:
+            epoch_metrics['performance/validation/misc/interceptDICE_score'] = self.misc_metrics['interceptDICE'].compute()[1]
+        if self.config['training']['tasks']['disparity']['enabled']:
+            epoch_metrics['performance/validation/misc/interceptAbsRel_rate'] = self.misc_metrics['interceptAbsRel'].compute()['AbsRel_rate']
                 
         return epoch_metrics
     
@@ -422,13 +432,13 @@ class Trainer(BaseProcessor):
             mlflow.log_metrics(val_epoch_metrics, step=self.metrics_tracker.global_step)
             
             logger.info('Start Training')
-            baseline_epe = self.config['data']['baseline_epe'] if 'disparity' in self.tasks else None
-            best_val_epoch = -1
-            best_val_loss = float('inf')
-            best_val_dice = float('-inf')
-            best_val_epe_norm = float('inf')
-            best_val_heuristic = float('inf')
-            best_val_epoch_metrics = {}
+            ema_alpha = self.config['training']['ema_alpha']
+            ema_val_dice = None
+            ema_val_absrel = None
+            ema_val_heuristic = None
+            best_ema_val_dice = float('-inf')
+            best_ema_val_absrel = float('inf')
+            best_ema_val_heuristic = float('-inf')
             
             epochs = self.config['training']['epochs']
             epochs_tqdm = tqdm(range(epochs), desc='Epochs', position=0, leave=True)
@@ -440,29 +450,43 @@ class Trainer(BaseProcessor):
                 val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
                 if 'segmentation' in self.tasks:
                     val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
-                    if val_dice > best_val_dice:
-                        best_val_dice = val_dice
+                    if ema_val_dice: ema_val_dice = (ema_alpha * ema_val_dice) + ((1 - ema_alpha) * val_dice)
+                    else: ema_val_dice = val_dice
+                    val_epoch_metrics['performance/validation/misc/ema_val_dice'] = ema_val_dice
+                    
+                    if ema_val_dice > best_ema_val_dice:
+                        best_ema_val_dice = ema_val_dice
                         
                         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
                         mlflow.log_metric('best/segmentation/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                         for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                         
                 if 'disparity' in self.tasks:
-                    val_epe = val_epoch_metrics['performance/validation/disparity/EPE_px']
-                    val_epe_norm = min(1.0, val_epe / baseline_epe)
-                    val_epoch_metrics['performance/validation/misc/normalized_EPE_px'] = val_epe_norm
-                    if val_epe_norm < best_val_epe_norm:
-                        best_val_epe_norm = val_epe_norm
+                    val_absrel = val_epoch_metrics['performance/validation/disparity/AbsRel_rate']
+                    if ema_val_absrel: ema_val_absrel = (ema_alpha * ema_val_absrel) + ((1 - ema_alpha) * val_absrel)
+                    else: ema_val_absrel = val_absrel
+                    val_epoch_metrics['performance/validation/misc/ema_val_absrel'] = ema_val_absrel
+                    
+                    if ema_val_absrel < best_ema_val_absrel:
+                        best_ema_val_absrel = ema_val_absrel
                         
                         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
                         mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                         for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                         
                 if 'segmentation' in self.tasks and 'disparity' in self.tasks:
-                    val_heuristic = ((1 - val_dice) ** 2 + val_epe_norm ** 2) ** 0.5
+                    absrel_clamped = max(0.0, min(1.0, 1 - val_absrel))
+                    denominator = val_dice + absrel_clamped
+                    if denominator == 0: val_heuristic = 0.0
+                    else: val_heuristic = (2 * val_dice * absrel_clamped) / (val_dice + absrel_clamped)
                     val_epoch_metrics['performance/validation/misc/heuristic'] = val_heuristic
-                    if val_heuristic < best_val_heuristic:
-                        best_val_heuristic = val_heuristic
+                    
+                    if ema_val_heuristic: ema_val_heuristic = (ema_alpha * ema_val_heuristic) + ((1 - ema_alpha) * val_heuristic)
+                    else: ema_val_heuristic = val_heuristic
+                    val_epoch_metrics['performance/validation/misc/ema_val_heuristic'] = ema_val_heuristic
+                    
+                    if ema_val_heuristic > best_ema_val_heuristic:
+                        best_ema_val_heuristic = ema_val_heuristic
                         
                         torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
                         mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)

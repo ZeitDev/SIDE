@@ -22,7 +22,7 @@ setup_environment()
 
 # %%
 # Settings
-run = 'segmentation_teacher/260226:1718/train'
+run = 'segmentation_teacher/260324:1809/train'
 
 # %%
 class EndoVisTeacherDataset(Dataset):
@@ -60,7 +60,7 @@ class EndoVisTeacherDataset(Dataset):
 # %% 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: config = yaml.safe_load(f)
 
-mode = 'test' # 'train' or 'test'
+mode = 'train' # 'train' or 'test'
 
 config['data']['transforms'][mode] = [
     {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from utils import visualization
 from metrics.segmentation import IoU, Dice
-from metrics.disparity import EPE, Bad3, MAE
+from metrics.disparity import EPE, Bad3, MAE, AbsRel
 
 from utils.logger import CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -43,6 +43,7 @@ class BaseProcessor:
     def _init_metrics(self) -> None:
         logger.subheader('Initializing Metrics')
         self.metrics = {}
+        self.misc_metrics = {}
         tasks_config = self.config['training']['tasks']
         
         if tasks_config['segmentation']['enabled']:
@@ -50,6 +51,8 @@ class BaseProcessor:
             
             self.metrics['segmentation']['IoU_score'] = IoU(n_classes=self.config['data']['num_of_classes']['segmentation'], device=self.device)
             self.metrics['segmentation']['DICE_score'] = Dice(n_classes=self.config['data']['num_of_classes']['segmentation'], device=self.device)
+            
+            self.misc_metrics['interceptDICE'] = Dice(n_classes=self.config['data']['num_of_classes']['segmentation'], device=self.device)
             logger.info(f'Initialized IoU and DICE metrics for segmentation with {self.config['data']['num_of_classes']['segmentation']} classes.')
             
         if tasks_config['disparity']['enabled']:
@@ -57,6 +60,9 @@ class BaseProcessor:
             self.metrics['disparity']['EPE_px'] = EPE(max_disparity=self.config['data']['max_disparity'], device=self.device)
             self.metrics['disparity']['Bad3_rate'] = Bad3(max_disparity=self.config['data']['max_disparity'], device=self.device)
             self.metrics['disparity']['MAE_mm'] = MAE(max_disparity=self.config['data']['max_disparity'], device=self.device)
+            self.metrics['disparity']['AbsRel_rate'] = AbsRel(max_disparity=self.config['data']['max_disparity'], device=self.device)
+            
+            self.misc_metrics['interceptAbsRel'] = AbsRel(max_disparity=self.config['data']['max_disparity'], device=self.device)
             logger.info('Initialized EPE, Bad3, and MAE metrics for disparity.')
 
     def _compute_metrics(self, mode: str = 'validation') -> Dict[str, float]:

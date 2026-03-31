@@ -1,15 +1,18 @@
 import torch.nn as nn
-from models.decoders.unext import DecoderBlock, ConvNeXtBlock
+#from models.decoders.unext import DecoderBlock, ConvNeXtBlock
+from models.decoders.dynamic_unet import DecoderBlock
     
 class SegmentationDecoder(nn.Module):
     """
     Missing explanations can be found in dynamic_unet.py
     """
-    def __init__(self, all_n_encoder_channels, all_encoder_reductions,  **kwargs):
+    def __init__(self, all_n_encoder_channels, all_encoder_reductions, intercept_at: int = 4, **kwargs):
         super().__init__()
+        self.intercept_at = intercept_at
+        
         self.all_n_decoder_channels = all_n_encoder_channels[::-1]
         self.all_decoder_increases = all_encoder_reductions[::-1]
-        
+
         self.blocks = nn.ModuleList()
         for i in range(len(all_n_encoder_channels) - 1):
             n_decoder_channels = self.all_n_decoder_channels[i]
@@ -25,7 +28,8 @@ class SegmentationDecoder(nn.Module):
             last_channels = self.all_n_decoder_channels[-1]
             while current_stride > 1:
                 upsample_layers.append(nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True))
-                upsample_layers.append(ConvNeXtBlock(last_channels))
+                upsample_layers.append(nn.Conv2d(last_channels, last_channels, kernel_size=3, padding=1))
+                upsample_layers.append(nn.ReLU(inplace=True))
                 current_stride //= 2
                 
             self.final_block = nn.Sequential(*upsample_layers)
@@ -36,10 +40,14 @@ class SegmentationDecoder(nn.Module):
         reversed_left_features = left_features[::-1]
         x = reversed_left_features[0]
 
+        intercept_features = None
         for i, block in enumerate(self.blocks):
             skip_features = reversed_left_features[i + 1]
             x = block(x, skip_features)
+            
+            if self.all_decoder_increases[i+1] == self.intercept_at:
+                intercept_features = x
                 
         x = self.final_block(x)
-        return x
+        return x, intercept_features
          

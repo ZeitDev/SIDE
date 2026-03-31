@@ -92,12 +92,9 @@ class Tester(BaseProcessor):
                         for metric in self.metrics['disparity'].values():
                             metric.update(outputs['disparity'], targets['disparity'], baseline, focal_length)
 
-            logger.subheader('Test Results')
-            test_metrics = self._compute_metrics(mode='testing')
-            for key, value in test_metrics.items(): mlflow.log_metric(f'best_{task_mode}/{key}', value)
-            
-            for metric_key, metric_value in test_metrics.items():
-                logger.info(f'{metric_key}: {metric_value:.4f}')
-            
+            test_metrics[task_mode] = self._compute_metrics(mode='testing')
             del self.model
+            
+        return test_metrics
+            
             

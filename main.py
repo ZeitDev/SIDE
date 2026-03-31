@@ -18,11 +18,8 @@ from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
-# ! Gradient clipping expects normalized input ranges, if disparity is changed to raw pixels we need to accomodate
-# * TASKS
-# TODO: Disparity in pixel vs normalized range, what about multi task balancing?
-# TODO: Wait for comparison run without weighting, if it is successful consider DWA weighting instead of Kendall, no not DWA, try DTP, before that compare different methods
-# TODO: FIX TEST METRIC CASES
+
+# TODO: Translation Layer for Segmentation, because of the resolution mismatch between teacher and student
 
 def main():
     try:
@@ -75,7 +72,17 @@ def main():
                 helpers.mlflow_log_run(config, tags=tags)
                 
                 tester = Tester(config, run_id=train_run.info.run_id)
-                tester.test()
+                test_metrics = tester.test()
+                
+                logger.subheader('Test Results')
+                for task_mode, _test_metrics in test_metrics.items():
+                    for metric_key, metric_value in _test_metrics.items(): 
+                        mlflow.log_metric(f'best_{task_mode}/{metric_key}', metric_value)
+
+                for task_mode, _test_metrics in test_metrics.items():
+                    logger.subheader(f'Test Results for {task_mode}')
+                    for metric_key, metric_value in _test_metrics.items():
+                        logger.info(f'{metric_key}: {metric_value:.4f}')
         
     except KeyboardInterrupt:
         logger.warning('Training interrupted by user')

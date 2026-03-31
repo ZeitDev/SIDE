@@ -38,9 +38,9 @@ class LossComposer(nn.Module):
             if 'disparity_distillation' in task:
                 intercept_features = outputs['disparity_intercept_features']
                 true_targets = targets['disparity']
-                raw_loss = criterion(intercept_features.float(), targets[task].float(), true_targets.float()) # custom kd loss needs 3 args
+                raw_loss = criterion(intercept_features, targets[task], true_targets) # custom kd loss needs 3 args
             else:
-                raw_loss = criterion(task_output.float(), targets[task].float()) # standard losses need 2 args
+                raw_loss = criterion(task_output, targets[task]) # standard losses need 2 args
 
             raw_losses[task] = raw_loss
             

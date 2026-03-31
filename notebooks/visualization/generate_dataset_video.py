@@ -126,7 +126,7 @@ for subset in sorted(os.listdir(dataset_path)):
 # %%
 # Teacher Segmentation and Disparity Videos
 
-mode = 'test' # 'train' or 'test'
+mode = 'train' # 'train' or 'test'
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
 teacher_output_video_path = f'/data/Zeitler/Visualization/videos/Teacher_SegFormer_FoundationStereo/{mode}'
 os.makedirs(teacher_output_video_path, exist_ok=True)
@@ -258,7 +258,7 @@ for subset in sorted(os.listdir(dataset_path)):
         # Add labels to the images before stacking
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(seg_gt_overlay, 'Segmentation Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(seg_t_overlay, 'Segmentation SegFormer-B4 Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(seg_t_overlay, 'Segmentation SegFormer-B5 Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(disp_gt_overlay, 'Disparity FoundationStereo Pseudo Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(disp_t_overlay, 'Disparity FoundationStereo Teacher Logits', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
 
@@ -274,7 +274,7 @@ for subset in sorted(os.listdir(dataset_path)):
 # %%
 # STTR disparity and confidence comparison videos
 
-mode = 'test' # 'train' or 'test'
+mode = 'train' # 'train' or 'test'
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
 sttr_output_video_path = f'/data/Zeitler/Visualization/videos/Teacher_FS_vs_STTR/{mode}'
 os.makedirs(sttr_output_video_path, exist_ok=True)
@@ -435,7 +435,7 @@ for subset in sorted(os.listdir(dataset_path)):
 # %%
 # FoundationStereo Teacher Confidence Comparison
 
-mode = 'train' # 'train' or 'test'
+mode = 'test' # 'train' 'val' 'test'
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
 fs_conf_output_video_path = f'/data/Zeitler/Visualization/videos/FoundationStereo_Confidence/{mode}'
 os.makedirs(fs_conf_output_video_path, exist_ok=True)

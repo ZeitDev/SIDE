@@ -1,7 +1,7 @@
 # %%
 # Usage
 # tmux new -s zeitler
-# uv run notebooks/tools/train_segmentation_teacher.py
+# uv run notebooks/train/train_segmentation_teacher.py
 # Detach with Ctrl+B, then D. Re-attach with `tmux attach -t zeitler`
 
 # %%
@@ -60,6 +60,9 @@ dataset_class = helpers.load(data_config['dataset'])
 train_transforms = build_transforms(config, mode='train')
 val_transforms = build_transforms(config, mode='test')
 
+# ! For LR Finder only
+# config['data']['batch_size'] = 1
+
 
 dataset_train = dataset_class(
     mode='train',
@@ -113,7 +116,7 @@ helpers.check_dataleakage('test', dataset_test)
 device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 torch.cuda.empty_cache()
 
-model_name = 'nvidia/mit-b4' # Huggingface SegFormer
+model_name = 'nvidia/mit-b5' # Huggingface SegFormer
 model = SegformerForSemanticSegmentation.from_pretrained(
     model_name,
     num_labels=config['data']['num_of_classes']['segmentation'],
@@ -130,7 +133,7 @@ optimizer = OptimizerClass(
     model.parameters(),
     **config['training']['optimizer']['params'])
 
-config['training']['scheduler']['params']['num_warmup_steps'] = len(dataloader_train) * config['training']['scheduler']['warmup_epochs']
+#config['training']['scheduler']['params']['num_warmup_steps'] = len(dataloader_train) * config['training']['scheduler']['warmup_epochs']
 
 SchedulerClass = load(config['training']['scheduler']['name'])
 scheduler = SchedulerClass(
@@ -233,25 +236,42 @@ with mlflow.start_run(run_name=run_datetime) as run:
         helpers.mlflow_log_run(config, tags=tags)
         mlflow.set_tag('mlflow.note.content', config['description'])
         
+        scaler = torch.amp.GradScaler(device.type)
+        accumulation_steps = config['data']['accumulate_grad_batches']
         for epoch in range(EPOCHS):
             print(f'Epoch {epoch+1}/{EPOCHS} - Training')
             
             ### Training Loop ###
             model.train()
+            optimizer.zero_grad()
             
             train_batch_tqdm = tqdm(dataloader_train, desc='Training')
             for idx, data in enumerate(train_batch_tqdm):
                 images = data['image'].to(device)
                 targets = data['segmentation'].to(device)
                 
-                outputs = model(pixel_values=images, labels=targets.squeeze(1).long())
-                loss = outputs.loss
+                with torch.autocast(device_type=device.type, dtype=torch.float16):
+                    outputs = model(pixel_values=images, labels=targets.squeeze(1).long())
+                    loss = outputs.loss
                 train_loss_running += loss.item()
                 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
+                accumulated_loss = loss / accumulation_steps
+                scaler.scale(accumulated_loss).backward()
+        
+                if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(dataloader_train):
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+                    scaler.step(optimizer)
+                    scaler.update()
+            
+                    scheduler.step()
+                    optimizer.zero_grad()
+                
+                # optimizer.zero_grad()
+                # loss.backward()
+                # optimizer.step()
+                # scheduler.step()
                 
                 global_step += 1
                 if global_step % train_log_interval == 0:
@@ -280,8 +300,9 @@ with mlflow.start_run(run_name=run_datetime) as run:
                         images = data['image'].to(device)
                         targets = data['segmentation'].to(device)
                         
-                        outputs = model(pixel_values=images, labels=targets.squeeze(1).long())
-                        loss = outputs.loss
+                        with torch.autocast(device_type=device.type, dtype=torch.float16):
+                            outputs = model(pixel_values=images, labels=targets.squeeze(1).long())
+                            loss = outputs.loss
                         val_loss += loss.item()
                         
                         logits = outputs.logits

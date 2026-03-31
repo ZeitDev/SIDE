@@ -46,6 +46,8 @@ class DisparityDecoder(nn.Module):
         max_displacement = max_disparity // self.all_decoder_increases[0] # 512 // 32 = 16
         self.correlation_volume = CorrelationVolume(max_displacement)
         
+        #self.spatial_attention = SpatialAttention()
+        
         # Equalize left features and cost volume before concatenation to prevent one from dominating the other
         self.squeeze_left = nn.Sequential(
             nn.Conv2d(self.all_n_decoder_channels[0], max_displacement, kernel_size=1, bias=False),
@@ -82,7 +84,7 @@ class DisparityDecoder(nn.Module):
             self.final_block = nn.Sequential(*upsample_layers)
         else:
             self.final_block = nn.Identity()
-            
+
     def forward(self, left_features, right_features):
         reversed_left_features = left_features[::-1]
         reversed_right_features = right_features[::-1]
@@ -100,6 +102,7 @@ class DisparityDecoder(nn.Module):
             x = block(x, skip_features)
             
             if self.all_decoder_increases[i+1] == self.intercept_at:
+                # x = self.spatial_attention(x)
                 intercept_features = x
                 
         x = self.final_block(x)

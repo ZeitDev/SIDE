@@ -214,4 +214,46 @@ if False:
                 
             cv2.imwrite(save_path, disp_scaled)
             
+# %% Speed Evaluation
+transforms_speed = build_transforms(config, mode='test')
+
+dataset_speed = EndoVisTeacherDataset(mode='train', transforms=transforms_speed)
+
+left_image = dataset_speed[0]['image'].unsqueeze(0).to('cuda')
+right_image = dataset_speed[0]['right_image'].unsqueeze(0).to('cuda')
+
+num_warmup = 50
+num_iterations = 1000
+
+print('Warm Up')
+with torch.autocast('cuda'), torch.no_grad():
+    for _ in range(num_warmup):
+        _ = model.get_disparity(left_image, right_image)
+
+print('Benchmarking')
+start_event = torch.cuda.Event(enable_timing=True)
+end_event = torch.cuda.Event(enable_timing=True)
+
+with torch.autocast('cuda'), torch.no_grad():
+    torch.cuda.synchronize()
+    start_event.record()
+
+    for _ in range(num_iterations):
+        _ = model.get_disparity(left_image, right_image)
+
+    end_event.record()
+    torch.cuda.synchronize()
+
+total_time_ms = start_event.elapsed_time(end_event)
+total_time_seconds = total_time_ms / 1000.0
+
+fps = num_iterations / total_time_seconds
+
+print('\n--- Results ---')
+print(f'Total time for {num_iterations} images: {total_time_seconds:.4f} seconds')
+print(f'Inference Speed: {fps:.2f} FPS')
+print(f'Time per image: {(total_time_ms / num_iterations):.2f} ms')
+peak_vram = torch.cuda.max_memory_allocated() / (1024 ** 2) # Convert Bytes to Megabytes
+print(f'Peak VRAM Usage: {peak_vram:.2f} MB')
+
 # %%

@@ -4,7 +4,7 @@ data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 250
+  epochs: 200
 
   optimizer:
     name: torch.optim.AdamW
@@ -16,8 +16,8 @@ training:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
       warmup_epochs: 1
-      total_epochs: 250
-      steps_per_epoch: 675
+      total_epochs: 200
+      steps_per_epoch: 169
       start_factor: 0.5
       eta_min: 1.0e-7 # lr / 1000
 

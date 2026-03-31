@@ -1,6 +1,5 @@
 import torch
 from typing import Dict
-#from utils.helpers import logits2disparity
 
 class DisparityMetric:
     def __init__(self, max_disparity: float = 512, device: torch.device = torch.device('cpu')):
@@ -71,3 +70,16 @@ class MAE(DisparityMetric):
 
     def compute(self) -> Dict[str, float]:
         return {'MAE_mm': (self.total_error / self.total_valid_pixels).item()}
+    
+class AbsRel(DisparityMetric):
+    def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
+        depth_predictions = torch.clamp(((focal_length * baseline) / predictions), max=300.0)
+        depth_targets = (focal_length * baseline) / targets
+
+        absrel_error = torch.abs(depth_predictions - depth_targets) / depth_targets
+        absrel = absrel_error[valid_mask].sum()
+        
+        return absrel
+
+    def compute(self) -> Dict[str, float]:
+        return {'AbsRel_rate': (self.total_error / self.total_valid_pixels).item()}

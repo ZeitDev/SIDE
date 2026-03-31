@@ -19,7 +19,7 @@ setup_environment(skip_cuda=True)
 
 # %% Settings
 # Settings
-state_path = 'debug/260318:1748/train' # '260206:1650/train/fold_1'
+state_path = 'debug/260310:1051/train' # '260206:1650/train/fold_1'
 
 show_n_images = None # None for all images
 
@@ -67,7 +67,6 @@ print(f'Testing Model \nExperiment: {state_path} \nID: {model_run_id}\n')
 tester = Tester(config, run_id=model_run_id)
 
 if show_n_images: config['logging']['n_validation_images'] = show_n_images
-else: config['logging']['n_validation_images'] = len(tester.dataloader_test.dataset) 
 
 test_metrics = tester.test()
 [print(f'{k}: {v}') for k, v in test_metrics.items()]
