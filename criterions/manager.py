@@ -32,13 +32,16 @@ class LossComposer(nn.Module):
     def _compute_raw_losses(self, outputs: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         raw_losses = {}
         for task, task_output in outputs.items():
-            if task not in self.criterions or task not in targets: continue # skip keys like baseline, focal_length
+            if task not in self.criterions or task not in targets: continue # skip intercept outputs
 
             criterion = self.criterions[task]
             if 'disparity_distillation' in task:
                 intercept_features = outputs['disparity_intercept_features']
                 true_targets = targets['disparity']
                 raw_loss = criterion(intercept_features, targets[task], true_targets) # custom kd loss needs 3 args
+            elif 'segmentation_distillation' in task:
+                intercept_features = outputs['segmentation_intercept_features']
+                raw_loss = criterion(intercept_features, targets[task]) # custom kd loss needs 2 args
             else:
                 raw_loss = criterion(task_output, targets[task]) # standard losses need 2 args
 

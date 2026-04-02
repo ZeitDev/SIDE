@@ -15,7 +15,7 @@ class ChannelWiseKLDivLoss(nn.Module):
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature
         
-        teacher_logits = upsample_logits(teacher_logits, size=(H, W))
+        #teacher_logits = upsample_logits(teacher_logits, size=(H, W))
         
         student_logits = student_logits.view(B, C, -1)
         teacher_logits = teacher_logits.view(B, C, -1)

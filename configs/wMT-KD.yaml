@@ -10,7 +10,7 @@ training:
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 3.0e-4
+      lr: 2.5e-4
     encoder_lr_mod: 1.0
 
   scheduler:
@@ -20,7 +20,7 @@ training:
       total_epochs: 80
       steps_per_epoch: 169
       start_factor: 0.5
-      eta_min: 3.0e-7 # lr / 1000
+      eta_min: 2.5e-7 # lr / 1000
 
   tasks:
     segmentation:
@@ -43,18 +43,25 @@ training:
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false
     intra_segmentation:
-      name: criterions.weighting.CompetenceDecay
-      params:
-        alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.9604
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptDICE_score'
-        metric_is_score: true
+      name: criterions.weighting.Uncertainty
+      params: {}
     intra_disparity:
-      name: criterions.weighting.CompetenceDecay
-      params:
-        alpha: 0.4 # Abandon teacher faster
-        teacher_performance: 0.0809
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
-        metric_is_score: false
+      name: criterions.weighting.Uncertainty
+      params: {}
+
+    # intra_segmentation:
+    #   name: criterions.weighting.CompetenceDecay
+    #   params:
+    #     alpha: 0.1 # Abandon teacher faster
+    #     teacher_performance: 0.9604
+    #     inverse: false
+    #     metric_key: 'performance/validation/misc/interceptDICE_score'
+    #     metric_is_score: true
+    # intra_disparity:
+    #   name: criterions.weighting.CompetenceDecay
+    #   params:
+    #     alpha: 0.4 # Abandon teacher faster
+    #     teacher_performance: 0.0809
+    #     inverse: false
+    #     metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+    #     metric_is_score: false

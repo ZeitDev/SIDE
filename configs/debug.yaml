@@ -43,18 +43,25 @@ training:
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false
     intra_segmentation:
-      name: criterions.weighting.CompetenceDecay
-      params:
-        alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.9604
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptDICE_score'
-        metric_is_score: true
+      name: criterions.weighting.Uncertainty
+      params: {}
     intra_disparity:
-      name: criterions.weighting.CompetenceDecay
-      params:
-        alpha: 0.4 # Abandon teacher faster
-        teacher_performance: 0.0809
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
-        metric_is_score: false
+      name: criterions.weighting.Uncertainty
+      params: {}
+
+    # intra_segmentation:
+    #   name: criterions.weighting.CompetenceDecay
+    #   params:
+    #     alpha: 0.1 # Abandon teacher faster
+    #     teacher_performance: 0.9604
+    #     inverse: false
+    #     metric_key: 'performance/validation/misc/interceptDICE_score'
+    #     metric_is_score: true
+    # intra_disparity:
+    #   name: criterions.weighting.CompetenceDecay
+    #   params:
+    #     alpha: 0.4 # Abandon teacher faster
+    #     teacher_performance: 0.0809
+    #     inverse: false
+    #     metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+    #     metric_is_score: false

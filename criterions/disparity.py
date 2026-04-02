@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 
 class MaskedL1Loss(nn.Module):
     def __init__(self):
@@ -48,13 +49,14 @@ class PixelWiseKLDivLoss(nn.Module):
         teacher_logits = teacher_logits.detach()
         
         targets = F.interpolate(targets, size=(H, W), mode='nearest-exact') # Sample down to 1/4 resolution
-        valid = targets > 0 # removes occlusion from left to right and later maybe instruments as well, as they dont perform that good on depth?
+        valid = targets > 0 # removes occlusion from left border and later maybe instruments as well, as they dont perform that good on depth?
         
         if valid.sum() == 0:
             return (student_logits * 0.0).sum()
         
         raw_teacher_probabilities = F.softmax(teacher_logits, dim=1)
         teacher_confidence = raw_teacher_probabilities.max(dim=1, keepdim=True)[0]
+        teacher_confidence = TF.gaussian_blur(teacher_confidence, kernel_size=7, sigma=2.0) # smooth confidence to avoid sharp gradients
         
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature  
