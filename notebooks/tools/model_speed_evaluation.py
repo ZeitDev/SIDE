@@ -18,6 +18,8 @@ from data.transforms import build_transforms
 
 
 from processors.tester import Tester
+from thop import profile
+
 
 
 from utils import helpers
@@ -64,7 +66,7 @@ class EndoVisTeacherDataset(Dataset):
 
 # %% Settings
 # Settings
-state_path = 'wMT/260330:1657/train' # '260206:1650/train/fold_1'
+state_path = 'wMT/260330:1657/train'
 task_mode = 'combined' # 'disparity' or 'segmentation' or 'combined'
 
 # %% Load mlflow data
@@ -114,13 +116,16 @@ num_warmup = 50
 num_iterations = 1000
 
 print('Warm Up')
+torch.backends.cudnn.benchmark = True
+
 with torch.no_grad():
     for _ in range(num_warmup):
         _ = model(image, image_right)
-        #_ = model(pixel_values=image)
-        
         
 print('Benchmarking')
+torch.cuda.empty_cache()
+torch.cuda.reset_peak_memory_stats()
+
 start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 
@@ -130,7 +135,6 @@ with torch.no_grad():
 
     for _ in range(num_iterations):
         _ = model(image, image_right)
-        #_ = model(pixel_values=image)
 
     end_event.record()
     torch.cuda.synchronize()
@@ -158,8 +162,22 @@ model2_fps = 13.28
 
 # SEG = 20.08 FPS // 1389.72 MB
 # DISP = 13.28 FPS // 1435.92 MB
-# wMT = 10.16 FPS // 1472.72 MB
-# wMT-KD-combined = 10.15 FPS // 1472.72 MB
+# wMT (260330:1657/train) = 10.51 FPS // 95.18 ms // 1473 MB // 546.38 G // 42.5 M
+# wMT-KD-segmentation (260331:1425/train) = 10.54 FPS // 94.58 ms // 1473 MB // 540.29 G // 42.41 M
 
 print((model1_fps * model2_fps) / (model1_fps + model2_fps))
+
+# %% Parameters and FLOPs
+print('\n--- Model Complexity ---')
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print(f'Total Parameters: {total_params / 1e6:.2f} M')
+print(f'Trainable Parameters: {trainable_params / 1e6:.2f} M')
+
+inputs = (image, image_right) if image_right is not None else (image,)
+macs, _ = profile(model, inputs=inputs, verbose=False)
+
+print(f'MACs: {macs / 1e9:.2f} G (Giga-MACs)')
+
 # %%

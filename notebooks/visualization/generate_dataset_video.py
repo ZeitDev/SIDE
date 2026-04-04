@@ -695,4 +695,355 @@ for subset in sorted(os.listdir(dataset_path)):
         video_out.write(combined_frame)
         
     video_out.release()
+
+# %%
+# Single Dataset Left/Right Video (Depth on Left, Confidence on Right)
+import torch.nn.functional as F
+
+import subprocess
+
+fps = 2
+mode = 'val'
+dataset_name = 'instrument_dataset_5'
+dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{dataset_name}'
+conference_output_video_path = f'/data/Zeitler/Visualization/videos/conference/{mode}/{dataset_name}'
+os.makedirs(conference_output_video_path, exist_ok=True)
+
+left_dir = os.path.join(dataset_path, 'input', 'left_images')
+teach_disp_dir = os.path.join(dataset_path, 'teacher', 'disparity_128_256_256')
+
+left_images = sorted(os.listdir(left_dir))
+
+if left_images:
+    sample_img = cv2.imread(os.path.join(left_dir, left_images[0]))
+    h, w = sample_img.shape[:2]
+    crop_h, crop_w = 1024, 1024
+    
+    top = max(0, (h - crop_h) // 2)
+    left = max(0, (w - crop_w) // 2)
+
+    # Read calibration
+    with open(os.path.join(dataset_path, 'calibration', 'foundation_stereo_calibration.txt'), 'r') as f:
+        lines = f.readlines()
+        K = np.array(list(map(float, lines[0].rstrip().split()))).astype(np.float32).reshape(3,3)
+        baseline = float(lines[1])
+    
+    temp_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_depth_conf_temp.mp4')
+    final_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_depth_conf.mp4')
+    
+    video_out = cv2.VideoWriter(
+        temp_output_path,
+        cv2.VideoWriter_fourcc(*'mp4v'),
+        fps,
+        (crop_w * 2, crop_h)
+    )
+    
+    max_depth_cm = 15.0
+    max_depth_mm = max_depth_cm * 10.0 # 150.0 mm
+    
+    for image_name in tqdm(left_images, desc=f'Processing Conference Video {dataset_name}'): 
+        left_img = cv2.imread(os.path.join(left_dir, image_name))
+        
+        if left_img is None:
+            continue
+            
+        left_img = left_img[top:top+crop_h, left:left+crop_w]
+            
+        pt_filename = image_name.replace('.png', '.pt')
+        teach_disp_path = os.path.join(teach_disp_dir, pt_filename)
+        
+        if not os.path.exists(teach_disp_path):
+            continue
+            
+        teach_disp_pt = torch.load(teach_disp_path, weights_only=True).float()
+        if teach_disp_pt.dim() == 3: teach_disp_pt = teach_disp_pt.unsqueeze(0)
+        
+        teach_disp_up = logits2disparity(teach_disp_pt, (crop_h, crop_w)) * 512.0
+        teach_disp_np = np.nan_to_num(teach_disp_up.squeeze().cpu().numpy(), nan=0.0)
+        
+        # Confidence map
+        teach_disp_logits_up = F.interpolate(teach_disp_pt, size=(crop_h, crop_w), mode='bilinear', align_corners=False)
+        conf_pt = F.softmax(teach_disp_logits_up, dim=1).max(dim=1)[0]
+        conf_np = conf_pt.squeeze().cpu().numpy()
+        
+        # --- Left: Depth Overlay ---
+        valid_disp_t = (teach_disp_np > 0)
+        depth = np.zeros_like(teach_disp_np)
+        depth[valid_disp_t] = (K[0,0] * baseline * 1000.0) / teach_disp_np[valid_disp_t]
+        
+        if valid_disp_t.any():
+            depth_vals = depth[valid_disp_t]
+            depth_norm = np.zeros(depth.shape, dtype=np.uint8)
+            depth_norm[valid_disp_t] = 255 - np.clip(depth_vals * (255.0 / max_depth_mm), 0, 255).astype(np.uint8)
+            heatmap = cv2.applyColorMap(depth_norm, cv2.COLORMAP_MAGMA)
+            
+            # Force invalid/NaN pixels to pure black background if not overlaying
+            heatmap[~valid_disp_t] = [0, 0, 0]
+            
+            if overlay_disparity:
+                blended = cv2.addWeighted(left_img, 0.6, heatmap, 0.4, 0)
+                depth_overlay = np.where(valid_disp_t[:, :, None], blended, left_img)
+            else:
+                depth_overlay = heatmap
+        else:
+            if overlay_disparity:
+                depth_overlay = left_img.copy()
+            else:
+                depth_overlay = np.zeros((*depth.shape, 3), dtype=np.uint8)
+            
+        # --- Right: Confidence Map Overlay ---
+        conf_scaled = np.clip(conf_np * 255, 0, 255).astype(np.uint8)
+        conf_color = BRIGHT_RYG_LUT[conf_scaled]
+        conf_overlay = cv2.addWeighted(left_img, 0.6, conf_color, 0.4, 0)
+        
+        # Add labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        mean_conf = conf_np.mean()
+        
+        cv2.putText(depth_overlay, 'FoundationStereo Teacher Logits as Depth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(conf_overlay, f'FoundationStereo Teacher Confidence (Mean: {mean_conf:.0%})', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        combined_frame = np.hstack((depth_overlay, conf_overlay))
+        video_out.write(combined_frame)
+        
+    video_out.release()
+    
+    # Convert to H.264 using FFmpeg for web compatibility
+    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    if os.path.exists(final_output_path):
+        os.remove(final_output_path)
+    
+    subprocess.run([
+        'ffmpeg', '-i', temp_output_path, 
+        '-vcodec', 'libx264', '-crf', '18', 
+        '-pix_fmt', 'yuv420p', final_output_path
+    ], check=True, capture_output=True)
+    
+    # Clean up temp file
+    os.remove(temp_output_path)
+    print(f"Finished! Web-ready video saved to: {final_output_path}")
+
+
+# %%
+# Conference Video 1: Segmentation Target (Left) vs Segmentation Teacher Logits (Right)
+dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{dataset_name}'
+conference_output_video_path = f'/data/Zeitler/Visualization/videos/conference/{mode}/{dataset_name}'
+os.makedirs(conference_output_video_path, exist_ok=True)
+
+left_dir = os.path.join(dataset_path, 'input', 'left_images')
+seg_dir = os.path.join(dataset_path, 'target', 'segmentation')
+teach_seg_dir = os.path.join(dataset_path, 'teacher', 'segmentation_2_256_256')
+
+left_images = sorted(os.listdir(left_dir))
+
+if left_images:
+    sample_img = cv2.imread(os.path.join(left_dir, left_images[0]))
+    h, w = sample_img.shape[:2]
+    crop_h, crop_w = 1024, 1024
+    
+    top = max(0, (h - crop_h) // 2)
+    left = max(0, (w - crop_w) // 2)
+
+    temp_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_seg.mp4')
+    final_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_seg_web.mp4')
+    
+    video_out = cv2.VideoWriter(
+        temp_output_path,
+        cv2.VideoWriter_fourcc(*'mp4v'),
+        fps,
+        (crop_w * 2, crop_h)
+    )
+    
+    for image_name in tqdm(left_images, desc=f'Processing Conference Seg Video {dataset_name}'): 
+        left_img = cv2.imread(os.path.join(left_dir, image_name))
+        seg_img = cv2.imread(os.path.join(seg_dir, image_name), cv2.IMREAD_GRAYSCALE)
+        
+        if left_img is None or seg_img is None:
+            continue
+            
+        left_img = left_img[top:top+crop_h, left:left+crop_w]
+        seg_img = seg_img[top:top+crop_h, left:left+crop_w]
+            
+        pt_filename = image_name.replace('.png', '.pt')
+        teach_seg_path = os.path.join(teach_seg_dir, pt_filename)
+        
+        if not os.path.exists(teach_seg_path):
+            continue
+            
+        teach_seg_pt = torch.load(teach_seg_path, weights_only=True).float()
+        if teach_seg_pt.dim() == 3: teach_seg_pt = teach_seg_pt.unsqueeze(0)
+        
+        teach_seg_up = upsample_logits(teach_seg_pt, (crop_h, crop_w))
+        teach_seg_mask = teach_seg_up.argmax(dim=1).squeeze().cpu().numpy()
+        
+        # --- Left: Segmentation Target ---
+        seg_gt_mask = (seg_img == 1)
+        if seg_gt_mask.any():
+            color_mask = np.zeros_like(left_img)
+            color_mask[seg_gt_mask] = seg_color
+            blended = cv2.addWeighted(left_img, 0.6, color_mask, 0.4, 0)
+            seg_gt_overlay = np.where(seg_gt_mask[:, :, None], blended, left_img)
+        else:
+            seg_gt_overlay = left_img.copy()
+            
+        # --- Right: Segmentation Teacher ---
+        seg_t_mask = (teach_seg_mask == 1)
+        if seg_t_mask.any():
+            color_mask = np.zeros_like(left_img)
+            color_mask[seg_t_mask] = seg_color
+            blended = cv2.addWeighted(left_img, 0.6, color_mask, 0.4, 0)
+            seg_t_overlay = np.where(seg_t_mask[:, :, None], blended, left_img)
+        else:
+            seg_t_overlay = left_img.copy()
+            
+        # Add labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(seg_gt_overlay, 'Segmentation Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(seg_t_overlay, 'SegFormer-B5 Teacher Logits as Mask', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        combined_frame = np.hstack((seg_gt_overlay, seg_t_overlay))
+        video_out.write(combined_frame)
+        
+    video_out.release()
+    
+    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    if os.path.exists(final_output_path):
+        os.remove(final_output_path)
+    
+    subprocess.run([
+        'ffmpeg', '-i', temp_output_path, 
+        '-vcodec', 'libx264', '-crf', '18', 
+        '-pix_fmt', 'yuv420p', final_output_path
+    ], check=True, capture_output=True)
+    os.remove(temp_output_path)
+    print(f"Finished! Web-ready video saved to: {final_output_path}")
+
+# %%
+# Conference Video 2: FoundationStereo Pseudo Targets (Left) vs FS Teacher Logits as Depth (Right)
+
+disp_dir = os.path.join(dataset_path, 'target', 'disparity')
+teach_disp_dir = os.path.join(dataset_path, 'teacher', 'disparity_128_256_256')
+
+if left_images:
+    sample_img = cv2.imread(os.path.join(left_dir, left_images[0]))
+    h, w = sample_img.shape[:2]
+    crop_h, crop_w = 1024, 1024
+    top = max(0, (h - crop_h) // 2)
+    left = max(0, (w - crop_w) // 2)
+
+    with open(os.path.join(dataset_path, 'calibration', 'foundation_stereo_calibration.txt'), 'r') as f:
+        lines = f.readlines()
+        K = np.array(list(map(float, lines[0].rstrip().split()))).astype(np.float32).reshape(3,3)
+        baseline = float(lines[1])
+    
+    temp_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_pseudo_vs_teach_depth_temp.mp4')
+    final_output_path = os.path.join(conference_output_video_path, f'{dataset_name}_pseudo_vs_teach_depth_web.mp4')
+
+    video_out = cv2.VideoWriter(
+        temp_output_path,
+        cv2.VideoWriter_fourcc(*'mp4v'),
+        fps,
+        (crop_w * 2, crop_h)
+    )
+    
+    max_depth_cm = 15.0
+    max_depth_mm = max_depth_cm * 10.0 # 150.0 mm
+    
+    for image_name in tqdm(left_images, desc=f'Processing Conference Disp vs Teach Video {dataset_name}'): 
+        left_img = cv2.imread(os.path.join(left_dir, image_name))
+        disp_img = cv2.imread(os.path.join(disp_dir, image_name), cv2.IMREAD_UNCHANGED)
+        
+        if left_img is None or disp_img is None:
+            continue
+            
+        left_img = left_img[top:top+crop_h, left:left+crop_w]
+        disp_img = disp_img[top:top+crop_h, left:left+crop_w]
+            
+        pt_filename = image_name.replace('.png', '.pt')
+        teach_disp_path = os.path.join(teach_disp_dir, pt_filename)
+        
+        if not os.path.exists(teach_disp_path):
+            continue
+            
+        # Target Disparity to Depth
+        disp_img_np = np.where(disp_img > 0, disp_img.astype(np.float32) / 128.0, 0.0)
+        valid_disp_gt = (disp_img_np > 0)
+        
+        depth_gt = np.zeros_like(disp_img_np)
+        depth_gt[valid_disp_gt] = (K[0,0] * baseline * 1000.0) / disp_img_np[valid_disp_gt]
+
+        # Teacher Disparity to Depth
+        teach_disp_pt = torch.load(teach_disp_path, weights_only=True).float()
+        if teach_disp_pt.dim() == 3: teach_disp_pt = teach_disp_pt.unsqueeze(0)
+        
+        teach_disp_up = logits2disparity(teach_disp_pt, (crop_h, crop_w)) * 512.0
+        teach_disp_np = np.nan_to_num(teach_disp_up.squeeze().cpu().numpy(), nan=0.0)
+        
+        valid_disp_t = (teach_disp_np > 0)
+        depth_t = np.zeros_like(teach_disp_np)
+        depth_t[valid_disp_t] = (K[0,0] * baseline * 1000.0) / teach_disp_np[valid_disp_t]
+        
+        
+        # --- Left: FS Pseudo Target Depth Overlay ---
+        if valid_disp_gt.any():
+            depth_vals_gt = depth_gt[valid_disp_gt]
+            depth_norm_gt = np.zeros(depth_gt.shape, dtype=np.uint8)
+            depth_norm_gt[valid_disp_gt] = 255 - np.clip(depth_vals_gt * (255.0 / max_depth_mm), 0, 255).astype(np.uint8)
+            heatmap_gt = cv2.applyColorMap(depth_norm_gt, cv2.COLORMAP_MAGMA)
+            
+            heatmap_gt[~valid_disp_gt] = [0, 0, 0]
+            
+            if overlay_disparity:
+                blended = cv2.addWeighted(left_img, 0.6, heatmap_gt, 0.4, 0)
+                depth_gt_overlay = np.where(valid_disp_gt[:, :, None], blended, left_img)
+            else:
+                depth_gt_overlay = heatmap_gt
+        else:
+            if overlay_disparity:
+                depth_gt_overlay = left_img.copy()
+            else:
+                depth_gt_overlay = np.zeros((*depth_gt.shape, 3), dtype=np.uint8)
+            
+        # --- Right: FS Teacher Logits Depth Overlay ---
+        if valid_disp_t.any():
+            depth_vals_t = depth_t[valid_disp_t]
+            depth_norm_t = np.zeros(depth_t.shape, dtype=np.uint8)
+            depth_norm_t[valid_disp_t] = 255 - np.clip(depth_vals_t * (255.0 / max_depth_mm), 0, 255).astype(np.uint8)
+            heatmap_t = cv2.applyColorMap(depth_norm_t, cv2.COLORMAP_MAGMA)
+            
+            heatmap_t[~valid_disp_t] = [0, 0, 0]
+            
+            if overlay_disparity:
+                blended = cv2.addWeighted(left_img, 0.6, heatmap_t, 0.4, 0)
+                depth_t_overlay = np.where(valid_disp_t[:, :, None], blended, left_img)
+            else:
+                depth_t_overlay = heatmap_t
+        else:
+            if overlay_disparity:
+                depth_t_overlay = left_img.copy()
+            else:
+                depth_t_overlay = np.zeros((*depth_t.shape, 3), dtype=np.uint8)
+            
+        # Add labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(depth_gt_overlay, 'FoundationStereo Pseudo Target Depth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(depth_t_overlay, 'FoundationStereo Teacher Logits as Depth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        combined_frame = np.hstack((depth_gt_overlay, depth_t_overlay))
+        video_out.write(combined_frame)
+        
+    video_out.release()
+    
+    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    if os.path.exists(final_output_path):
+        os.remove(final_output_path)
+    
+    subprocess.run([
+        'ffmpeg', '-i', temp_output_path, 
+        '-vcodec', 'libx264', '-crf', '18', 
+        '-pix_fmt', 'yuv420p', final_output_path
+    ], check=True, capture_output=True)
+    os.remove(temp_output_path)
+    print(f"Finished! Web-ready video saved to: {final_output_path}")
+
 # %%

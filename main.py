@@ -23,16 +23,16 @@ logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
 def main():
     try:
-        setup_environment(delete_temp=True)
         parser = argparse.ArgumentParser(description='SIDE Training and Testing')
         parser.add_argument('--config', type=str, required=True, help='Path to the YAML config file.')
+        parser.add_argument('--cuda_device', type=int, default=1, help='CUDA device to use.')
         args = parser.parse_args()
+        setup_environment(skip_cuda=False, cuda_device=args.cuda_device, delete_temp=True)
 
         with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
         with open(args.config, 'r') as f: experiment_config = yaml.safe_load(f)
         config = helpers.deep_merge(experiment_config, base_config)
         
-        if not os.path.exists('.temp'): os.makedirs('.temp')
         if not os.path.exists('logs'): os.makedirs('logs')
 
         experiment_name = os.path.splitext(os.path.basename(args.config))[0]
@@ -50,6 +50,7 @@ def main():
             tags['parent_name'] = experiment_name
             tags['run_type'] = 'root'
             tags['description'] = config['description']
+            mlflow.set_tag('mlflow.note.content', config['description'])
             helpers.mlflow_log_run(config, tags=tags)
 
             logger.header('Mode: Val Training' if config['data']['validation'] else 'Mode: Full Training')

@@ -84,7 +84,6 @@ class MetricsTracker:
         
         return metrics
 
-
 class Trainer(BaseProcessor):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
@@ -308,20 +307,33 @@ class Trainer(BaseProcessor):
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
             
-        for task_mode in ['segmentation', 'disparity', 'combined']:
-            model_state_path = os.path.join('.temp', f'model_state_{task_mode}.pth')
-            if os.path.exists(model_state_path):
-                state_dict = torch.load(model_state_path)
-                self.model.load_state_dict(state_dict['model_state_dict'])
+        if self.config['data']['validation']:
+            for task_mode in ['segmentation', 'disparity', 'combined']:
+                model_state_path = os.path.join(self.temp_path, f'model_state_{task_mode}.pth')
+                if os.path.exists(model_state_path):
+                    state_dict = torch.load(model_state_path)
+                    self.model.load_state_dict(state_dict['model_state_dict'])
+                    
+                    mlflow.pytorch.log_model(
+                        pytorch_model=self.model,
+                        name=f'best_model_{task_mode}',
+                        code_paths=['models/'],
+                        signature=signature
+                    )
                 
-                mlflow.pytorch.log_model(
-                    pytorch_model=self.model,
-                    name=f'best_model_{task_mode}',
-                    code_paths=['models/'],
-                    signature=signature
-                )
-                
-                logger.info(f'Logged best {task_mode} model.')
+                    logger.info(f'Logged best {task_mode} model.')
+        else:
+            model_state_path = os.path.join(self.temp_path, 'model_state.pth')
+            torch.save({'model_state_dict': self.model.state_dict()}, model_state_path)
+            
+            mlflow.pytorch.log_model(
+                pytorch_model=self.model,
+                name='best_model_',
+                code_paths=['models/'],
+                signature=signature
+            )
+        
+            logger.info('Logged best model.')
 
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()
@@ -457,7 +469,7 @@ class Trainer(BaseProcessor):
                     if ema_val_dice > best_ema_val_dice:
                         best_ema_val_dice = ema_val_dice
                         
-                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_segmentation.pth'))
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join(self.temp_path, 'model_state_segmentation.pth'))
                         mlflow.log_metric('best/segmentation/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                         for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/segmentation/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                         
@@ -470,7 +482,7 @@ class Trainer(BaseProcessor):
                     if ema_val_absrel < best_ema_val_absrel:
                         best_ema_val_absrel = ema_val_absrel
                         
-                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_disparity.pth'))
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join(self.temp_path, 'model_state_disparity.pth'))
                         mlflow.log_metric('best/disparity/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                         for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/disparity/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                         
@@ -488,7 +500,7 @@ class Trainer(BaseProcessor):
                     if ema_val_heuristic > best_ema_val_heuristic:
                         best_ema_val_heuristic = ema_val_heuristic
                         
-                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state_combined.pth'))
+                        torch.save({'model_state_dict': self.model.state_dict()}, os.path.join(self.temp_path, 'model_state_combined.pth'))
                         mlflow.log_metric('best/combined/epoch', epoch + 1, step=self.metrics_tracker.global_step)
                         for key, value in val_epoch_metrics.items(): mlflow.log_metric(f'best/combined/{key.replace("/", "_")}', value, step=self.metrics_tracker.global_step)
                 
@@ -513,10 +525,10 @@ class Trainer(BaseProcessor):
             for epoch in epochs_tqdm:
                 self._train_epoch(epoch=epoch)
         
-            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join(self.temp_path, 'model_state.pth'))
         except KeyboardInterrupt:
             logger.warning('Training interrupted. Saving current model...')
-            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+            torch.save({'model_state_dict': self.model.state_dict()}, os.path.join(self.temp_path, 'model_state.pth'))
         finally:
             self._save_model()
             if hasattr(self, 'model'): del self.model

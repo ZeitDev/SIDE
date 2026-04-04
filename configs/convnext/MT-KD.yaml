@@ -1,0 +1,57 @@
+description: ConvNeXt Tiny in full training with OneCycleLR
+
+data:
+  dataset: data.datasets.EndoVis17
+  validation: false
+
+training:
+  epochs: 120
+
+  optimizer:
+    name: torch.optim.AdamW
+    params:
+      lr: 3.0e-4
+    encoder_lr_mod: 1.0
+
+  scheduler:
+    name: torch.optim.lr_scheduler.OneCycleLR
+    params:
+      max_lr: 3.0e-4 # lr by LR Finder
+      epochs: 120 # max epochs
+      steps_per_epoch: 225 # 1350 + 450 samples // 2 // 8 = 225
+      pct_start: 0.3 # 36 epochs warmup, 84 epochs cooldown
+      div_factor: 25.0 # initial lr = max_lr / div_factor
+      final_div_factor: 10000.0 # end lr = max_lr / final_div_factor
+
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: convnextv2_tiny # atto, femto, pico, nano, tiny, base, large, huge
+      pretrained: true
+
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: true
+    disparity:
+      enabled: true
+      distillation:
+        enabled: true
+
+  weighting:
+    inter:
+      name: criterions.weighting.Unweighted
+      params: {}
+    intra_segmentation:
+      name: criterions.weighting.Fixed
+      params:
+        weights:
+          target: 1.0
+          distillation: 3.0
+    intra_disparity:
+      name: criterions.weighting.Fixed
+      params:
+        weights:
+          target: 1.0
+          distillation: 0.1

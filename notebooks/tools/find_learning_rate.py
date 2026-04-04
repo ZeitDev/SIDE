@@ -5,7 +5,6 @@ sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
 
-import torch
 import torch.nn as nn
 from torch_lr_finder import LRFinder, TrainDataLoaderIter
 
@@ -18,7 +17,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'wMT-KD'
+EXPERIMENT = 'convnext/wMT-KD'
 START_LR = 1e-8
 END_LR = 1.0
 NUM_ITER = 100
@@ -36,8 +35,6 @@ class LossComposerWrapper(nn.Module):
         self.loss_composer = loss_composer
         
     def forward(self, outputs, targets):
-        #targets = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in targets.items()}
-        
         # LossComposer returns: inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
         inter_loss, _, _, _, _ = self.loss_composer(outputs, targets)
         return inter_loss
@@ -48,13 +45,8 @@ class ModelInputWrapper(nn.Module):
         self.model = model
         
     def forward(self, inputs):
-        #with torch.amp.autocast('cuda', dtype=torch.float16):
-        if isinstance(inputs, dict):
-            return self.model(inputs['image'], inputs.get('right_image'))
-        else:
-            outputs = self.model(inputs)
-        
-        #outputs = {k: v.float() if isinstance(v, torch.Tensor) else v for k, v in outputs.items()}
+        if isinstance(inputs, dict): return self.model(inputs['image'], inputs.get('right_image'))
+        else: outputs = self.model(inputs)
         
         return outputs
 

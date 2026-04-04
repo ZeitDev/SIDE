@@ -33,6 +33,10 @@ dependencies = [
     "transformers>=5.2.0",
     "trimesh>=4.11.2",
     "kaleido>=1.2.0",
+    "trame>=3.12.0",
+    "trame-vtk>=2.11.6",
+    "trame-vuetify>=3.2.1",
+    "thop>=0.1.1.post2209072238",
 ]
 
 [[tool.uv.index]]

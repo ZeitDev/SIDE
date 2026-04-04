@@ -82,8 +82,16 @@ class CompetenceDecay(BaseWeighting):
         self.student_error_ema = None
         
     def combine(self, losses: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
-        combined_loss = (self.weight_target * losses['target']) + (self.weight_distillation * losses['distillation'])
-        weights = {'target': self.weight_target, 'distillation': self.weight_distillation}
+        total_weight = self.weight_target + self.weight_distillation
+        if total_weight < self.eps:
+            norm_weight_target = 1.0
+            norm_weight_distillation = 1.0
+        else:
+            norm_weight_target = (self.weight_target / total_weight) * 2.0
+            norm_weight_distillation = (self.weight_distillation / total_weight) * 2.0
+        
+        combined_loss = (norm_weight_target * losses['target']) + (norm_weight_distillation * losses['distillation'])
+        weights = {'target': norm_weight_target, 'distillation': norm_weight_distillation}
         
         return combined_loss, weights
     

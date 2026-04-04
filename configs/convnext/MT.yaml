@@ -22,6 +22,12 @@ training:
       start_factor: 0.01
       eta_min: 5.5e-8
 
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: convnextv2_tiny # atto, femto, pico, nano, tiny, base, large, huge
+      pretrained: true
+
   tasks:
     segmentation:
       enabled: true

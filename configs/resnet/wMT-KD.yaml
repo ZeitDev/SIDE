@@ -1,8 +1,7 @@
-description: weighted Multi-Task Knowledge Distillation
+description: ResNet50
 
 data:
   dataset: data.datasets.EndoVis17
-  max_disparity: 512
 
 training:
   epochs: 80
@@ -21,6 +20,12 @@ training:
       steps_per_epoch: 169
       start_factor: 0.5
       eta_min: 3.0e-7 # lr / 1000
+
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: resnet50
+      pretrained: true
 
   tasks:
     segmentation:
@@ -43,25 +48,19 @@ training:
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false
     intra_segmentation:
-      name: criterions.weighting.Uncertainty
-      params: {}
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher faster
+        teacher_performance: 0.9604
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptDICE_score'
+        metric_is_score: true
     intra_disparity:
-      name: criterions.weighting.Uncertainty
-      params: {}
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.4 # Abandon teacher faster
+        teacher_performance: 0.0809
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+        metric_is_score: false
 
-    # intra_segmentation:
-    #   name: criterions.weighting.CompetenceDecay
-    #   params:
-    #     alpha: 0.1 # Abandon teacher faster
-    #     teacher_performance: 0.9604
-    #     inverse: false
-    #     metric_key: 'performance/validation/misc/interceptDICE_score'
-    #     metric_is_score: true
-    # intra_disparity:
-    #   name: criterions.weighting.CompetenceDecay
-    #   params:
-    #     alpha: 0.4 # Abandon teacher faster
-    #     teacher_performance: 0.0809
-    #     inverse: false
-    #     metric_key: 'performance/validation/misc/interceptAbsRel_rate'
-    #     metric_is_score: false

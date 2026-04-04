@@ -65,6 +65,7 @@ class Tester(BaseProcessor):
         if 'segmentation' in self.tasks: task_modes = ['segmentation']
         if 'disparity' in self.tasks: task_modes = ['disparity']
         if 'segmentation' in self.tasks and 'disparity' in self.tasks: task_modes = ['segmentation', 'disparity', 'combined']
+        if not self.config['data']['validation']: task_modes = ['']
         
         test_metrics = {}
         for task_mode in task_modes:

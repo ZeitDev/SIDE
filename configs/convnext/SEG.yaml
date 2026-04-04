@@ -1,32 +1,39 @@
-description: DISP Baseline
+description: 01 - Highly increased epochs with MultiStepLR and normalized losses
 
 data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 200
+  epochs: 50
 
   optimizer:
     name: torch.optim.AdamW
     params:
       lr: 1.0e-4
+      weight_decay: 0.01
     encoder_lr_mod: 1.0
 
   scheduler:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
-      warmup_epochs: 1
-      total_epochs: 200
+      warmup_epochs: 3
+      total_epochs: 50
       steps_per_epoch: 169
-      start_factor: 0.5
+      start_factor: 0.01
       eta_min: 1.0e-7 # lr / 1000
+
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: convnextv2_tiny # atto, femto, pico, nano, tiny, base, large, huge
+      pretrained: true
 
   tasks:
     segmentation:
-      enabled: false
+      enabled: true
       distillation:
         enabled: false
     disparity:
-      enabled: true
+      enabled: false
       distillation:
         enabled: false

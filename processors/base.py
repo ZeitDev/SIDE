@@ -28,6 +28,8 @@ class BaseProcessor:
     def _setup(self) -> None:
         logger.subheader('Setup')
         
+        self.temp_path = os.environ['TMPDIR']
+        
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f'Using device: {self.device}')
         
@@ -38,6 +40,8 @@ class BaseProcessor:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
         logger.info(f'Set reproducibility seed to {seed}')
    
     def _init_metrics(self) -> None:

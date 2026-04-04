@@ -1,4 +1,4 @@
-description: SEG Baseline
+description: SEG Baseline with Resnet
 
 data:
   dataset: data.datasets.EndoVis17
@@ -9,7 +9,7 @@ training:
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 4.0e-4
+      lr: 1.0e-3
     encoder_lr_mod: 1.0
 
   scheduler:
@@ -19,7 +19,13 @@ training:
       total_epochs: 15
       steps_per_epoch: 169
       start_factor: 0.5
-      eta_min: 4.0e-7 # lr / 1000
+      eta_min: 1.0e-6 # lr / 1000
+
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: resnet50
+      pretrained: true
 
   tasks:
     segmentation:

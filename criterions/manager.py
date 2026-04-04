@@ -14,6 +14,7 @@ class LossComposer(nn.Module):
         self.config = config
         self.criterions = criterions
         self.tasks = tasks
+        self.initial_losses = {}
 
         self.inter = load(
             config['training']['weighting']['inter']['name'],
@@ -51,16 +52,24 @@ class LossComposer(nn.Module):
         
     def forward(self, outputs: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float], Dict[str, float]]:
         raw_losses = self._compute_raw_losses(outputs, targets)
+        raw_task_losses = {k: float(v.detach().item()) for k, v in raw_losses.items()}
+
+        normalized_losses = {}
+        for task, loss in raw_losses.items():
+            if task not in self.initial_losses:
+                self.initial_losses[task] = loss.detach().item() + 1e-8
+            
+            normalized_losses[task] = loss / self.initial_losses[task]
 
         intra_losses = {}
         intra_loss_weights = {}
         for task in self.tasks:
             if f'{task}_distillation' in raw_losses:
                 intra_losses[task], intra_loss_weights[task] = self.intras[task].combine(
-                    {'target': raw_losses[task], 'distillation': raw_losses[f'{task}_distillation']}
+                    {'target': normalized_losses[task], 'distillation': normalized_losses[f'{task}_distillation']}
                 )
             else:
-                intra_losses[task] = raw_losses[task]
+                intra_losses[task] = normalized_losses[task]
                 intra_loss_weights[task] = {'target': 1.0, 'distillation': 0.0}
 
         if len(self.tasks) > 1:
@@ -69,7 +78,7 @@ class LossComposer(nn.Module):
             inter_loss = intra_losses[self.tasks[0]]
             inter_loss_weights = {self.tasks[0]: 1.0}
             
-        raw_task_losses = {k: float(v.detach().item()) for k, v in raw_losses.items()}
+        inter_loss = inter_loss / len(raw_losses)
         
         return inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses
     

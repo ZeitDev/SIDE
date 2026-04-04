@@ -39,7 +39,7 @@ class MaskedSmoothL1Loss(nn.Module):
         return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature: float = 1.0):
+    def __init__(self, temperature: float = 4.0):
         super().__init__()
         self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='none', log_target=False)
