@@ -12,7 +12,7 @@ data:
 
   batch_size:  2
   accumulate_grad_batches: 4
-  num_workers: 4
+  num_workers: 8
   pin_memory: true
 
   transforms:
@@ -102,9 +102,8 @@ training:
       decoder:
         name: models.decoders.disparity.DisparityDecoder
         params:
-          is_disparity: true
           max_disparity: 512
-          intercept_at: 4
+          intercept_at: 4 # intercept at 256x256 resolution, matching FoundationStereo V'_c
           intercept_channels: 128 # matching FoundationStereo V'_c logits
       distillation:
         enabled: false
@@ -113,7 +112,7 @@ training:
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
-            temperature: 4.0
+            temperature: 2.0
 
   weighting:
     inter:

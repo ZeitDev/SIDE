@@ -66,8 +66,9 @@ class EndoVisTeacherDataset(Dataset):
 
 # %% Settings
 # Settings
-state_path = 'wMT/260330:1657/train'
-task_mode = 'combined' # 'disparity' or 'segmentation' or 'combined'
+arch = 'convnext'
+state_path = 'SEG/260407:1208/train'
+task_mode = 'segmentation' # 'disparity' or 'segmentation' or 'combined'
 
 # %% Load mlflow data
 # Load mlflow data
@@ -80,7 +81,7 @@ mlflow_experiment = mlflow.get_experiment_by_name(experiment)
 mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f'run_name = "{state_path_parts[1]}"').iloc[0] 
 
 base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp')
-experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{experiment}.yaml', dst_path='../.temp')
+experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{arch}/{experiment}.yaml', dst_path='../.temp')
 
 with open(base_config_filepath, 'r') as f: base_config = yaml.safe_load(f)
 with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)
@@ -151,19 +152,21 @@ print(f'Inference Speed: {fps:.2f} FPS')
 print(f'Time per image: {(total_time_ms / num_iterations):.2f} ms')
 peak_vram = torch.cuda.max_memory_allocated() / (1024 ** 2) # Convert Bytes to Megabytes
 print(f'Peak VRAM Usage: {peak_vram:.2f} MB')
+print(f'VRAM Usage in GB: {peak_vram / 1024:.2f} GB')
 
 # %%
 model1_fps = 20.08
 model2_fps = 13.28
 
-# NVIDIA SF = 7.14 FPS // 2114.68 MB
-# NVIDIA FS = 0.49 FPS // 7126.30 MB in half precision
-# Sequence Teacher = 0.46 FPS 
+# NVIDIA SF = 7.14 FPS // 140.06 ms // 2114.68 MB
+# NVIDIA FS = 0.49 FPS // 2040.82 ms // 7126.30 MB in half precision
+# Sequence Teacher = 0.46 FPS // 2180.88 ms
 
-# SEG = 20.08 FPS // 1389.72 MB
-# DISP = 13.28 FPS // 1435.92 MB
-# wMT (260330:1657/train) = 10.51 FPS // 95.18 ms // 1473 MB // 546.38 G // 42.5 M
-# wMT-KD-segmentation (260331:1425/train) = 10.54 FPS // 94.58 ms // 1473 MB // 540.29 G // 42.41 M
+# SEG = 20.08 FPS // 49.80 ms // 1389.72 MB
+# DISP = 13.28 FPS // 75.30 ms // 1435.92 MB
+# Sequence Single Task = 7.99 FPS // 125.10 ms
+# wMT (convnext/wMT/260406:2037/train) = 10.52 FPS // 95.02 ms // 1.44 GB // 540.29 G // 42.41 M
+# wMT-KD-segmentation (convnext/wMT-KD/260406:2036/train) = 10.50 FPS // 95.23 ms // 1.44 GB // 540.29 G // 42.41 M
 
 print((model1_fps * model2_fps) / (model1_fps + model2_fps))
 

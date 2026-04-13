@@ -1,8 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.helpers import upsample_logits
-
 class ChannelWiseKLDivLoss(nn.Module):
     def __init__(self, temperature=1.0):
         super().__init__()
@@ -14,8 +12,6 @@ class ChannelWiseKLDivLoss(nn.Module):
         
         student_logits = student_logits / self.temperature
         teacher_logits = teacher_logits / self.temperature
-        
-        #teacher_logits = upsample_logits(teacher_logits, size=(H, W))
         
         student_logits = student_logits.view(B, C, -1)
         teacher_logits = teacher_logits.view(B, C, -1)

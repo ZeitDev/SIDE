@@ -39,12 +39,25 @@ class MaskedSmoothL1Loss(nn.Module):
         return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature: float = 4.0):
+    def __init__(self, temperature_start: float = 1.0, temperature_end: float = 4.0, total_epochs: int = 100, steps_per_epoch: int = 100):
         super().__init__()
-        self.temperature = temperature
+        self.current_step = 0
+        self.temperature_start = temperature_start
+        self.temperature_end = temperature_end
+        self.total_epoch_steps = total_epochs * steps_per_epoch
         self.criterion = nn.KLDivLoss(reduction='none', log_target=False)
+    
+    def get_current_temperature(self):
+        if self.current_step >= self.total_epoch_steps: return self.temperature_end
         
+        progress = self.current_step / self.total_epoch_steps
+        
+        temperature = self.temperature_start + (self.temperature_end - self.temperature_start) * progress
+        return temperature
+    
     def forward(self, student_logits, teacher_logits, targets):
+        T = self.get_current_temperature()
+        
         B, D, H, W = student_logits.shape
         teacher_logits = teacher_logits.detach()
         
@@ -58,11 +71,8 @@ class PixelWiseKLDivLoss(nn.Module):
         teacher_confidence = raw_teacher_probabilities.max(dim=1, keepdim=True)[0]
         teacher_confidence = TF.gaussian_blur(teacher_confidence, kernel_size=7, sigma=2.0) # smooth confidence to avoid sharp gradients
         
-        student_logits = student_logits / self.temperature
-        teacher_logits = teacher_logits / self.temperature  
-        
-        # student = logits2disparity(student_logits, size=targets.shape[2:])
-        # teacher = logits2disparity(teacher_logits, size=targets.shape[2:])
+        student_logits = student_logits / T
+        teacher_logits = teacher_logits / T
         
         student_log_probabilities = F.log_softmax(student_logits, dim=1)
         teacher_probabilities = F.softmax(teacher_logits, dim=1)
@@ -71,6 +81,8 @@ class PixelWiseKLDivLoss(nn.Module):
         weighted_pixel_loss = pixel_loss * teacher_confidence
         valid_pixel_loss = weighted_pixel_loss * valid.float()
         
-        loss = (valid_pixel_loss.sum() / valid.sum()) * (self.temperature ** 2)
+        loss = (valid_pixel_loss.sum() / valid.sum()) * (T ** 2)
+        
+        if self.training: self.current_step += 1
         
         return loss

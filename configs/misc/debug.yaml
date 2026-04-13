@@ -1,25 +1,35 @@
-description: ConvNeXt Tiny
+description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
 
 data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 1
+  epochs: 50
 
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 3.0e-4
-    encoder_lr_mod: 1.0
+      lr: 6.0e-4
+      weight_decay: 1.0e-4
+    encoder_lr_mod: 0.6
+
+  # scheduler:
+  #   name: schedulers.custom.WarmupMultiStepLR
+  #   params:
+  #     warmup_epochs: 1
+  #     milestones: [20, 40]
+  #     gamma: 0.1
+  #     steps_per_epoch: 169
+  #     start_factor: 0.1
 
   scheduler:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
       warmup_epochs: 1
-      total_epochs: 80
+      total_epochs: 50
       steps_per_epoch: 169
-      start_factor: 0.5
-      eta_min: 3.0e-7 # lr / 1000
+      start_factor: 0.1
+      eta_min: 6.0e-6 # lr / 100
 
   encoder:
     name: models.encoders.timm.Encoder
@@ -36,6 +46,13 @@ training:
       enabled: true
       distillation:
         enabled: true
+        criterion:
+          name: criterions.disparity.PixelWiseKLDivLoss
+          params:
+            temperature_start: 1.0
+            temperature_end: 4.0
+            total_epochs: 50
+            steps_per_epoch: 169
 
   weighting:
     inter:
@@ -58,7 +75,7 @@ training:
     intra_disparity:
       name: criterions.weighting.CompetenceDecay
       params:
-        alpha: 0.4 # Abandon teacher faster
+        alpha: 0.1 # Abandon teacher faster
         teacher_performance: 0.0809
         inverse: false
         metric_key: 'performance/validation/misc/interceptAbsRel_rate'

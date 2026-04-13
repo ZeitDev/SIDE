@@ -21,7 +21,7 @@ BRIGHT_RYG_LUT = np.stack([_lut_b, _lut_g, _lut_r], axis=1).astype(np.uint8) # B
 # Global setting for visualization colormap scaling
 max_disparity = 512.0 #128.0
 
-# Global setting for segmentation color (BGR format) - using Magenta to contrast with MAGMA
+# Global setting for segmentation color (BGR format)
 seg_color = [255, 255, 0]
 
 # Global setting to toggle disparity overlay (True = blend with image, False = solid colormap where valid)
@@ -702,7 +702,7 @@ import torch.nn.functional as F
 
 import subprocess
 
-fps = 2
+fps = 4
 mode = 'val'
 dataset_name = 'instrument_dataset_5'
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{dataset_name}'
@@ -809,14 +809,29 @@ if left_images:
     video_out.release()
     
     # Convert to H.264 using FFmpeg for web compatibility
-    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    print("Converting to H.264 for web optimization using FFmpeg...")
     if os.path.exists(final_output_path):
         os.remove(final_output_path)
     
     subprocess.run([
-        'ffmpeg', '-i', temp_output_path, 
-        '-vcodec', 'libx264', '-crf', '18', 
-        '-pix_fmt', 'yuv420p', final_output_path
+        'ffmpeg', '-y', '-i', temp_output_path,
+        # Video settings
+        '-c:v', 'libx264', 
+        '-profile:v', 'baseline', 
+        '-level', '3.0',
+        '-pix_fmt', 'yuv420p',
+        '-crf', '23',                # Lighter compression, easier on the CPU
+        '-maxrate', '1.5M',          # Slightly lowered to ensure smooth streaming
+        '-bufsize', '3M',
+        '-vf', 'scale=-2:480',       # CRITICAL: Force height to 480p (or 720 max)
+        '-r', '30',                  # CRITICAL: Force max 30 fps
+        # Audio settings (CRITICAL)
+        '-c:a', 'aac',               # Universally supported audio
+        '-b:a', '128k', 
+        '-ac', '2',                  # Force stereo
+        # Container settings
+        '-movflags', '+faststart',
+        final_output_path
     ], check=True, capture_output=True)
     
     # Clean up temp file
@@ -825,7 +840,7 @@ if left_images:
 
 
 # %%
-# Conference Video 1: Segmentation Target (Left) vs Segmentation Teacher Logits (Right)
+# Conference Video 1: Segmentation Teacher Logits (Left) vs Segmentation Target (Right)
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}/{dataset_name}'
 conference_output_video_path = f'/data/Zeitler/Visualization/videos/conference/{mode}/{dataset_name}'
 os.makedirs(conference_output_video_path, exist_ok=True)
@@ -901,25 +916,40 @@ if left_images:
         cv2.putText(seg_gt_overlay, 'Segmentation Target', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(seg_t_overlay, 'SegFormer-B5 Teacher Logits as Mask', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         
-        combined_frame = np.hstack((seg_gt_overlay, seg_t_overlay))
+        combined_frame = np.hstack((seg_t_overlay, seg_gt_overlay))
         video_out.write(combined_frame)
         
     video_out.release()
     
-    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    print("Converting to H.264 for web optimization using FFmpeg...")
     if os.path.exists(final_output_path):
         os.remove(final_output_path)
     
     subprocess.run([
-        'ffmpeg', '-i', temp_output_path, 
-        '-vcodec', 'libx264', '-crf', '18', 
-        '-pix_fmt', 'yuv420p', final_output_path
+        'ffmpeg', '-y', '-i', temp_output_path,
+        # Video settings
+        '-c:v', 'libx264', 
+        '-profile:v', 'baseline', 
+        '-level', '3.0',
+        '-pix_fmt', 'yuv420p',
+        '-crf', '23',                # Lighter compression, easier on the CPU
+        '-maxrate', '1.5M',          # Slightly lowered to ensure smooth streaming
+        '-bufsize', '3M',
+        '-vf', 'scale=-2:480',       # CRITICAL: Force height to 480p (or 720 max)
+        '-r', '30',                  # CRITICAL: Force max 30 fps
+        # Audio settings (CRITICAL)
+        '-c:a', 'aac',               # Universally supported audio
+        '-b:a', '128k', 
+        '-ac', '2',                  # Force stereo
+        # Container settings
+        '-movflags', '+faststart',
+        final_output_path
     ], check=True, capture_output=True)
     os.remove(temp_output_path)
     print(f"Finished! Web-ready video saved to: {final_output_path}")
 
 # %%
-# Conference Video 2: FoundationStereo Pseudo Targets (Left) vs FS Teacher Logits as Depth (Right)
+# Conference Video 2: FS Teacher Logits as Depth (Left) vs FoundationStereo Pseudo Targets (Right)
 
 disp_dir = os.path.join(dataset_path, 'target', 'disparity')
 teach_disp_dir = os.path.join(dataset_path, 'teacher', 'disparity_128_256_256')
@@ -1029,20 +1059,36 @@ if left_images:
         cv2.putText(depth_gt_overlay, 'FoundationStereo Pseudo Target Depth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(depth_t_overlay, 'FoundationStereo Teacher Logits as Depth', (20, 40), font, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
         
-        combined_frame = np.hstack((depth_gt_overlay, depth_t_overlay))
+        combined_frame = np.hstack((depth_t_overlay, depth_gt_overlay))
         video_out.write(combined_frame)
         
     video_out.release()
     
-    print(f"Converting to H.264 for web optimization using FFmpeg...")
+    print("Converting to H.264 for web optimization using FFmpeg...")
     if os.path.exists(final_output_path):
         os.remove(final_output_path)
     
     subprocess.run([
-        'ffmpeg', '-i', temp_output_path, 
-        '-vcodec', 'libx264', '-crf', '18', 
-        '-pix_fmt', 'yuv420p', final_output_path
+        'ffmpeg', '-y', '-i', temp_output_path,
+        # Video settings
+        '-c:v', 'libx264', 
+        '-profile:v', 'baseline', 
+        '-level', '3.0',
+        '-pix_fmt', 'yuv420p',
+        '-crf', '23',                # Lighter compression, easier on the CPU
+        '-maxrate', '1.5M',          # Slightly lowered to ensure smooth streaming
+        '-bufsize', '3M',
+        '-vf', 'scale=-2:480',       # CRITICAL: Force height to 480p (or 720 max)
+        '-r', '30',                  # CRITICAL: Force max 30 fps
+        # Audio settings (CRITICAL)
+        '-c:a', 'aac',               # Universally supported audio
+        '-b:a', '128k', 
+        '-ac', '2',                  # Force stereo
+        # Container settings
+        '-movflags', '+faststart',
+        final_output_path
     ], check=True, capture_output=True)
+    
     os.remove(temp_output_path)
     print(f"Finished! Web-ready video saved to: {final_output_path}")
 

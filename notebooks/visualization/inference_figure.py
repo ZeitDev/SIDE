@@ -20,12 +20,13 @@ setup_environment(skip_cuda=True)
 
 # %%
 # Settings
-run = 'wMT-KD/260331:1425/train'
+arch = 'convnext'
+run = 'wMT-KD/260406:2036/train'
 task_mode = 'segmentation'
 sample_indices = [226, 81] # Bad / Good
 sample_metrics = {
-    0: {'dice': 0.744957685470581, 'absrel': 0.13829538226127625, 'score': 0.7990894867050663},
-    1: {'dice': 0.9868193864822388, 'absrel': 0.03192799538373947, 'score': 0.9773558019806275}
+    0: {'dice': 0.7095116376876831, 'absrel': 0.13883139193058014, 'score': 0.7780185064236758},
+    1: {'dice': 0.9895262122154236, 'absrel': 0.03645792603492737, 'score': 0.9763612931583254}
 }
 
 # Final composite controls
@@ -50,7 +51,7 @@ model.eval()
 config_name = run.split('/')[0]
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
-with open(os.path.join('configs', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
+with open(os.path.join('configs', arch, config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
 data_config = config['data']
@@ -379,7 +380,7 @@ for sample_idx, data_idx in enumerate([1, 0]): # Good first (1), Bad second (0)
             z=target_depth[::-1], colorscale='Magma_r', zmin=0, zmax=max_depth_viz, 
             showscale=(sample_idx == 0), 
             colorbar=dict(
-                title=dict(text="Depth [mm]", side="right"), 
+                title=dict(text="Depth [mm]", side="right", font=dict(size=2 * 1)), 
                 x=1.005, len=1.0, y=0.5, yanchor='middle'
             )
         ), 
@@ -404,8 +405,8 @@ for sample_idx, data_idx in enumerate([1, 0]): # Good first (1), Bad second (0)
             zmin=0, zmax=1.0, 
             showscale=(sample_idx == 0), 
             colorbar=dict(
-                title=dict(text="Error", side="right"), 
-                x=1.085,              # <-- Tucked right next to the Depth colorbar
+                title=dict(text="Error", side="right", font=dict(size=2 * 1)), 
+                x=1.1,              # <-- Tucked right next to the Depth colorbar
                 len=1.0, y=0.5, yanchor='middle'
             )
         ), 
@@ -433,14 +434,14 @@ target_width_inches = a0_width_inches * minipage_fraction
 scale_factor = 1
 layout_dpi = 96
 target_width_px = int(target_width_inches * layout_dpi * scale_factor)
-target_height_px = int(target_width_px * 1.125) # Adjust this multiplier to tune the height
+target_height_px = int(target_width_px * 1.115) # Adjust this multiplier to tune the height
 
 font_size = 36
 
 fig.add_annotation(
-    text=f"<b>Good Sample</b> (DICE: {sample_metrics[1]['dice']*100:.2f}%, AbsRel: {sample_metrics[1]['absrel']*100:.2f}%)",
+    text=f"<b>Good Sample</b> (DICE: {sample_metrics[1]['dice']*100:.0f}%, AbsRel: {sample_metrics[1]['absrel']*100:.0f}%)",
     xref="paper", yref="paper",
-    x=-0.034, y=1, 
+    x=-0.034, y=0.96, 
     textangle=-90,
     showarrow=False,
     font=dict(size=font_size * scale_factor) # Make these prominent
@@ -448,9 +449,9 @@ fig.add_annotation(
 
 # Bad Sample (Spans Rows 3 & 4 -> centered around y=0.25 in paper coordinates)
 fig.add_annotation(
-    text=f"<b>Bad Sample</b> (DICE: {sample_metrics[0]['dice']*100:.2f}%, AbsRel: {sample_metrics[0]['absrel']*100:.2f}%)",
+    text=f"<b>Bad Sample</b> (DICE: {sample_metrics[0]['dice']*100:.0f}%, AbsRel: {sample_metrics[0]['absrel']*100:.0f}%)",
     xref="paper", yref="paper",
-    x=-0.034, y=0, 
+    x=-0.034, y=0.04, 
     textangle=-90,
     showarrow=False,
     font=dict(size=font_size * scale_factor)
@@ -460,7 +461,7 @@ fig.add_annotation(
 fig.update_layout(
     width=target_width_px,
     height=target_height_px,
-    margin=dict(l=50 * scale_factor, r=130 * scale_factor, t=50 * scale_factor, b=10 * scale_factor), # Adjusted right margin to give colorbars breathing room
+    margin=dict(l=50 * scale_factor, r=160 * scale_factor, t=50 * scale_factor, b=10 * scale_factor), # Adjusted right margin to give colorbars breathing room
     plot_bgcolor='white', 
     paper_bgcolor='white',
     font=dict(
@@ -472,8 +473,8 @@ fig.update_layout(
 
 # Optional: Tweak colorbar font sizes to be legible but not overpowering
 fig.update_traces(
-    colorbar_tickfont_size=22 * scale_factor, 
-    colorbar_title_font_size=24 * scale_factor, 
+    colorbar_tickfont_size=28 * scale_factor, 
+    colorbar_title_font_size=28 * scale_factor, 
     selector=dict(type='heatmap')
 )
 

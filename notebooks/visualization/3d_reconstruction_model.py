@@ -20,6 +20,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from utils import helpers
+from utils.helpers import upsample_logits, logits2disparity
+
 from data.transforms import build_transforms
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -27,8 +29,9 @@ setup_environment(skip_cuda=True)
 
 # %%
 # Settings
-run = 'wMT-KD/260331:1425/train'
-task_mode = 'segmentation'
+arch = 'convnext'
+run = 'wMT-KD/260406:2036/train'
+task_mode = 'combined'
 sample_indices = [226, 81] # Bad / Good
 sample_metrics = {
     0: {'dice': 0.744957685470581, 'absrel': 0.13829538226127625, 'score': 0.7990894867050663},
@@ -57,7 +60,7 @@ model.eval()
 config_name = run.split('/')[0]
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
-with open(os.path.join('configs', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
+with open(os.path.join('configs', arch, config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
 data_config = config['data']
@@ -149,16 +152,18 @@ for i, idx in enumerate([bad_sample_idx, good_sample_idx]):
     with torch.no_grad():
         output = model(left_image, right_image)
         
-        
     data[i] = {
         'left_image': left_image.squeeze(0).cpu().numpy(),
         'target_segmentation': target_segmentation.squeeze(0).cpu().numpy(),
         'target_disparity': target_disparity.squeeze(0).cpu().numpy(),
         'output_segmentation': output['segmentation'].squeeze(0).cpu().numpy(),
         'output_disparity': output['disparity'].squeeze(0).cpu().numpy(),
+        'teacher_segmentation': dataset['teacher_segmentation'].squeeze(0).cpu().numpy() if 'teacher_segmentation' in dataset else None,
+        'teacher_disparity': dataset['teacher_disparity'].squeeze(0).cpu().numpy() if 'teacher_disparity' in dataset else None,
         'baseline': baseline.item(),
         'focal_length': focal_length.item()
     }
+    
 # %%
 max_disparity = 512.0
 seg_color = np.array([0, 255, 255])  # Cyan in RGB
@@ -235,8 +240,18 @@ for sample_idx, data_idx in enumerate([1, 0]): # Good first (1), Bad second (0)
     pred_disp = sample['output_disparity'].squeeze() * max_disparity
     target_disp = sample['target_disparity'].squeeze() * max_disparity
     
-    pred_seg_mask = target_seg_mask
-    pred_disp = target_disp
+    teach_seg = torch.tensor(sample['teacher_segmentation'])
+    teach_seg_up = upsample_logits(teach_seg.unsqueeze(0), (pred_seg_mask.shape[0], pred_seg_mask.shape[1]))
+    teach_seg_mask = teach_seg_up.argmax(dim=1).squeeze().cpu().numpy()
+        
+    teach_disp = torch.tensor(sample['teacher_disparity'])
+    teach_disp_up = logits2disparity(teach_disp.unsqueeze(0), (pred_seg_mask.shape[0], pred_seg_mask.shape[1])) * 512.0
+    teach_disp_np = np.nan_to_num(teach_disp_up.squeeze().cpu().numpy(), nan=0.0)
+    
+    ###
+    
+    # pred_seg_mask = target_seg_mask
+    # pred_disp = target_disp
     
     ###
     
