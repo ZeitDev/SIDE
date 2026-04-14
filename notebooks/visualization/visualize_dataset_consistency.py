@@ -38,8 +38,7 @@ config['training']['tasks']['segmentation']['distillation']['enabled'] = True
 config['training']['tasks']['disparity']['enabled'] = True
 config['training']['tasks']['disparity']['distillation']['enabled'] = True
 
-data_config = config['data']
-dataset_class = helpers.load(data_config['dataset'])
+dataset_class = helpers.load(config['data']['dataset'])
 
 train_transforms = build_transforms(config, mode='train')
 dataset_train = dataset_class(

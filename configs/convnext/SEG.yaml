@@ -4,7 +4,7 @@ data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 25
+  epochs: 50
 
   optimizer:
     name: torch.optim.AdamW

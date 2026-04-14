@@ -1,19 +1,17 @@
 description: Base configuration
 
-# --- Data Configuration ---
+general:
+  seed: 42
+  num_workers: 8
+  pin_memory: true
+
 data:
   dataset: data.datasets.EndoVis17
-  validation: true
 
   num_of_classes:
     segmentation: 2
     disparity: 1
   max_disparity: 512
-
-  batch_size:  2
-  accumulate_grad_batches: 4
-  num_workers: 8
-  pin_memory: true
 
   transforms:
     train:
@@ -47,6 +45,11 @@ data:
 # --- Training Configuration ---
 training:
   epochs: 10
+  validation: true
+
+  batch_size:  2
+  accumulate_grad_batches: 4
+
   ema_alpha: 0.1
 
   checkpoint: null # continue training from this checkpoint

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 SESSION_NAME=$(date +"%d%H%M")
 CONFIG_DIR="configs"
 DEFAULT_NAME="base"

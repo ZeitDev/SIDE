@@ -248,7 +248,7 @@ def main() -> None:
 		os.makedirs('logs')
 
 	base_config = load_config(args.config)
-	if not base_config['data']['validation']:
+	if not base_config['training']['validation']:
 		raise ValueError('Optuna search needs validation enabled to produce a reliable objective.')
 
 	config_name = os.path.splitext(os.path.basename(args.config))[0]

@@ -34,7 +34,7 @@ class BaseProcessor:
         logger.info(f'Using device: {self.device}')
         
         torch.cuda.empty_cache()
-        seed = 42
+        seed = self.config['general']['seed']
         os.environ['PYTHONHASHSEED'] = str(seed)
         #os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
         

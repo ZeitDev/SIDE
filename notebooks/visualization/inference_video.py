@@ -86,7 +86,7 @@ def inference_video(run, task_mode, arch):
     with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)
     config = helpers.deep_merge(experiment_config, base_config)
     config['logging']['notebook_mode'] = True
-    config['data']['batch_size'] = 1 # Force batch size to 1 for video creation
+    config['training']['batch_size'] = 1 # Force batch size to 1 for video creation
     
     # Get Run ID & Initialize Tester
     model_run_id = mlflow.search_runs(

@@ -26,7 +26,7 @@ NUM_ITER = 100
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
 with open(f'./configs/{EXPERIMENT}.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
-#config['data']['batch_size'] = 1
+#config['training']['batch_size'] = 1
 
 # %%
 class LossComposerWrapper(nn.Module):

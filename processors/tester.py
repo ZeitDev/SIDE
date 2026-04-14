@@ -25,12 +25,13 @@ class Tester(BaseProcessor):
     def _load_data(self) -> None:
         logger.subheader('Load Data')
 
-        data_config = self.config['data']
-        dataset_class = load(data_config['dataset'])
-        
+        dataset_class = load(self.config['data']['dataset'])
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
         test_transforms = build_transforms(self.config, mode='test')
+        
+        g = torch.Generator()
+        g.manual_seed(self.config['general']['seed'])
         
         dataset_test = dataset_class(
             mode='test',
@@ -39,14 +40,15 @@ class Tester(BaseProcessor):
         )
         self.dataloader_test = DataLoader(
             dataset_test,
-            batch_size=data_config['batch_size'],
+            batch_size=self.config['training']['batch_size'],
             shuffle=False,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'],
-            persistent_workers=False
+            num_workers=self.config['general']['num_workers'],
+            pin_memory=self.config['general']['pin_memory'],
+            generator=g,
+            persistent_workers=True
         )
         helpers.check_dataleakage('test', dataset_test)
-        logger.info(f'Loaded test dataset: {data_config["dataset"]} with {len(dataset_test)} samples.')
+        logger.info(f'Loaded test dataset: {self.config["data"]["dataset"]} with {len(dataset_test)} samples.')
         
         if 'segmentation' in self.tasks:
             self.segmentation_class_mappings = dataset_test.segmentation_class_mappings
@@ -65,7 +67,7 @@ class Tester(BaseProcessor):
         if 'segmentation' in self.tasks: task_modes = ['segmentation']
         if 'disparity' in self.tasks: task_modes = ['disparity']
         if 'segmentation' in self.tasks and 'disparity' in self.tasks: task_modes = ['segmentation', 'disparity', 'combined']
-        if not self.config['data']['validation']: task_modes = ['']
+        if not self.config['training']['validation']: task_modes = ['']
         
         test_metrics = {}
         for task_mode in task_modes:

@@ -63,8 +63,7 @@ with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.sa
 with open(os.path.join('configs', arch, config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
-data_config = config['data']
-dataset_class = helpers.load(data_config['dataset'])
+dataset_class = helpers.load(config['data']['dataset'])
 
 test_transforms = build_transforms(config, mode='test')
 dataset_test = dataset_class(
@@ -76,8 +75,8 @@ dataloader_test = DataLoader(
     dataset_test,
     batch_size=1,
     shuffle=False,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 

@@ -4,7 +4,7 @@ data:
   dataset: data.datasets.EndoVis17
 
 training:
-  epochs: 50
+  epochs: 1
 
   optimizer:
     name: torch.optim.AdamW
@@ -30,10 +30,10 @@ training:
 
   tasks:
     segmentation:
-      enabled: false
+      enabled: true
       distillation:
         enabled: false
     disparity:
-      enabled: true
+      enabled: false
       distillation:
         enabled: false

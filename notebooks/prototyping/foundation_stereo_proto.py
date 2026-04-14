@@ -25,8 +25,7 @@ with open(os.path.join('configs', 'debug.yaml'), 'r') as f: experiment_config = 
 config = helpers.deep_merge(experiment_config, base_config)
 
 # %%
-data_config = config['data']
-dataset_class = load(data_config['dataset'])
+dataset_class = load(config['data']['dataset'])
 train_transforms = build_transforms(config, mode='train')
 
 dataset_train = dataset_class(
@@ -36,10 +35,10 @@ dataset_train = dataset_class(
 )
 dataloader_train = DataLoader(
     dataset_train,
-    batch_size=data_config['batch_size'],
+    batch_size=config['training']['batch_size'],
     shuffle=True,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 

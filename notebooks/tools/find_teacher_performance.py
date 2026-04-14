@@ -26,8 +26,7 @@ config['training']['tasks']['segmentation']['distillation']['enabled'] = True
 config['training']['tasks']['disparity']['enabled'] = True
 config['training']['tasks']['disparity']['distillation']['enabled'] = True
 
-data_config = config['data']
-dataset_class = helpers.load(data_config['dataset'])
+dataset_class = helpers.load(config['data']['dataset'])
 
 transforms = build_transforms(config, mode='test')
 dataset = dataset_class(
@@ -37,10 +36,10 @@ dataset = dataset_class(
 )
 dataloader = DataLoader(
     dataset,
-    batch_size=data_config['batch_size'],
+    batch_size=config['training']['batch_size'],
     shuffle=False,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 helpers.check_dataleakage('val', dataset)

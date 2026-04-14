@@ -1,4 +1,5 @@
 import os
+import sys
 import yaml
 import logging
 import argparse
@@ -53,16 +54,16 @@ def main():
             mlflow.set_tag('mlflow.note.content', config['description'])
             helpers.mlflow_log_run(config, tags=tags)
 
-            logger.header('Mode: Val Training' if config['data']['validation'] else 'Mode: Full Training')
+            logger.header('Mode: Val Training' if config['training']['validation'] else 'Mode: Full Training')
             with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
                 tags['parent_name'] = run.info.run_name
                 tags['run_type'] = 'train'
-                tags['run_mode'] = 'validation' if config['data']['validation'] else 'full'
+                tags['run_mode'] = 'validation' if config['training']['validation'] else 'full'
                 tags['description'] = config['description']
                 helpers.mlflow_log_run(config, tags=tags)
                     
                 trainer = Trainer(config)
-                if config['data']['validation']: trainer.train()
+                if config['training']['validation']: trainer.train()
                 else: trainer.full_train()
 
             logger.header('Mode: Testing')
@@ -96,3 +97,4 @@ def main():
             
 if __name__ == "__main__":
     main()
+    sys.exit(0)

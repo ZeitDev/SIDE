@@ -96,14 +96,15 @@ class Trainer(BaseProcessor):
     def _load_data(self) -> None:
         logger.subheader('Load Data')
 
-        data_config = self.config['data']
-        dataset_class = load(data_config['dataset'])
-        
+        dataset_class = load(self.config['data']['dataset'])
         self.tasks = [task for task, task_config in self.config['training']['tasks'].items() if task_config['enabled']]
         
         train_transforms = build_transforms(self.config, mode='train')
-        val_mode = 'test' if data_config['validation'] else 'train'
+        val_mode = 'test' if self.config['training']['validation'] else 'train'
         val_transforms = build_transforms(self.config, mode=val_mode)
+        
+        g = torch.Generator()
+        g.manual_seed(self.config['general']['seed'])
         
         dataset_train = dataset_class(
             mode='train',
@@ -112,11 +113,12 @@ class Trainer(BaseProcessor):
         )
         self.dataloader_train = DataLoader(
             dataset_train,
-            batch_size=data_config['batch_size'],
+            batch_size=self.config['training']['batch_size'],
             shuffle=True,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'],
-            persistent_workers=False
+            num_workers=self.config['general']['num_workers'],
+            pin_memory=self.config['general']['pin_memory'],
+            generator=g,
+            persistent_workers=True
         )
         helpers.check_dataleakage('train', dataset_train)
         
@@ -127,27 +129,29 @@ class Trainer(BaseProcessor):
         )
         self.dataloader_val = DataLoader(
             dataset_val,
-            batch_size=data_config['batch_size'],
+            batch_size=self.config['training']['batch_size'],
             shuffle=False,
-            num_workers=data_config['num_workers'],
-            pin_memory=data_config['pin_memory'],
-            persistent_workers=False
+            num_workers=self.config['general']['num_workers'],
+            pin_memory=self.config['general']['pin_memory'],
+            generator=g,
+            persistent_workers=True
         )
         helpers.check_dataleakage('val', dataset_val)
         
-        if not data_config['validation']:
+        if not self.config['training']['validation']:
             dataset_full = ConcatDataset([dataset_train, dataset_val])
             self.dataloader_train = DataLoader(
                 dataset_full,
-                batch_size=data_config['batch_size'],
+                batch_size=self.config['training']['batch_size'],
                 shuffle=True,
-                num_workers=data_config['num_workers'],
-                pin_memory=data_config['pin_memory'],
-                persistent_workers=False
+                num_workers=self.config['general']['num_workers'],
+                pin_memory=self.config['general']['pin_memory'],
+                generator=g,
+                persistent_workers=True
             )
             
-        logger.info(f'Loaded datasets: {data_config["dataset"]} with batch size {data_config["batch_size"]}, num_workers {data_config["num_workers"]}, pin_memory {data_config["pin_memory"]}')
-        dataset_val_length = len(dataset_val) if data_config['validation'] else 0
+        logger.info(f'Loaded datasets: {self.config["data"]["dataset"]} with batch size {self.config["training"]["batch_size"]}, num_workers {self.config["general"]["num_workers"]}, pin_memory {self.config["general"]["pin_memory"]}')
+        dataset_val_length = len(dataset_val) if self.config['training']['validation'] else 0
         logger.info(f'Num of Samples - Training: {len(dataset_train)}, Validation: {dataset_val_length}')
         
         self.signature_input_example = dataset_train[0]['image'].unsqueeze(0)
@@ -284,7 +288,7 @@ class Trainer(BaseProcessor):
             **scheduler_config['params'])
         logger.info(f'Scheduler: {scheduler_config["name"]} with params {scheduler_config["params"]}')
         
-        self.accumulation_steps = self.config['data']['accumulate_grad_batches']
+        self.accumulation_steps = self.config['training']['accumulate_grad_batches']
         
         train_log_interval = max(1, int(len(self.dataloader_train) * self.config['logging']['log_interval']))
         self.metrics_tracker = MetricsTracker(
@@ -307,7 +311,7 @@ class Trainer(BaseProcessor):
             signature_output_example = {k: v.numpy() for k, v in signature_output_example.items()}
         signature = infer_signature(self.signature_input_example.numpy(), signature_output_example)
             
-        if self.config['data']['validation']:
+        if self.config['training']['validation']:
             for task_mode in ['segmentation', 'disparity', 'combined']:
                 model_state_path = os.path.join(self.temp_path, f'model_state_{task_mode}.pth')
                 if os.path.exists(model_state_path):

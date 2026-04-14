@@ -2,10 +2,6 @@ description: Finetune the SegFormer segmentation teacher on EndoVis17 in a noteb
 
 data:
   dataset: data.datasets.EndoVis17
-  validation: true
-
-  batch_size:  1
-  accumulate_grad_batches: 8
 
   transforms:
     train:
@@ -79,6 +75,10 @@ data:
 
 training:
   epochs: 15
+  validation: true
+
+  batch_size:  1
+  accumulate_grad_batches: 8
 
   optimizer:
     name: torch.optim.AdamW

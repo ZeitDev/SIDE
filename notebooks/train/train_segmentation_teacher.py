@@ -55,13 +55,12 @@ with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.sa
 with open(os.path.join('configs', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
-data_config = config['data']
-dataset_class = helpers.load(data_config['dataset'])
+dataset_class = helpers.load(config['data']['dataset'])
 train_transforms = build_transforms(config, mode='train')
 val_transforms = build_transforms(config, mode='test')
 
 # ! For LR Finder only
-# config['data']['batch_size'] = 1
+# config['training']['batch_size'] = 1
 
 
 dataset_train = dataset_class(
@@ -71,10 +70,10 @@ dataset_train = dataset_class(
 )
 dataloader_train = DataLoader(
     dataset_train,
-    batch_size=data_config['batch_size'],
+    batch_size=config['training']['batch_size'],
     shuffle=True,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 helpers.check_dataleakage('train', dataset_train)
@@ -86,10 +85,10 @@ dataset_val = dataset_class(
 )
 dataloader_val = DataLoader(
     dataset_val,
-    batch_size=data_config['batch_size'],
+    batch_size=config['training']['batch_size'],
     shuffle=False,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 helpers.check_dataleakage('val', dataset_val)
@@ -102,10 +101,10 @@ dataset_test = dataset_class(
 )
 dataloader_test = DataLoader(
     dataset_test,
-    batch_size=data_config['batch_size'],
+    batch_size=config['training']['batch_size'],
     shuffle=False,
-    num_workers=data_config['num_workers'],
-    pin_memory=data_config['pin_memory'],
+    num_workers=config['general']['num_workers'],
+    pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
 helpers.check_dataleakage('test', dataset_test)
@@ -232,12 +231,12 @@ with mlflow.start_run(run_name=run_datetime) as run:
     with mlflow.start_run(run_name=f'{run.info.run_name}/train', nested=True) as train_run:
         tags['parent_name'] = run.info.run_name
         tags['run_type'] = 'train'
-        tags['run_mode'] = 'validation' if config['data']['validation'] else 'full_training'
+        tags['run_mode'] = 'validation' if config['training']['validation'] else 'full_training'
         helpers.mlflow_log_run(config, tags=tags)
         mlflow.set_tag('mlflow.note.content', config['description'])
         
         scaler = torch.amp.GradScaler(device.type)
-        accumulation_steps = config['data']['accumulate_grad_batches']
+        accumulation_steps = config['training']['accumulate_grad_batches']
         for epoch in range(EPOCHS):
             print(f'Epoch {epoch+1}/{EPOCHS} - Training')
             
@@ -287,7 +286,7 @@ with mlflow.start_run(run_name=run_datetime) as run:
                     train_loss_running = 0.0
                 
             ### Validation Loop ###
-            if config['data']['validation']:
+            if config['training']['validation']:
                 model.eval()
                 val_loss = 0.0
                 
