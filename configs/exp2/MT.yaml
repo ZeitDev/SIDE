@@ -1,4 +1,4 @@
-description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
+description: exp2 - Inter unweighted
 
 data:
   dataset: data.datasets.EndoVis17
@@ -34,6 +34,11 @@ training:
       distillation:
         enabled: false
     disparity:
-      enabled: false
+      enabled: true
       distillation:
         enabled: false
+
+  weighting:
+    inter:
+      name: criterions.weighting.Unweighted
+      params: {}

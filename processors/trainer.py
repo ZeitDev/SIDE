@@ -465,7 +465,7 @@ class Trainer(BaseProcessor):
                 
                 val_epoch_metrics = self._validate_epoch(epoch=epoch + 1)
                 if 'segmentation' in self.tasks:
-                    val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument']
+                    val_dice = val_epoch_metrics['performance/validation/segmentation/DICE_score/instrument_mean']
                     if ema_val_dice: ema_val_dice = (ema_alpha * ema_val_dice) + ((1 - ema_alpha) * val_dice)
                     else: ema_val_dice = val_dice
                     val_epoch_metrics['performance/validation/misc/ema_val_dice'] = ema_val_dice

@@ -49,10 +49,10 @@ mlflow.pytorch.autolog()
 
 # %%
 # Dataloader
-config_name = 'segmentation_teacher'
+config_name = 'segmentation_teacher_multi'
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
-with open(os.path.join('configs', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
+with open(os.path.join('configs', 'misc', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
 dataset_class = helpers.load(config['data']['dataset'])
@@ -108,7 +108,6 @@ dataloader_test = DataLoader(
     persistent_workers=False
 )
 helpers.check_dataleakage('test', dataset_test)
-
 
 # %%
 # model
@@ -318,17 +317,23 @@ with mlflow.start_run(run_name=run_datetime) as run:
                 val_metrics['optimization/validation/loss'] = val_loss
                 
                 for key, value in IoU_results.items():
-                    if key == 0: key = 'background'
-                    if key == 1: key = 'instrument'
-                    val_metrics[f'performance/validation/segmentation/IoU_score/{key}'] = value
+                    name = dataset_val.segmentation_class_mappings[key]
+                    val_metrics[f'performance/validation/segmentation/IoU_score/{name}'] = value
+                IoU_instruments = [value for key, value in IoU_results.items() if key >= 1]
+                IoU_instrument_mean = sum(IoU_instruments) / len(IoU_instruments)
+                val_metrics['performance/validation/segmentation/IoU_score/instrument_mean'] = IoU_instrument_mean
+                    
                 for key, value in DICE_results.items():
-                    if key == 0: key = 'background'
-                    if key == 1: key = 'instrument'
-                    val_metrics[f'performance/validation/segmentation/DICE_score/{key}'] = value
+                    name = dataset_val.segmentation_class_mappings[key]
+                    val_metrics[f'performance/validation/segmentation/DICE_score/{name}'] = value
+                DICE_instruments = [value for key, value in DICE_results.items() if key >= 1]
+                DICE_instrument_mean = sum(DICE_instruments) / len(DICE_instruments)
+                val_metrics['performance/validation/segmentation/DICE_score/instrument_mean'] = DICE_instrument_mean
+                    
                 print(f'Validation Loss: {val_loss:.4f}')
                 mlflow.log_metrics(val_metrics, step=global_step)
                 
-                dice_instrument = DICE_results[1]
+                dice_instrument = DICE_instrument_mean
                 if dice_instrument > best_val_dice:
                     best_epoch = epoch
                     best_val_dice = dice_instrument
@@ -336,11 +341,11 @@ with mlflow.start_run(run_name=run_datetime) as run:
                     best_metrics['best/segmentation/epoch'] = best_epoch + 1
                     mlflow.log_metrics(best_metrics, step=global_step)
                     
-                    torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+                    torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp_1', 'model_state.pth'))
                     print(f'New best model saved with DICE Instrument: {best_val_dice:.4f}')
             else:
                 if epoch == EPOCHS - 1:
-                    torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp', 'model_state.pth'))
+                    torch.save({'model_state_dict': model.state_dict()}, os.path.join('.temp_1', 'model_state.pth'))
                     best_metrics = {'best/segmentation/epoch': epoch + 1}
                     mlflow.log_metrics(best_metrics, step=global_step)
                     print('No validation - model from last epoch saved as best model.')
@@ -348,7 +353,7 @@ with mlflow.start_run(run_name=run_datetime) as run:
             mlflow.log_metric('epoch_validation', epoch + 1, step=global_step)
             print()
 
-        state_dict = torch.load(os.path.join('.temp', 'model_state.pth'))
+        state_dict = torch.load(os.path.join('.temp_1', 'model_state.pth'))
         model.load_state_dict(state_dict['model_state_dict'])
         model.to('cpu')
         model.eval()
@@ -400,13 +405,18 @@ with mlflow.start_run(run_name=run_datetime) as run:
 
         test_metrics = {}
         for key, value in IoU_results.items():
-            if key == 0: key = 'background'
-            if key == 1: key = 'instrument'
-            test_metrics[f'performance/testing/segmentation/IoU_score/{key}'] = value
+            name = dataset_test.segmentation_class_mappings[key]
+            test_metrics[f'performance/testing/segmentation/IoU_score/{name}'] = value
+        IoU_instruments = [value for key, value in IoU_results.items() if key >= 1]
+        IoU_instrument_mean = sum(IoU_instruments) / len(IoU_instruments)
+        test_metrics['performance/testing/segmentation/IoU_score/instrument_mean'] = IoU_instrument_mean
+            
         for key, value in DICE_results.items():
-            if key == 0: key = 'background'
-            if key == 1: key = 'instrument'
-            test_metrics[f'performance/testing/segmentation/DICE_score/{key}'] = value
+            name = dataset_test.segmentation_class_mappings[key]
+            test_metrics[f'performance/testing/segmentation/DICE_score/{name}'] = value
+        DICE_instruments = [value for key, value in DICE_results.items() if key >= 1]
+        DICE_instrument_mean = sum(DICE_instruments) / len(DICE_instruments)
+        test_metrics['performance/testing/segmentation/DICE_score/instrument_mean'] = DICE_instrument_mean
             
         mlflow.log_metrics(test_metrics)
 

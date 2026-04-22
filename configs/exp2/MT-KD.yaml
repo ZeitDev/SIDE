@@ -1,4 +1,4 @@
-description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
+description: exp2 - Inter unweighted, intra like in literature for segmentation
 
 data:
   dataset: data.datasets.EndoVis17
@@ -47,27 +47,17 @@ training:
 
   weighting:
     inter:
-      name: criterions.weighting.DynamicTaskPriority
-      params:
-        alpha: 0.2 # Faster reaction
-        gamma: 0.3 # Punish winning task more
-        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
-        metric_is_score_segmentation: true
-        metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
-        metric_is_score_disparity: false
+      name: criterions.weighting.Unweighted
+      params: {}
     intra_segmentation:
-      name: criterions.weighting.CompetenceDecay
+      name: criterions.weighting.Fixed
       params:
-        alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.9604
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptDICE_score'
-        metric_is_score: true
+        weights:
+          target: 1.0
+          distillation: 3.0
     intra_disparity:
-      name: criterions.weighting.CompetenceDecay
+      name: criterions.weighting.Fixed
       params:
-        alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.0809
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
-        metric_is_score: false
+        weights:
+          target: 1.0
+          distillation: 0.1

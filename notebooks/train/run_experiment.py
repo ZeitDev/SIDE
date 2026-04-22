@@ -13,13 +13,15 @@ def main():
     args = parser.parse_args()    
     
     experiment_name = args.experiment
+    
+    configs = [f'configs/{experiment_name}/{config_file}' for config_file in os.listdir(f'configs/{experiment_name}') if config_file.endswith('.yaml')]
 
-    configs = [
-        f'configs/{experiment_name}/SEG.yaml',
-        f'configs/{experiment_name}/DISP.yaml',
-        f'configs/{experiment_name}/wMT.yaml',
-        f'configs/{experiment_name}/wMT-KD.yaml'
-    ]
+    # configs = [
+    #     f'configs/{experiment_name}/SEG.yaml',
+    #     f'configs/{experiment_name}/DISP.yaml',
+    #     f'configs/{experiment_name}/wMT.yaml',
+    #     f'configs/{experiment_name}/wMT-KD.yaml'
+    # ]
 
     seeds = [42, 43, 44, 45, 46]
 

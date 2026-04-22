@@ -188,7 +188,11 @@ class EndoVis17(BaseDataset):
             sample_paths['segmentation'] = os.path.join(subset_path, 'target', 'segmentation', file_name)
             
             if self.config['training']['tasks']['segmentation']['distillation']['enabled'] and self.config['training']['tasks']['segmentation']['distillation']['name'] == 'offline':
-                sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', 'segmentation_2_256_256', file_name.replace('.png', '.pt'))
+                for t in self.config['data']['transforms']['train']:
+                    if t['name'] == 'Resize':
+                         segmentation_logit_resolution = t['params']['height'] // 4
+                         break
+                sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', f'segmentation_2_{segmentation_logit_resolution}_{segmentation_logit_resolution}', file_name.replace('.png', '.pt'))
             
         if self.config['training']['tasks']['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
@@ -196,7 +200,12 @@ class EndoVis17(BaseDataset):
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             #if self.config['training']['tasks']['disparity']['distillation']['enabled'] and self.config['training']['tasks']['disparity']['distillation']['name'] == 'offline':
-            sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', 'disparity_128_256_256', file_name.replace('.png', '.pt'))
+            for t in self.config['data']['transforms']['train']:
+                if t['name'] == 'Resize':
+                    disparity_logit_resolution = t['params']['height'] // 4
+                    break
+            
+            sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', f'disparity_128_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name.replace('.png', '.pt'))
             
         return sample_paths
     

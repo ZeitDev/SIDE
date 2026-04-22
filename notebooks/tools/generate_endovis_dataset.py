@@ -21,12 +21,12 @@ setup_environment(skip_cuda=True)
 # %% Settings
 # Settings
 
-MODE = 'test'  # 'train' or 'test'
+MODE = 'train'  # 'train' or 'test'
 SEGMENTATION = True
-RECT_ALPHA = 0  # 0: cropped (no black bars, for training), 1: full image (with black bars), -1: minimal black bars (for testing?)
+RECT_ALPHA = 0  # 0: cropped (no black bars), 1: full image (with black bars), -1: minimal black bars (for testing?)
 
 source_path = Path('/data/Zeitler/SIDED/EndoVis17/raw') / MODE
-mappings_name = Path('instrument_type_mapping.json')
+mappings_name = Path('mapping.json')
 output_path = Path('/data/Zeitler/SIDED/EndoVis17/processed') / MODE
 
 # %% Helpers
@@ -211,12 +211,12 @@ for sequence in sequences:
         
         filename = left_image_path.name.replace('frame', 'image')
         assert filename == right_image_path.name.replace('frame', 'image')
-        cv2.imwrite(str(output_left_images_path / filename), left_image_rectified)
-        cv2.imwrite(str(output_right_images_path / filename), right_image_rectified)
+        #cv2.imwrite(str(output_left_images_path / filename), left_image_rectified)
+        #cv2.imwrite(str(output_right_images_path / filename), right_image_rectified)
     
     save_path = output_path / sequence.name / 'input' / 'rectified_calibration.json'
-    with open(save_path, 'w') as f:
-        json.dump(rectifier.calib, f, cls=NumpyEncoder, indent=4)
+    # with open(save_path, 'w') as f:
+    #    json.dump(rectifier.calib, f, cls=NumpyEncoder, indent=4)
 
     # Segmentation Masks
     # 1. Crop
@@ -224,8 +224,8 @@ for sequence in sequences:
     # 3. Rectify
     # 4. Combine into single mask with different instrument types
     if SEGMENTATION:
-        source_target_segmentation_instruments = sorted([ path for path in (sequence / 'target').iterdir() if path.is_dir()])
-        source_target_segmentation_instruments_paths = [sorted((sequence / 'target' / instrument).glob('*.png')) for instrument in sorted([p.name for p in source_target_segmentation_instruments])]
+        source_target_segmentation_instruments = sorted([ path for path in (sequence / 'ground_truth').iterdir() if path.is_dir()])
+        source_target_segmentation_instruments_paths = [sorted((sequence / 'ground_truth' / instrument).glob('*.png')) for instrument in sorted([p.name for p in source_target_segmentation_instruments])]
         for target_segmentation in tqdm(zip(*source_target_segmentation_instruments_paths)):
             target_list_with_type = []
             filename = target_segmentation[0].name.replace('frame', 'image')
@@ -239,7 +239,7 @@ for sequence in sequences:
                     check_name = mapping_name.replace(' ', '_')
                     if check_name in instrument_name:
                         instrument_type = mapping_name
-                        instrument_type_id = mapping_id
+                        instrument_type_id = mapping_id # 1 / mapping_id # for binary/multi-class segmentation
                     
                 if instrument_type is None:
                     print(f'Warning: Could not find instrument type for folder {instrument_name}. Skipping.')
@@ -258,7 +258,7 @@ for sequence in sequences:
                 
             cv2.imwrite(str(output_target_segmentation_path / filename), combined_segmentation_mask)
 
-    shutil.copy(source_path / sequence.name / 'camera_calibration.txt', output_path / sequence.name / 'original_calibration.txt')
+    # shutil.copy(source_path / sequence.name / 'camera_calibration.txt', output_path / sequence.name / 'original_calibration.txt')
 shutil.copy(source_path.parent / mappings_name, output_path / mappings_name)
 
 # %%

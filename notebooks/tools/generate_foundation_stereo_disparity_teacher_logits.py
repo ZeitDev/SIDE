@@ -22,6 +22,8 @@ from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
+# %%
+resolution = (512, 512)
 
 # %%
 # load debug config
@@ -124,8 +126,8 @@ if False:
     
     transform_mode = 'train' if mode == 'train' else 'test'
     config['data']['transforms'][transform_mode] = [
-        # {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
-        # {'name': 'Resize', 'params': {'height': 1024, 'width': 1024}},
+        {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
+        {'name': 'Resize', 'params': {'height': resolution[0], 'width': resolution[1]}},
         {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
     ]
     train_transform = build_transforms(config, mode=transform_mode)
@@ -160,7 +162,8 @@ if False:
             # raw_disparity = logits2disparity(logit, size=left_image.shape[2:]) * 512.0
             
             image_path = data['image_path'][0]
-            save_path = image_path.replace('input', 'teacher').replace('left_images', 'disparity_128_256_256').replace('.png', '.pt')
+            fs_res = resolution[0] // 4
+            save_path = image_path.replace('input', 'teacher').replace('left_images', f'disparity_128_{fs_res}_{fs_res}').replace('.png', '.pt')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save(logit_save, save_path)
 

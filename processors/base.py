@@ -80,6 +80,11 @@ class BaseProcessor:
             for metric_name, metric in task_metrics.items():
                 metric_results = metric.compute()
                 
+                if task == 'segmentation':
+                    instruments = [value for key, value in metric_results.items() if key >= 1]
+                    instrument_mean = sum(instruments) / len(instruments)
+                    computed_metrics[f'performance/{mode}/{task}/{metric_name}/instrument_mean'] = instrument_mean
+            
                 for key, value in metric_results.items():
                     if isinstance(key, int) and self.segmentation_class_mappings:
                         class_name = self.segmentation_class_mappings[key].replace(' ', '_').lower()

@@ -46,8 +46,11 @@ class IoU(SegmentationMetric):
         iou_per_class = tp / (tp + fp + fn)
         
         results = {}
-        for i, iou in enumerate(iou_per_class): results[i] = iou.item()
+        #for i, iou in enumerate(iou_per_class): results[i] = iou.item()
         present_classes = self.confusion_matrix.sum(dim=1) > 0
+        for i, iou in enumerate(iou_per_class): 
+            if present_classes[i]:  # Only return classes present in the ground truth
+                results[i] = iou.item()
             
         valid_iou = iou_per_class[present_classes & ~torch.isnan(iou_per_class)]
         # mean_iou = valid_iou.mean().item()
@@ -67,8 +70,11 @@ class Dice(SegmentationMetric):
         dice_per_class = (2 * tp) / (2 * tp + fp + fn)
 
         results = {}
-        for i, dice in enumerate(dice_per_class): results[i] = dice.item()
+        #for i, dice in enumerate(dice_per_class): results[i] = dice.item()
         present_classes = self.confusion_matrix.sum(dim=1) > 0
+        for i, dice in enumerate(dice_per_class): 
+            if present_classes[i]:  # Only return classes present in the ground truth
+                results[i] = dice.item()
 
         valid_dice = dice_per_class[present_classes & ~torch.isnan(dice_per_class)]
         # mean_dice = valid_dice.mean().item()

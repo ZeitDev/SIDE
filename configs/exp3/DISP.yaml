@@ -1,7 +1,35 @@
-description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
+description: 03 - 512x512 resolution
 
 data:
   dataset: data.datasets.EndoVis17
+
+  transforms:
+    train:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+    test:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
 
 training:
   epochs: 50
@@ -30,10 +58,10 @@ training:
 
   tasks:
     segmentation:
-      enabled: true
+      enabled: false
       distillation:
         enabled: false
     disparity:
-      enabled: false
+      enabled: true
       distillation:
         enabled: false
