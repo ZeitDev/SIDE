@@ -32,6 +32,8 @@ class BaseDataset(Dataset):
         self.transforms = transforms
         
         self.class_mappings = None
+        self.n_segmentation_classes = self.config['data']['num_of_classes']['segmentation']
+        self.focal_length_scale_factor = self.config['data']['focal_length_scale_factor']
         
         self._get_class_mappings()
         self._load_samples()
@@ -62,6 +64,13 @@ class BaseDataset(Dataset):
     def _load_samples(self) -> None:
         mode_path = os.path.join(self.root_path, self.mode)
         
+        transform_mode = 'train' if self.mode == 'train' else 'test'
+        for t in self.config['data']['transforms'][transform_mode]:
+            if t['name'] == 'Resize':
+                self.target_width = t['params']['width']
+                self.target_height = t['params']['height']
+                break
+            
         self.sample_paths = []
         for subset_name in sorted(os.listdir(mode_path)):
             subset_path = os.path.join(mode_path, subset_name)
@@ -75,7 +84,7 @@ class BaseDataset(Dataset):
         with open(intrinsics_path, 'r') as f:
             intrinsics = json.load(f)
             Q = intrinsics['Q']
-            focal_length = Q[2][3]
+            focal_length = Q[2][3] * self.focal_length_scale_factor
             baseline = abs(1.0 / Q[3][2])
         return baseline, focal_length
     
@@ -170,7 +179,7 @@ class EndoVis17(BaseDataset):
         
     def _get_class_mappings(self) -> None:
         if self.config['training']['tasks']['segmentation']['enabled']:
-            class_mapping_path = os.path.join(self.root_path, 'mapping.json')
+            class_mapping_path = os.path.join(self.root_path, f'mapping_{self.n_segmentation_classes}.json')
             with open(class_mapping_path, 'r') as f:
                 name2id = json.load(f)
                 
@@ -185,14 +194,12 @@ class EndoVis17(BaseDataset):
         sample_paths['left_image'] = os.path.join(subset_path, 'input', 'left_images', file_name)
         
         if self.config['training']['tasks']['segmentation']['enabled']:
-            sample_paths['segmentation'] = os.path.join(subset_path, 'target', 'segmentation', file_name)
+            
+            sample_paths['segmentation'] = os.path.join(subset_path, 'target', f'segmentation_{self.n_segmentation_classes}', file_name)
             
             if self.config['training']['tasks']['segmentation']['distillation']['enabled'] and self.config['training']['tasks']['segmentation']['distillation']['name'] == 'offline':
-                for t in self.config['data']['transforms']['train']:
-                    if t['name'] == 'Resize':
-                         segmentation_logit_resolution = t['params']['height'] // 4
-                         break
-                sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', f'segmentation_2_{segmentation_logit_resolution}_{segmentation_logit_resolution}', file_name.replace('.png', '.pt'))
+                segmentation_logit_resolution = self.target_width // 4
+                sample_paths['teacher_segmentation'] = os.path.join(subset_path, 'teacher', f'segmentation_{self.n_segmentation_classes}_{segmentation_logit_resolution}_{segmentation_logit_resolution}', file_name.replace('.png', '.pt'))
             
         if self.config['training']['tasks']['disparity']['enabled']:
             sample_paths['right_image'] = os.path.join(subset_path, 'input', 'right_images', file_name)
@@ -200,12 +207,9 @@ class EndoVis17(BaseDataset):
             sample_paths['intrinsics'] = os.path.join(subset_path, 'calibration', 'rectified_calibration.json')
 
             #if self.config['training']['tasks']['disparity']['distillation']['enabled'] and self.config['training']['tasks']['disparity']['distillation']['name'] == 'offline':
-            for t in self.config['data']['transforms']['train']:
-                if t['name'] == 'Resize':
-                    disparity_logit_resolution = t['params']['height'] // 4
-                    break
-            
-            sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', f'disparity_128_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name.replace('.png', '.pt'))
+            disparity_logit_resolution = self.target_width // 4
+            n_classes_disparity = self.config['data']['max_disparity'] // 4
+            sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', f'disparity_{n_classes_disparity}_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name.replace('.png', '.pt'))
             
         return sample_paths
     

@@ -432,7 +432,9 @@ class Trainer(BaseProcessor):
             epoch_metrics[f'optimization/validation/loss/weights/inter_{task}'] = total_task_weights[task] / len(self.dataloader_val)
             
         if self.config['training']['tasks']['segmentation']['enabled']:
-            epoch_metrics['performance/validation/misc/interceptDICE_score'] = self.misc_metrics['interceptDICE'].compute()[1]
+            interceptDICEs = self.misc_metrics['interceptDICE'].compute()
+            valid_interceptDICEs = [DICE for class_idx, DICE in interceptDICEs.items() if class_idx >= 1]
+            epoch_metrics['performance/validation/misc/interceptDICE_score'] = sum(valid_interceptDICEs) / len(valid_interceptDICEs)
         if self.config['training']['tasks']['disparity']['enabled']:
             epoch_metrics['performance/validation/misc/interceptAbsRel_rate'] = self.misc_metrics['interceptAbsRel'].compute()['AbsRel_rate']
                 

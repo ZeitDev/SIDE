@@ -1,7 +1,9 @@
-description: 01 - 1024x1024
+description: 04 - Multiclass Segmentation
 
 data:
   dataset: data.datasets.EndoVis17
+  num_of_classes:
+    segmentation: 8
 
 training:
   epochs: 50
@@ -30,10 +32,10 @@ training:
 
   tasks:
     segmentation:
-      enabled: true
+      enabled: false
       distillation:
         enabled: false
     disparity:
-      enabled: false
+      enabled: true
       distillation:
         enabled: false

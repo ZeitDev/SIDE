@@ -1,4 +1,4 @@
-description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
+description: 01 - 1024x1024
 
 data:
   dataset: data.datasets.EndoVis17

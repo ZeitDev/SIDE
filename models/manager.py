@@ -31,7 +31,7 @@ class AttachHead(nn.Module):
         self.decoder = decoder_class(encoder_channels, encoder_reductions, **kwargs)
         self.head = nn.Conv2d(self.decoder.all_n_decoder_channels[-1], n_classes, kernel_size=1)
         
-        intercept_channels = kwargs.get('intercept_channels', 2)
+        intercept_channels = kwargs.get('intercept_channels', n_classes)
         intercept_at = kwargs.get('intercept_at', 4)
         idx = self.decoder.all_decoder_increases.index(intercept_at)
         n_output_channels = self.decoder.all_n_decoder_channels[idx]

@@ -7,7 +7,8 @@ import ipywidgets as widgets
 from IPython.display import display
 
 # %% Settings
-mode = 'val'  # 'train' or 'test'
+mode = 'test'  # 'train' or 'test'
+seg_classes = 8
 dataset_path = f'/data/Zeitler/SIDED/EndoVis17/processed/{mode}'
 
 subsets = sorted([d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))])
@@ -34,7 +35,7 @@ def show_images(subset_name, frame_idx):
     frame_name = frames[frame_idx]
     
     left_img_path = os.path.join(dataset_path, subset_name, 'input', 'left_images', frame_name)
-    seg_img_path = os.path.join(dataset_path, subset_name, 'target', 'segmentation', frame_name)
+    seg_img_path = os.path.join(dataset_path, subset_name, 'target', f'segmentation_{seg_classes}', frame_name)
     
     # Load and convert Left Image for matplotlib (BGR -> RGB)
     left_img = cv2.imread(left_img_path)

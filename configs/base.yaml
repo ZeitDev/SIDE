@@ -12,6 +12,7 @@ data:
     segmentation: 2
     disparity: 1
   max_disparity: 512
+  focal_length_scale_factor: 1.0
 
   transforms:
     train:
@@ -87,7 +88,6 @@ training:
         name: models.decoders.segmentation.SegmentationDecoder
         params:
           intercept_at: 4
-          intercept_channels: 2
       distillation:
         enabled: false
         name: offline # mlflow

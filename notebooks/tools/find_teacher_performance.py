@@ -20,11 +20,13 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
 
 # %%
-with open(os.path.join('configs', 'base.yaml'), 'r') as f: config = yaml.safe_load(f)
-config['training']['tasks']['segmentation']['enabled'] = True
-config['training']['tasks']['segmentation']['distillation']['enabled'] = True
-config['training']['tasks']['disparity']['enabled'] = True
-config['training']['tasks']['disparity']['distillation']['enabled'] = True
+EXPERIMENT = 'exp3/wMT-KD'
+
+
+# %%
+with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
+with open(f'./configs/{EXPERIMENT}.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
+config = helpers.deep_merge(experiment_config, base_config)
 
 dataset_class = helpers.load(config['data']['dataset'])
 
@@ -48,18 +50,22 @@ helpers.check_dataleakage('val', dataset)
 dice_metric = Dice(n_classes=config['data']['num_of_classes']['segmentation'], device='cpu')
 absrel_metric = AbsRel(max_disparity=config['data']['max_disparity'], device='cpu')
 
+for t in config['data']['transforms']['train']:
+    if t['name'] == 'Resize':
+         logit_resolution = t['params']['height'] // 4
+         break
+
 tasks = ['segmentation', 'disparity']
 for data in tqdm(dataloader):
     targets = {task: data[task] for task in tasks}
     baseline, focal_length = data['baseline'], data['focal_length']
-    
 
     teacher_logits = {}
     teacher_logits['segmentation'] = data['teacher_segmentation'] #F.interpolate(data['teacher_segmentation'], size=targets['segmentation'].shape[2:], mode='bilinear', align_corners=False)
-    teacher_logits['disparity'] = helpers.logits2disparity(data['teacher_disparity'], size=(256, 256)) # helpers.logits2disparity(data['teacher_disparity'], size=targets['disparity'].shape[2:])
+    teacher_logits['disparity'] = helpers.logits2disparity(data['teacher_disparity'], size=(logit_resolution, logit_resolution)) # helpers.logits2disparity(data['teacher_disparity'], size=targets['disparity'].shape[2:])
     
-    segmentation_targets = F.interpolate(targets['segmentation'], size=(256, 256), mode='nearest-exact')
-    disparity_targets = F.interpolate(targets['disparity'], size=(256, 256), mode='nearest-exact')
+    segmentation_targets = F.interpolate(targets['segmentation'], size=(logit_resolution, logit_resolution), mode='nearest-exact')
+    disparity_targets = F.interpolate(targets['disparity'], size=(logit_resolution, logit_resolution), mode='nearest-exact')
     
     dice_metric.update(teacher_logits['segmentation'], segmentation_targets)
     absrel_metric.update(teacher_logits['disparity'], disparity_targets, baseline, focal_length)
@@ -68,7 +74,10 @@ dice_result = dice_metric.compute()
 absrel_result = absrel_metric.compute()
 
 # %%
+valid_dices = [DICE for class_idx, DICE in dice_result.items() if class_idx >= 1]
+dice_result = sum(valid_dices) / len(valid_dices)
 print(dice_result)
 print(absrel_result)
+
 
 # %%

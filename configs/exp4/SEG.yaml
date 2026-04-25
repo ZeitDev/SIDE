@@ -1,37 +1,9 @@
-description: 03 - 512x512
+description: 04 - Multiclass Segmentation
 
 data:
   dataset: data.datasets.EndoVis17
-  max_disparity: 256
-  focal_length_scale_factor: 0.5
-
-  transforms:
-    train:
-      - name: CenterCrop
-        params:
-          height: 1024
-          width: 1024
-      - name: Resize
-        params:
-          height: 512
-          width: 512
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-    test:
-      - name: CenterCrop
-        params:
-          height: 1024
-          width: 1024
-      - name: Resize
-        params:
-          height: 512
-          width: 512
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
+  num_of_classes:
+    segmentation: 8
 
 training:
   epochs: 50

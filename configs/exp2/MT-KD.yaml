@@ -1,4 +1,4 @@
-description: exp2 - Inter unweighted, intra like in literature for segmentation
+description: 02 - Fixed Weighting
 
 data:
   dataset: data.datasets.EndoVis17

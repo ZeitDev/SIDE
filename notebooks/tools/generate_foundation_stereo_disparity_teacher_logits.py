@@ -121,7 +121,7 @@ if False:
             cv2.imwrite(save_path, disp_scaled)
 
 # %% Save Disparity Teacher Logits
-if False:
+if True:
     mode = 'test'
     
     transform_mode = 'train' if mode == 'train' else 'test'
@@ -163,7 +163,7 @@ if False:
             
             image_path = data['image_path'][0]
             fs_res = resolution[0] // 4
-            save_path = image_path.replace('input', 'teacher').replace('left_images', f'disparity_128_{fs_res}_{fs_res}').replace('.png', '.pt')
+            save_path = image_path.replace('input', 'teacher').replace('left_images', f'disparity_64_{fs_res}_{fs_res}').replace('.png', '.pt')
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save(logit_save, save_path)
 

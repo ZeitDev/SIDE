@@ -1,4 +1,4 @@
-description: exp2 - Inter unweighted
+description: 02 - Fixed Weighting
 
 data:
   dataset: data.datasets.EndoVis17

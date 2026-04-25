@@ -16,12 +16,10 @@ setup_environment(skip_cuda=True)
 
 #%%
 # --- Configuration ---
-# Adjust these paths if your directory structure is different.
 BASE_DATA_DIR = Path("/data/Zeitler/SIDED/EndoVis17/raw")
 TRAIN_DIR = BASE_DATA_DIR / "train"
 TEST_DIR = BASE_DATA_DIR / "test"
-# The mapping file is expected in the training directory.
-MAPPINGS_PATH = BASE_DATA_DIR / "mapping.json"
+MAPPINGS_PATH = BASE_DATA_DIR / "mapping_8.json"
 
 #%%
 def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFrame:
@@ -42,7 +40,7 @@ def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFra
     sequence_dirs = sorted([d for d in dataset_dir.iterdir() if d.is_dir()])
 
     for seq_dir in tqdm(sequence_dirs, desc=f"Processing {dataset_dir.name}"):
-        gt_dir = seq_dir / "target"
+        gt_dir = seq_dir / "ground_truth"
         if not gt_dir.is_dir():
             continue
 
@@ -318,7 +316,7 @@ custom_split_configs = {
     "Split A": {
         "Train": [7, 8, 1, 2, 3, 4],
         "Val": [5, 6],
-        "Test": [9, 10],
+        "Test": [9, 10],Í
     },
 }
 

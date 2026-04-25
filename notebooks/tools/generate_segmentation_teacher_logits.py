@@ -22,7 +22,8 @@ setup_environment()
 
 # %%
 # Settings
-run = 'segmentation_teacher/260324:1809/train' # best binary teacher 'segmentation_teacher/260324:1809/train'
+run = 'segmentation_teacher_multi/260421:1409/train' # best binary teacher 'segmentation_teacher/260324:1809/train'
+num_classes = 8
 resolution = (1024, 1024)
 
 # %%
@@ -61,7 +62,7 @@ class EndoVisTeacherDataset(Dataset):
 # %% 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: config = yaml.safe_load(f)
 
-mode = 'test' # 'train' or 'test'
+mode = 'val' # 'train' or 'test'
 
 config['data']['transforms'][mode] = [
     {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
@@ -107,8 +108,10 @@ for data in tqdm(dataloader):
         
         image_path = data['image_path'][0]
         seg_former_res = resolution[0] // 4
-        save_path = image_path.replace('input', 'teacher').replace('left_images', f'segmentation_2_{seg_former_res}_{seg_former_res}').replace('.png', '.pt')
+        save_path = image_path.replace('input', 'teacher').replace('left_images', f'segmentation_{num_classes}_{seg_former_res}_{seg_former_res}').replace('.png', '.pt')
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save(logit_save, save_path)
+
+# %%
 
 # %%

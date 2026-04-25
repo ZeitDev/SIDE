@@ -1,7 +1,9 @@
-description: 03 - 512x512 resolution
+description: 03 - 512x512
 
 data:
   dataset: data.datasets.EndoVis17
+  max_disparity: 256
+  focal_length_scale_factor: 0.5
 
   transforms:
     train:
@@ -63,6 +65,12 @@ training:
         enabled: true
     disparity:
       enabled: true
+      decoder:
+        name: models.decoders.disparity.DisparityDecoder
+        params:
+          max_disparity: 256
+          intercept_at: 4 # intercept at 128x128 resolution, matching FoundationStereo V'_c
+          intercept_channels: 64 # matching FoundationStereo V'_c logits
       distillation:
         enabled: true
         criterion:
@@ -79,7 +87,7 @@ training:
       params:
         alpha: 0.2 # Faster reaction
         gamma: 0.3 # Punish winning task more
-        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
+        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument_mean'
         metric_is_score_segmentation: true
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false
@@ -87,7 +95,7 @@ training:
       name: criterions.weighting.CompetenceDecay
       params:
         alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.9604
+        teacher_performance: 0.9549
         inverse: false
         metric_key: 'performance/validation/misc/interceptDICE_score'
         metric_is_score: true
@@ -95,7 +103,7 @@ training:
       name: criterions.weighting.CompetenceDecay
       params:
         alpha: 0.1 # Abandon teacher faster
-        teacher_performance: 0.0809
+        teacher_performance: 0.0558
         inverse: false
         metric_key: 'performance/validation/misc/interceptAbsRel_rate'
         metric_is_score: false

@@ -44,7 +44,7 @@ training:
       params:
         alpha: 0.2 # Faster reaction
         gamma: 0.3 # Punish winning task more
-        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument'
+        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument_mean'
         metric_is_score_segmentation: true
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false

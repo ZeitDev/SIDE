@@ -15,6 +15,8 @@ class LossComposer(nn.Module):
         self.criterions = criterions
         self.tasks = tasks
         self.initial_losses = {}
+        self.step_counts = {}
+        self.warmup_steps = 100 
 
         self.inter = load(
             config['training']['weighting']['inter']['name'],
@@ -56,9 +58,15 @@ class LossComposer(nn.Module):
 
         normalized_losses = {}
         for task, loss in raw_losses.items():
+            loss_val = loss.detach().item()
+                    
             if task not in self.initial_losses:
-                self.initial_losses[task] = loss.detach().item() + 1e-8
-            
+                self.initial_losses[task] = loss_val + 1e-8
+                self.step_counts[task] = 1
+            elif self.step_counts[task] < self.warmup_steps:
+                self.initial_losses[task] = (0.95 * self.initial_losses[task]) + ((1 - 0.95) * loss_val)
+                self.step_counts[task] += 1
+                    
             normalized_losses[task] = loss / self.initial_losses[task]
 
         intra_losses = {}

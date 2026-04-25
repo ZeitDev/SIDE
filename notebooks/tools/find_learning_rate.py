@@ -17,7 +17,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment()
 
 # %% Settings
-EXPERIMENT = 'convnext/wMT'
+EXPERIMENT = 'exp3/wMT'
 START_LR = 1e-8
 END_LR = 1.0
 NUM_ITER = 100

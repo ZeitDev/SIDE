@@ -1,7 +1,9 @@
-description: 03 - 512x512 resolution
+description: 03 - 512x512
 
 data:
   dataset: data.datasets.EndoVis17
+  max_disparity: 256
+  focal_length_scale_factor: 0.5
 
   transforms:
     train:
