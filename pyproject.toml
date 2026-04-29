@@ -37,6 +37,7 @@ dependencies = [
     "trame-vtk>=2.11.6",
     "trame-vuetify>=3.2.1",
     "thop>=0.1.1.post2209072238",
+    "cairosvg>=2.9.0",
 ]
 
 [[tool.uv.index]]

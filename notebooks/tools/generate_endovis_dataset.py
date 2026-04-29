@@ -22,11 +22,12 @@ setup_environment(skip_cuda=True)
 # Settings
 
 MODE = 'train'  # 'train' or 'test'
-SEGMENTATION = True
+SEGMENTATION = False
 RECT_ALPHA = 0  # 0: cropped (no black bars), 1: full image (with black bars), -1: minimal black bars (for testing?)
+n_seg_classes = 8
 
 source_path = Path('/data/Zeitler/SIDED/EndoVis17/raw') / MODE
-mappings_name = Path('mapping.json')
+mappings_name = Path(f'mapping_{n_seg_classes}.json')
 output_path = Path('/data/Zeitler/SIDED/EndoVis17/processed') / MODE
 
 # %% Helpers
@@ -200,14 +201,18 @@ for sequence in sequences:
     for left_image_path, right_image_path in tqdm(zip(source_left_images_paths, source_right_images_paths)):
         left_image = cv2.imread(str(left_image_path))
         right_image = cv2.imread(str(right_image_path))
+        cv2.imwrite('/data/Zeitler/Visualization/rectification/left_image_raw.png', left_image)
         
         left_image_cropped = left_image[first_crop_y:first_crop_y+first_crop_h, first_crop_x:first_crop_x+first_crop_w]
         right_image_cropped = right_image[first_crop_y:first_crop_y+first_crop_h, first_crop_x:first_crop_x+first_crop_w]
+        cv2.imwrite('/data/Zeitler/Visualization/rectification/left_image_cropped.png', left_image_cropped)
         
         left_image_0, _ = deinterlace(left_image_cropped, out_size=(first_crop_h, first_crop_w))
         right_image_0, _ = deinterlace(right_image_cropped, out_size=(first_crop_h, first_crop_w))
+        cv2.imwrite('/data/Zeitler/Visualization/rectification/left_image_deinterlaced.png', left_image_0)
         
         left_image_rectified, right_image_rectified = rectifier.rectify(left_image_0, right_image_0, alpha=RECT_ALPHA)
+        cv2.imwrite('/data/Zeitler/Visualization/rectification/left_image_rectified.png', left_image_rectified)
         
         filename = left_image_path.name.replace('frame', 'image')
         assert filename == right_image_path.name.replace('frame', 'image')
@@ -256,9 +261,9 @@ for sequence in sequences:
             for segmentation_mask_rectified, instrument_type_id in target_list_with_type:
                 combined_segmentation_mask[segmentation_mask_rectified > 0] = instrument_type_id
                 
-            cv2.imwrite(str(output_target_segmentation_path / filename), combined_segmentation_mask)
+            #cv2.imwrite(str(output_target_segmentation_path / filename), combined_segmentation_mask)
 
     # shutil.copy(source_path / sequence.name / 'camera_calibration.txt', output_path / sequence.name / 'original_calibration.txt')
-shutil.copy(source_path.parent / mappings_name, output_path / mappings_name)
+#shutil.copy(source_path.parent / mappings_name, output_path / mappings_name)
 
 # %%

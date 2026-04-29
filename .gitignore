@@ -17,3 +17,5 @@ logs/
 .temp_*
 external/
 mlflow/
+output/
+input/

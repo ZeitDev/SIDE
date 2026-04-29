@@ -334,10 +334,11 @@ for sample_idx, data_idx in enumerate([1, 0]): # Good first (1), Bad second (0)
 
     fig.show()
     
-    export_pcd = o3d.geometry.PointCloud()
-    export_pcd.points = o3d.utility.Vector3dVector(points[::step].astype(np.float64))
-    export_pcd.colors = o3d.utility.Vector3dVector(colors[::step].astype(np.float64))
+    #export_pcd = o3d.geometry.PointCloud()
+    # export_pcd.points = o3d.utility.Vector3dVector(points[::step].astype(np.float64))
+    # export_pcd.colors = o3d.utility.Vector3dVector(colors[::step].astype(np.float64))
     #o3d.io.write_point_cloud(f'{prefix}_cloud.ply', export_pcd)
+    #o3d.io.write_point_cloud(f'./notebooks/output/pointclouds/model.ply', pcd)
     
 
 # %%

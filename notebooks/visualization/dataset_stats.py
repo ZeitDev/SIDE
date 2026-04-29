@@ -10,73 +10,75 @@ import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
 
+from notebooks.visualization.helpers import save_figure
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
 
 #%%
 # --- Configuration ---
-BASE_DATA_DIR = Path("/data/Zeitler/SIDED/EndoVis17/raw")
+BASE_DATA_DIR = Path("/data/Zeitler/SIDED/EndoVis17/processed")
 TRAIN_DIR = BASE_DATA_DIR / "train"
+VAL_DIR = BASE_DATA_DIR / "val"
 TEST_DIR = BASE_DATA_DIR / "test"
 MAPPINGS_PATH = BASE_DATA_DIR / "mapping_8.json"
 
 #%%
 def get_pixel_counts(dataset_dir: Path, instrument_mappings: dict) -> pd.DataFrame:
     """
-    Counts non-zero pixels for each instrument class in a given dataset directory.
-    It handles variations in folder names (e.g., 'Left_'/'Right_' prefixes).
+    Counts pixels for each instrument class in the processed dataset.
+    Applies a 1024x1024 center crop to match training augmentation.
 
     Args:
-        dataset_dir (Path): Path to the dataset split (e.g., '.../raw/train').
+        dataset_dir (Path): Path to the dataset split (e.g., '.../processed/train').
         instrument_mappings (dict): Dictionary mapping instrument names to class IDs.
 
     Returns:
-        pd.DataFrame: A DataFrame with columns ['sequence', 'instrument', 'pixel_count'].
+        pd.DataFrame: A DataFrame with columns ['sequence', 'instrument', 'pixel_count', 'frame_count'].
     """
     records = []
-    base_instrument_names = list(instrument_mappings.keys())
+    value_to_name = {v: k for k, v in instrument_mappings.items()}
     
     sequence_dirs = sorted([d for d in dataset_dir.iterdir() if d.is_dir()])
 
     for seq_dir in tqdm(sequence_dirs, desc=f"Processing {dataset_dir.name}"):
-        gt_dir = seq_dir / "ground_truth"
-        if not gt_dir.is_dir():
+        seg_dir = seq_dir / "target" / "segmentation_8"
+        if not seg_dir.is_dir():
             continue
 
-        # Create a temporary dictionary to store pixel counts for this sequence
-        # to aggregate left/right versions before adding to records.
-        sequence_pixel_counts = {name: 0 for name in base_instrument_names}
+        sequence_pixel_counts = {name: 0 for name in instrument_mappings.keys()}
+        sequence_frame_sets = {name: set() for name in instrument_mappings.keys()}
 
-        # Iterate over actual instrument folders in the target directory
-        instrument_folders = [d for d in gt_dir.iterdir() if d.is_dir()]
-        for instrument_dir in instrument_folders:
-            folder_name_str = instrument_dir.name.replace('_', ' ')
-            
-            # Find the corresponding base instrument name
-            matched_instrument = None
-            for base_name in base_instrument_names:
-                if base_name in folder_name_str:
-                    matched_instrument = base_name
-                    break
-            
-            if matched_instrument:
-                total_pixels = 0
-                mask_files = list(instrument_dir.glob('*.png'))
-                for mask_path in mask_files:
-                    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-                    if mask is not None:
-                        total_pixels += np.count_nonzero(mask)
-                
-                # Add pixels to the matched base instrument
-                sequence_pixel_counts[matched_instrument] += total_pixels
+        mask_files = list(seg_dir.glob('*.png'))
+        for mask_path in mask_files:
+            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask is not None:
+                # Replicate 1024x1024 centercrop augmentation
+                h, w = mask.shape
+                crop_size = 1024
+                start_x = w // 2 - crop_size // 2
+                start_y = h // 2 - crop_size // 2
+                mask = mask[max(0, start_y):start_y+crop_size, max(0, start_x):start_x+crop_size]
 
-        # Append aggregated counts for the sequence to the main records list
+                unique, counts = np.unique(mask, return_counts=True)
+                for val, count in zip(unique, counts):
+                    if val in value_to_name:
+                        instr_name = value_to_name[val]
+                        sequence_pixel_counts[instr_name] += count
+                        if count > 0:
+                            sequence_frame_sets[instr_name].add(mask_path.name)
+
+        sequence_frame_counts = {name: len(frames) for name, frames in sequence_frame_sets.items()}
+        
+        # Background is always present in the frame
+        sequence_frame_counts["background"] = len(mask_files) 
+
         for instrument_name, total_pixels in sequence_pixel_counts.items():
             records.append({
                 "sequence": seq_dir.name,
                 "instrument": instrument_name,
-                "pixel_count": total_pixels
+                "pixel_count": total_pixels,
+                "frame_count": sequence_frame_counts[instrument_name]
             })
             
     return pd.DataFrame(records)
@@ -102,7 +104,7 @@ def aggregate_split_pixel_counts(
 
     for split_label, sequence_ids in split_config.items():
         split_df = counts_df[counts_df["seq_id"].isin(sequence_ids)]
-        split_agg = split_df.groupby("instrument", as_index=False)["pixel_count"].sum()
+        split_agg = split_df.groupby("instrument", as_index=False)[["pixel_count", "frame_count"]].sum()
         split_agg["subset"] = split_label
         split_agg["split_name"] = split_name
         records.append(split_agg)
@@ -117,206 +119,32 @@ except FileNotFoundError:
     print(f"Error: Mapping file not found at {MAPPINGS_PATH}")
     instrument_mappings = {}
 
-# Process both train and test sets
-train_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count"])
-test_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count"])
+# Process train, val, and test sets
+train_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count", "frame_count"])
+val_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count", "frame_count"])
+test_counts_df = pd.DataFrame(columns=["sequence", "instrument", "pixel_count", "frame_count"])
 
 if instrument_mappings:
     train_counts_df = get_pixel_counts(TRAIN_DIR, instrument_mappings)
+    val_counts_df = get_pixel_counts(VAL_DIR, instrument_mappings)
     test_counts_df = get_pixel_counts(TEST_DIR, instrument_mappings)
 else:
     raise FileNotFoundError(
         f"Instrument mapping file not found or empty: {MAPPINGS_PATH}"
     )
-
-#%%
-# --- Aggregate and Display Results ---
-# Group by instrument and sum the pixel counts for the entire dataset split.
-train_summary = train_counts_df.groupby("instrument")["pixel_count"].sum().sort_values(ascending=False)
-test_summary = test_counts_df.groupby("instrument")["pixel_count"].sum().sort_values(ascending=False)
-
-print("--- Training Set Pixel Counts per Class ---")
-print(train_summary)
-print("\n" + "="*40 + "\n")
-print("--- Test Set Pixel Counts per Class ---")
-print(test_summary)
-
-#%%
-# --- Plot Training Set Imbalance ---
-fig_train = px.bar(
-    train_summary,
-    title='Total Pixel Count per Instrument in Training Set',
-    labels={'index': 'Instrument Type', 'value': 'Total Pixels'},
-    log_y=True
-)
-fig_train.update_layout(xaxis_tickangle=-45, yaxis_title='Total Pixels (log scale)')
-fig_train.show()
-
-
-#%%
-# --- Plot Test Set Imbalance ---
-fig_test = px.bar(
-    test_summary,
-    title='Total Pixel Count per Instrument in Test Set',
-    labels={'index': 'Instrument Type', 'value': 'Total Pixels'},
-    log_y=True
-)
-fig_test.update_layout(xaxis_tickangle=-45, yaxis_title='Total Pixels (log scale)')
-fig_test.show()
-
-#%%
-# --- Compare Train vs. Test Distribution ---
 # Combine summaries for a comparative plot
-train_summary_df = train_summary.reset_index()
-train_summary_df['split'] = 'Train'
-test_summary_df = test_summary.reset_index()
-test_summary_df['split'] = 'Test'
-
-combined_summary = pd.concat([train_summary_df, test_summary_df])
-
-# Plot
-fig_combined = px.bar(
-    combined_summary,
-    x='instrument',
-    y='pixel_count',
-    color='split',
-    barmode='group',
-    title='Comparison of Pixel Counts (Train vs. Test)',
-    labels={'instrument': 'Instrument Type', 'pixel_count': 'Total Pixels'},
-    log_y=False
-)
-fig_combined.update_layout(
-    xaxis_tickangle=-45,
-    yaxis_title='Total Pixels',
-    legend_title='Dataset Split'
-)
-fig_combined.show()
-# %%
-
-# --- Plot Instrument Distribution per Sequence (Combined Train & Test) ---
-
-# Add a 'split' column to each dataframe before combining
 train_counts_df['split'] = 'Train'
+val_counts_df['split'] = 'Val'
 test_counts_df['split'] = 'Test'
-combined_counts_df = pd.concat([train_counts_df, test_counts_df])
+combined_counts_df = pd.concat([train_counts_df, val_counts_df, test_counts_df])
 
-# Filter out entries with zero pixels for a cleaner plot
-combined_seq_df = combined_counts_df[combined_counts_df['pixel_count'] > 0]
-
-# Get a sorted list of all unique sequences to maintain order
-all_sequences_sorted = sorted(combined_counts_df['sequence'].unique())
-
-# Create a faceted bar chart
-fig_seq_combined = px.bar(
-    combined_seq_df,
-    x='sequence',
-    y='pixel_count',
-    color='instrument',
-    facet_col='split',  # Create separate columns for 'Train' and 'Test'
-    title='Instrument Pixel Counts per Sequence (Train vs. Test)',
-    labels={'sequence': 'Sequence', 'pixel_count': 'Total Pixels', 'instrument': 'Instrument'},
-    category_orders={"sequence": all_sequences_sorted}
-)
-
-# Update layout for better readability
-fig_seq_combined.update_xaxes(tickangle=-90)
-fig_seq_combined.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # Clean up facet titles
-fig_seq_combined.update_layout(yaxis_title='Total Pixels')
-fig_seq_combined.show()
-
-# %%
-# --- Cross Validation Folds Analysis ---
-
-# Define the 5 folds based on sequence IDs
-# Fold definitions:
-# Fold 0: Test {1, 2} | Train {3..10}
-# Fold 1: Test {3, 4} | Train {1, 2, 5..10}
-# Fold 2: Test {5, 6} | Train {1..4, 7..10}
-# Fold 3: Test {7, 8} | Train {1..6, 9, 10}
-# Fold 4: Test {9, 10}| Train {1..8} (Official Split)
-
-folds_config = {
-    "Fold 0": [1, 2],
-    "Fold 1": [3, 4],
-    "Fold 2": [5, 6],
-    "Fold 3": [7, 8],
-    "Fold 4": [9, 10]
-}
-all_seq_ids = set(range(1, 11))
-
-# Create a column for sequence ID to facilitate filtering
 combined_counts_df['seq_id'] = combined_counts_df['sequence'].apply(extract_seq_id)
 
-fold_records = []
-
-for fold_name, test_ids_list in folds_config.items():
-    test_ids = set(test_ids_list)
-    train_ids = all_seq_ids - test_ids
-    
-    # Aggregate Train for this fold
-    # Filter by seq_id being in the calculated train_ids set
-    train_mask = combined_counts_df['seq_id'].isin(train_ids)
-    train_fold_data = combined_counts_df[train_mask]
-    train_agg = train_fold_data.groupby("instrument")["pixel_count"].sum().reset_index()
-    train_agg["split"] = "Train"
-    train_agg["fold"] = fold_name
-    fold_records.append(train_agg)
-    
-    # Aggregate Test for this fold
-    test_mask = combined_counts_df['seq_id'].isin(test_ids)
-    test_fold_data = combined_counts_df[test_mask]
-    test_agg = test_fold_data.groupby("instrument")["pixel_count"].sum().reset_index()
-    test_agg["split"] = "Test"
-    test_agg["fold"] = fold_name
-    fold_records.append(test_agg)
-
-cv_df = pd.concat(fold_records)
-
-# Plot comparison
-fig_cv = px.bar(
-    cv_df,
-    x="instrument",
-    y="pixel_count",
-    color="split",
-    barmode="group",
-    facet_col="fold",
-    facet_col_wrap=3, # Arranges plots in a grid (3 columns)
-    title="Class Balance across 5 Cross-Validation Folds",
-    labels={'instrument': 'Instrument', 'pixel_count': 'Total Pixels'},
-    category_orders={"fold": sorted(folds_config.keys())}
-)
-
-fig_cv.update_xaxes(tickangle=-45)
-fig_cv.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # Clean facet labels
-fig_cv.update_layout(yaxis_title="Total Pixels")
-fig_cv.show()
-
-# %%
-# --- Total Pixel Count Comparison (Train vs Test per Fold) ---
-total_pixels_per_fold = cv_df.groupby(["fold", "split"])["pixel_count"].sum().reset_index()
-
-fig_total_cv = px.bar(
-    total_pixels_per_fold,
-    x="fold",
-    y="pixel_count",
-    color="split",
-    barmode="group",
-    text_auto='.2s',
-    title="Total Pixel Count: Train vs Test per Fold",
-    labels={'fold': 'Fold', 'pixel_count': 'Total Pixels', 'split': 'Split'}
-)
-fig_total_cv.update_layout(yaxis_title="Total Pixels")
-fig_total_cv.show()
-
-# %%
-# --- Custom Train / Val / Test Split Comparison ---
-
-# Add more named split definitions here to compare alternative train/val/test setups.
 custom_split_configs = {
     "Split A": {
         "Train": [7, 8, 1, 2, 3, 4],
         "Val": [5, 6],
-        "Test": [9, 10],Í
+        "Test": [9, 10],
     },
 }
 
@@ -329,28 +157,323 @@ for split_name, split_config in custom_split_configs.items():
 
 custom_splits_df = pd.concat(custom_split_records, ignore_index=True)
 
-fig_custom_splits = px.bar(
-    custom_splits_df,
-    x="instrument",
-    y="pixel_count",
-    color="subset",
-    barmode="group",
-    facet_col="split_name",
-    title="Class Pixel Counts for Custom Train / Val / Test Splits",
-    labels={
-        "instrument": "Instrument",
-        "pixel_count": "Total Pixels",
-        "subset": "Subset",
-        "split_name": "Split Definition",
-    },
-    category_orders={"subset": ["Train", "Val", "Test"]},
+# Co-occurence matrix
+import itertools
+
+# We will collect frame-level instrument presence to compute the co-occurrence matrix
+co_occurrence_records = []
+base_instrument_names = list(instrument_mappings.keys())
+
+train_sequence_dirs = sorted([d for d in TRAIN_DIR.iterdir() if d.is_dir()])
+
+for seq_dir in tqdm(train_sequence_dirs, desc="Processing Co-occurrences in Train"):
+    seg_dir = seq_dir / "target" / "segmentation_8"
+    if not seg_dir.is_dir():
+        continue
+    
+    value_to_name = {v: k for k, v in instrument_mappings.items()}
+    mask_files = list(seg_dir.glob('*.png'))
+    for mask_path in mask_files:
+        mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        if mask is not None:
+            # Replicate 1024x1024 centercrop augmentation
+            h, w = mask.shape
+            crop_size = 1024
+            start_x = w // 2 - crop_size // 2
+            start_y = h // 2 - crop_size // 2
+            mask = mask[max(0, start_y):start_y+crop_size, max(0, start_x):start_x+crop_size]
+
+            unique = np.unique(mask)
+            instruments_in_frame = set()
+            for val in unique:
+                if val in value_to_name:
+                    instr_name = value_to_name[val]
+                    if instr_name != 'background':
+                        instruments_in_frame.add(instr_name)
+            
+            if instruments_in_frame:
+                co_occurrence_records.append(list(instruments_in_frame))
+
+
+# %%
+### PLOTS
+# --- Plot Instrument Percentage Distribution per Sequence (All Sequences) ---
+
+# Calculate total pixels across the entire dataset to compute percentages relative to the whole dataset
+total_dataset_pixels = combined_counts_df['pixel_count'].sum()
+
+# Create a new dataframe with percentages
+percent_seq_df = combined_counts_df.copy()
+percent_seq_df['percentage'] = (percent_seq_df['pixel_count'] / total_dataset_pixels) * 100
+
+# Filter out entries with zero pixels (and exclude background) for clean display
+percent_seq_df = percent_seq_df[(percent_seq_df['pixel_count'] > 0) & (percent_seq_df['instrument'] != 'background')]
+
+# Create a new formatted sequence column for the y-axis (2 digits for alignment)
+percent_seq_df['formatted_sequence'] = "" + percent_seq_df['seq_id'].apply(lambda x: f"{x:02d}")
+
+# Calculate frame percentage relative to total frames in the dataset
+# Denominator is the sum of sequence frame counts (stored under 'background')
+total_dataset_frames = combined_counts_df[combined_counts_df['instrument'] == 'background']['frame_count'].sum()
+percent_seq_df['frame_percentage'] = (percent_seq_df['frame_count'] / total_dataset_frames) * 100
+
+# Melt the dataframe to have multiple rows per sequence/instrument pair
+melted_seq_df = percent_seq_df.melt(
+    id_vars=['formatted_sequence', 'instrument', 'seq_id', 'pixel_count', 'frame_count'],
+    value_vars=['percentage', 'frame_percentage'],
+    var_name='metric',
+    value_name='value'
 )
 
-fig_custom_splits.update_xaxes(tickangle=-45)
-fig_custom_splits.for_each_annotation(
-    lambda a: a.update(text=a.text.split("=")[-1])
+# Rename the metric column to readable names for faceting
+metric_mapping = {'percentage': 'Relative Pixel Count', 'frame_percentage': 'Relative Frame Occurence'}
+melted_seq_df['metric'] = melted_seq_df['metric'].map(metric_mapping)
+
+# Abbreviate instruments for the first graph to save space
+abbr_map = {
+    "bipolar_forceps": "BF",
+    "prograsp_forceps": "PF",
+    "large_needle_driver": "LND",
+    "vessel_sealer": "VS",
+    "grasping_retractor": "GR",
+    "monopolar_curved_scissors": "MCS",
+    "other": "Other"
+}
+
+legend_map = {k: f"{k.replace('_', ' ').title()} [{v}]" if k != "other" else "Other" for k, v in abbr_map.items()}
+melted_seq_df['instrument'] = melted_seq_df['instrument'].map(legend_map)
+
+def get_seq_text_label(row):
+    is_pixel = row['metric'] == 'Relative Pixel Count'
+    threshold = 0.01 if is_pixel else 0.09
+    
+    if row['value'] < threshold:
+        raw_val = row['pixel_count'] if is_pixel else row['frame_count']
+        unit = "px" if is_pixel else "frames"
+        instr_full = row['instrument']
+        abbr = instr_full.split('[')[-1].split(']')[0] if '[' in instr_full else instr_full
+        return f"+ {int(raw_val)} {unit} {abbr}"
+    return ""
+
+# Add text labels for very small bars (< 0.01% / 0.09%) to remain legible
+melted_seq_df['text_label'] = melted_seq_df.apply(get_seq_text_label, axis=1)
+
+# Sort sequences for y-axis representation
+unique_seq_ids = sorted(melted_seq_df['seq_id'].unique(), reverse=True)
+all_sequences_sorted_desc = [f"{sid:02d}" for sid in unique_seq_ids]
+
+# Fixed original names for instruments order (top to bottom)
+instrument_order = [
+    "bipolar_forceps",
+    "prograsp_forceps",
+    "large_needle_driver",
+    "vessel_sealer",
+    "grasping_retractor",
+    "monopolar_curved_scissors",
+    "other"
+]
+
+legend_instrument_order = [legend_map[instr] for instr in instrument_order]
+
+# --- 1) Create a horizontal bar chart displaying percentages with a split/facet vertical axis ---
+fig_seq_percent = px.bar(
+    melted_seq_df,
+    y='formatted_sequence',
+    x='value',
+    color='instrument',
+    facet_col='metric',
+    text='text_label',
+    #title='Instrument Distribution per Sequence',
+    labels={'formatted_sequence': 'Sequence', 'value': 'Percentage of Total Dataset (%)', 'instrument': 'Instrument'},
+    category_orders={
+        "formatted_sequence": all_sequences_sorted_desc,
+        "instrument": legend_instrument_order,
+        "metric": ["Relative Pixel Count", "Relative Frame Occurence"]
+    },
+    color_discrete_sequence=px.colors.qualitative.Set2,
+    orientation='h'
 )
-fig_custom_splits.update_layout(yaxis_title="Total Pixels")
-fig_custom_splits.show()
+
+fig_seq_percent.update_traces(textposition='outside', cliponaxis=False)
+
+# Clean up facet titles by hiding the "metric=" prefix
+fig_seq_percent.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+# Allow each facet to have its own independent X-axis range
+fig_seq_percent.update_xaxes(matches=None, showticklabels=True)
+
+# Manually set ranges to prevent text cutoff
+fig_seq_percent.update_xaxes(range=[0, 2.5], col=1)
+fig_seq_percent.update_xaxes(range=[0, 55], col=2)
+
+# Configure dual-axis scaling and formatting
+fig_seq_percent.update_layout(
+    legend=dict(
+        title_font_size=11 * 1.333,
+        font_size=11 * 1.333,
+        orientation="h",
+        y=-0.2,
+    ),
+)
+
+# Reversing axis so IDs count starting from 01 at the top
+fig_seq_percent.update_yaxes(autorange='reversed')
+fig_seq_percent.layout.yaxis.title.text = "Sequence"
+fig_seq_percent.layout.yaxis2.title.text = ""
+
+fig_seq_percent.update_xaxes(title_text="Percentage of Dataset (%)")
+
+save_figure(fig_seq_percent, height=400, name='instrument_dataset_distribution', margin=(40, 40, 20, 0))
+
+# %%
+# --- Plot Instrument Percentage Distribution for Custom Split ---
+
+# Map subset names to full written-out names
+subset_mapping = {"Train": "Training Set", "Val": "Validation Set", "Test": "Test Set"}
+custom_splits_df['subset_full'] = custom_splits_df['subset'].map(subset_mapping)
+
+# Calculate percentage relative to the whole dataset
+# (Reusing total_dataset_pixels computed earlier)
+custom_splits_df['percentage'] = (custom_splits_df['pixel_count'] / total_dataset_pixels) * 100
+
+# Calculate frame percentage relative to total frames in the dataset
+total_dataset_frames = combined_counts_df[combined_counts_df['instrument'] == 'background']['frame_count'].sum()
+custom_splits_df['frame_percentage'] = (custom_splits_df['frame_count'] / total_dataset_frames) * 100
+
+# Filter out entries with zero pixels (and exclude background)
+plot_split_df = custom_splits_df[(custom_splits_df['pixel_count'] > 0) & (custom_splits_df['instrument'] != 'background')].copy()
+
+# Melt the dataframe to have multiple rows per instrument/subset pair
+melted_split_df = plot_split_df.melt(
+    id_vars=['instrument', 'subset_full', 'pixel_count', 'frame_count'],
+    value_vars=['percentage', 'frame_percentage'],
+    var_name='metric',
+    value_name='value'
+)
+
+melted_split_df['metric'] = melted_split_df['metric'].map(metric_mapping)
+
+display_map = {k: k.replace('_', ' ').title() for k in abbr_map.keys()}
+melted_split_df['instrument'] = melted_split_df['instrument'].map(display_map)
+display_instrument_order = [display_map[instr] for instr in instrument_order]
+
+def get_text_label(row):
+    is_pixel = row['metric'] == 'Relative Pixel Count'
+    threshold = 0.01 if is_pixel else 0.09
+    
+    if row['value'] < threshold:
+        raw_val = row['pixel_count'] if is_pixel else row['frame_count']
+        unit = "px" if is_pixel else "frames"
+        return f"{int(raw_val)} {unit}"
+    return ""
+
+# Add text labels for very small bars (< 0.01% / 0.09%) to remain legible
+melted_split_df['text_label'] = melted_split_df.apply(get_text_label, axis=1)
+
+# Generate a descriptive title specifying the current active split's mapping
+split_name = "Split A"
+split_details = " | ".join([f"{k} {v}" for k, v in custom_split_configs[split_name].items()])
+title_str = f"Instrument Distribution for the Split: {split_details}"
+
+# Create a horizontal bar chart displaying percentages with a facet vertical axis
+fig_split_percent = px.bar(
+    melted_split_df,
+    y='instrument',
+    x='value',
+    color='subset_full',
+    facet_col='metric',
+    barmode='group',
+    text='text_label',
+    #title=title_str,
+    labels={'subset_full': 'Dataset Split', 'value': 'Percentage of Total Dataset (%)', 'instrument': 'Instrument'},
+    category_orders={
+        "subset_full": ["Test Set", "Validation Set", "Training Set"], # Reversed so Training draws at the top of each item's group
+        "metric": ["Relative Pixel Count", "Relative Frame Occurence"]
+    },
+    color_discrete_map={
+        "Training Set": px.colors.qualitative.Plotly[0], # Standard Plotly Blue
+        "Validation Set": px.colors.qualitative.Plotly[1], # Standard Plotly Red/Orange
+        "Test Set": px.colors.qualitative.Plotly[2], # Standard Plotly Green
+    },
+    orientation='h'
+)
+
+fig_split_percent.update_traces(textposition='outside', cliponaxis=False)
+
+# Clean up facet titles by hiding the "metric=" prefix
+fig_split_percent.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+
+# Allow each facet to have its own independent X-axis range
+fig_split_percent.update_xaxes(matches=None, showticklabels=True)
+
+fig_split_percent.update_layout(
+    legend=dict(
+        traceorder='reversed',
+        title_font_size=11 * 1.333,
+        font_size=11 * 1.333,
+        orientation="h",
+        y=-0.2,
+        ), # Reverse legend to match visual top-to-bottom order
+    yaxis={'categoryorder': 'array', 'categoryarray': display_instrument_order[::-1]} # Reverses instrument order explicitly so Bipolar Forceps is on top in this barmode
+)
+
+# Prevent doubled y-axis titles
+if hasattr(fig_split_percent.layout, 'yaxis'):
+    fig_split_percent.layout.yaxis.title.text = "Instrument"
+if hasattr(fig_split_percent.layout, 'yaxis2'):
+    fig_split_percent.layout.yaxis2.title.text = ""
+
+fig_split_percent.update_xaxes(title_text="Percentage of Dataset (%)")
+
+save_figure(fig_split_percent, height=400, name='instrument_dataset_distribution_split', margin=(0, 0, 20, 0))
+
+# %%
+
+# %%
+# --- Co-occurrence Matrix for Training Set ---
+# Initialize co-occurrence matrix
+co_matrix = pd.DataFrame(0, index=base_instrument_names, columns=base_instrument_names)
+
+# Populate matrix
+for instruments in co_occurrence_records:
+    # Occurrences (diagonal)
+    for inst in instruments:
+        co_matrix.loc[inst, inst] += 1
+    # Co-occurrences (off-diagonal)
+    for inst1, inst2 in itertools.combinations(instruments, 2):
+        co_matrix.loc[inst1, inst2] += 1
+        co_matrix.loc[inst2, inst1] += 1
+
+# Filter out instruments with zero occurrences in the training set
+co_matrix = co_matrix.loc[(co_matrix.sum(axis=1) > 0), (co_matrix.sum(axis=0) > 0)]
+
+# Format instrument names for display
+co_matrix.index = [display_map.get(idx, idx.replace('_', ' ').title()) for idx in co_matrix.index]
+co_matrix.columns = [display_map.get(col, col.replace('_', ' ').title()) for col in co_matrix.columns]
+
+
+
+# Plot Heatmap
+fig_co = px.imshow(
+    co_matrix, 
+    labels=dict(x="Instrument", y="Instrument", color="Co-occurrences"),
+    x=co_matrix.columns, 
+    y=co_matrix.index,
+    #title="Instrument Co-occurrence Matrix of Training Set",
+    color_continuous_scale="Viridis",
+    text_auto=True
+)
+
+fig_co.update_layout(
+    coloraxis_colorbar=dict(
+        len=0.9,
+        y=0.53,
+        yanchor="middle",
+        title_font_size=11 * 1.333,
+        tickfont_size=11 * 1.333,
+    ),
+)
+
+save_figure(fig_co, height=450, name='instrument_cooccurrence_matrix')
 
 # %%
