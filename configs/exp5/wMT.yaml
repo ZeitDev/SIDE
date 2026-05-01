@@ -1,0 +1,50 @@
+description: 05 - convnext nano
+
+data:
+  dataset: data.datasets.EndoVis17
+
+training:
+  epochs: 50
+
+  optimizer:
+    name: torch.optim.AdamW
+    params:
+      lr: 8.0e-4
+      weight_decay: 1.0e-4
+    encoder_lr_mod: 0.5
+
+  scheduler:
+    name: schedulers.custom.WarmupCosineAnnealingLR
+    params:
+      warmup_epochs: 1
+      total_epochs: 50
+      steps_per_epoch: 169
+      start_factor: 0.1
+      eta_min: 8.0e-6 # lr / 100
+
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: convnextv2_nano # atto, femto, pico, nano, tiny, base, large, huge
+      pretrained: true
+
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: false
+    disparity:
+      enabled: true
+      distillation:
+        enabled: false
+
+  weighting:
+    inter:
+      name: criterions.weighting.DynamicTaskPriority
+      params:
+        alpha: 0.2 # Faster reaction
+        gamma: 0.3 # Punish winning task more
+        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument_mean'
+        metric_is_score_segmentation: true
+        metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
+        metric_is_score_disparity: false

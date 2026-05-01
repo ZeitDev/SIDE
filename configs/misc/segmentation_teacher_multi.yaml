@@ -57,14 +57,14 @@ data:
           num_holes_range: [1, 8]
           hole_height_range: [1, 20]
           hole_width_range: [1, 20]
-          fill_value: 0
+          fill: 0
           p: 0.2
       - name: CoarseDropout # Simulates Glare on Metal
         params:
           num_holes_range: [1, 5]
           hole_height_range: [1, 15]
           hole_width_range: [1, 15]
-          fill_value: 255
+          fill: 255
           p: 0.2
       - name: Normalize
         params:

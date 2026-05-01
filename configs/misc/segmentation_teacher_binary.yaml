@@ -5,6 +5,14 @@ data:
 
   transforms:
     train:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 1024
+          width: 1024
       - name: Affine # Simulate camera distance changes and rotations
         params:
           scale: [0.8, 1.2]
@@ -41,20 +49,20 @@ data:
         params:
           std_range: [0.01, 0.03]
           p: 0.2
-      - name: CoarseDropout # Simulate glare on metal
+      - name: CoarseDropout # Simulates Occlusion (Tissue/Blood)
         params:
           num_holes_range: [1, 8]
           hole_height_range: [1, 20]
           hole_width_range: [1, 20]
+          fill: 0
           p: 0.2
-      - name: CenterCrop
+      - name: CoarseDropout # Simulates Glare on Metal
         params:
-          height: 1024
-          width: 1024
-      - name: Resize
-        params:
-          height: 1024
-          width: 1024
+          num_holes_range: [1, 5]
+          hole_height_range: [1, 15]
+          hole_width_range: [1, 15]
+          fill: 255
+          p: 0.2
       - name: Normalize
         params:
           mean: [0.485, 0.456, 0.406]

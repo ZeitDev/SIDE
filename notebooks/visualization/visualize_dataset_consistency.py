@@ -120,7 +120,7 @@ def left_right_consistency_check(left_disp, right_disp, threshold=3.0):
     
     diff = torch.abs(left_disp - warped_disp_right)
     
-    valid_mask = (diff < threshold).float()
+    valid_mask = (diff <= threshold).float()
     
     left_disp_valid = left_disp > 0
     valid_mask[~left_disp_valid] = torch.nan
@@ -313,33 +313,70 @@ for (mode, seq), counts in pixel_hist_accum.items():
 df_pixels = pd.DataFrame(pixel_agg_records)
 df_images = pd.DataFrame(image_records)
 
-# if not df_pixels.empty:
-#     fig1 = px.bar(
-#         df_pixels, 
-#         x='Consistency', 
-#         y='Count',
-#         color='Sequence', 
-#         facet_col='Mode',
-#         barmode='overlay',
-#         title='Pixel-level Consistency Distribution per Sequence (Aggregated histograms)'
-#     )
-#     fig1.update_layout(bargap=0)
-#     fig1.show()
-# else:
-#     print("No pixel data.")
+# Use regex to extract the trailing number from "instrument_dataset_X" and format it as 2-digit "0X"
+df_images['SequenceLabel'] = df_images['Sequence'].str.extract(r'(\d+)')[0].astype(int).map(lambda x: f"{x:02d}")
 
-if not df_images.empty:
-    fig2 = px.histogram(
-        df_images, 
-        x='Mean Consistency', 
-        color='Sequence', 
-        facet_col='Mode',
-        barmode='overlay',
-        nbins=50,
-        title='Image-level Mean 3px-Consistency Distribution per Sequence'
-    )
-    fig2.show()
-else:
-    print("No image data.")
+# Map Mode to readable names
+mode_map = {'train': 'Train Set', 'val': 'Validation Set', 'test': 'Test Set'}
+df_images['ModeLabel'] = df_images['Mode'].map(mode_map)
+
+# Explicitly map colors to ensure only Sequence 10 changes
+sequences = sorted(df_images['SequenceLabel'].unique())
+colors = px.colors.qualitative.Plotly  # Default Plotly palette
+color_map = {seq: colors[i % len(colors)] for i, seq in enumerate(sequences)}
+color_map['10'] = 'darkcyan'  # Override only sequence 10
+color_map['07'] = 'goldenrod'  # Override only sequence 07
+
+# Restore vertical histogram: x=Mean Consistency, color=SequenceLabel, facet_col=ModeLabel
+fig2 = px.histogram(
+    df_images,
+    x='Mean Consistency',
+    color='SequenceLabel',
+    facet_col='ModeLabel',
+    barmode='overlay',
+    nbins=50,
+    category_orders={
+        'SequenceLabel': sequences,
+        'ModeLabel': ['Train Set', 'Validation Set', 'Test Set']
+    },
+    color_discrete_map=color_map,
+    labels={'SequenceLabel': 'Sequence', 'Mean Consistency': 'Mean 3px Agreement', 'count': 'Frames'},
+    orientation='v'
+)
+
+# Remove facet title prefix ("ModeLabel=")
+for annotation in fig2.layout.annotations:
+    if annotation.text.startswith('ModeLabel='):
+        annotation.text = annotation.text.replace('ModeLabel=', '')
+
+# Apply masterthesis-ready formatting
+font_size = 15.5
+width = 600
+height = 400
+family = 'Latin Modern Roman, Computer Modern Roman, serif'
+fig2.update_layout(
+    width=width,
+    height=height,
+    font=dict(
+        family=family,
+        size=font_size,
+        color='black'
+    ),
+    title=None,
+    legend_title_text='Sequence',
+    legend=dict(
+        title_font_size=font_size,
+        font_size=font_size,
+        orientation="h",
+        y=-0.2,
+        entrywidth=0.2,
+        entrywidthmode='fraction'
+    ),
+    yaxis_title='Count'
+)
+
+from notebooks.figures.helpers import save_figure
+save_figure(fig2, height=height, name='left_right_consistency', margin=(45, 0, 20, 0), standoff=10)
+
 
 # %%

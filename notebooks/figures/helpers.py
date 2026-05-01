@@ -2,9 +2,8 @@ import os
 import plotly.express as px
 import cairosvg
 
-def save_figure(fig, height=400, name='test', margin=(0, 0, 0, 0), standoff=5, fallback=True):
-    font_size = 11
-    font_size *= 1.333
+def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff=5, fallback=True):
+    font_size = 15.5
     width = 600
     family= 'Latin Modern Roman, Computer Modern Roman, serif'
     base_path = 'notebooks/output/methods/'
@@ -15,10 +14,11 @@ def save_figure(fig, height=400, name='test', margin=(0, 0, 0, 0), standoff=5, f
     fig.update_layout(
         width=width,
         height=height,
-        margin=dict(l=margin[0], r=margin[1], t=margin[2], b=margin[3]),
+        margin=dict(l=lrtb_margin[0], r=lrtb_margin[1], t=lrtb_margin[2], b=lrtb_margin[3]),
         font=dict(
             family=family,
-            size=font_size
+            size=font_size,
+            color='black'
         )
     )
     
@@ -35,6 +35,6 @@ def save_figure(fig, height=400, name='test', margin=(0, 0, 0, 0), standoff=5, f
             os.path.join(base_path, f'{name}.png'),
             width=width,
             height=height,
-            scale=5  # This is the magic number. Increase to 6 or 8 if you need it even larger.
+            scale=3
         )
     

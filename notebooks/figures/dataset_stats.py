@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
 
-from notebooks.visualization.helpers import save_figure
+from notebooks.figures.helpers import save_figure
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
@@ -219,14 +219,17 @@ percent_seq_df['frame_percentage'] = (percent_seq_df['frame_count'] / total_data
 
 # Melt the dataframe to have multiple rows per sequence/instrument pair
 melted_seq_df = percent_seq_df.melt(
-    id_vars=['formatted_sequence', 'instrument', 'seq_id', 'pixel_count', 'frame_count'],
-    value_vars=['percentage', 'frame_percentage'],
+    id_vars=['formatted_sequence', 'instrument', 'seq_id', 'pixel_count'],
+    value_vars=['percentage', 'frame_count'], # Use raw frame_count here
     var_name='metric',
     value_name='value'
 )
 
 # Rename the metric column to readable names for faceting
-metric_mapping = {'percentage': 'Relative Pixel Count', 'frame_percentage': 'Relative Frame Occurence'}
+metric_mapping = {
+    'percentage': 'Relative Pixel Count', 
+    'frame_count': 'Cumulative Occurrences'
+}
 melted_seq_df['metric'] = melted_seq_df['metric'].map(metric_mapping)
 
 # Abbreviate instruments for the first graph to save space
@@ -245,10 +248,11 @@ melted_seq_df['instrument'] = melted_seq_df['instrument'].map(legend_map)
 
 def get_seq_text_label(row):
     is_pixel = row['metric'] == 'Relative Pixel Count'
-    threshold = 0.01 if is_pixel else 0.09
+    # Show labels if pixel percentage > 0.01%, or if frame count > 50
+    threshold = 0.01 if is_pixel else 50 
     
     if row['value'] < threshold:
-        raw_val = row['pixel_count'] if is_pixel else row['frame_count']
+        raw_val = row['pixel_count'] if is_pixel else row['value']
         unit = "px" if is_pixel else "frames"
         instr_full = row['instrument']
         abbr = instr_full.split('[')[-1].split(']')[0] if '[' in instr_full else instr_full
@@ -288,7 +292,7 @@ fig_seq_percent = px.bar(
     category_orders={
         "formatted_sequence": all_sequences_sorted_desc,
         "instrument": legend_instrument_order,
-        "metric": ["Relative Pixel Count", "Relative Frame Occurence"]
+        "metric": ["Relative Pixel Count", "Cumulative Occurrences"]
     },
     color_discrete_sequence=px.colors.qualitative.Set2,
     orientation='h'
@@ -303,14 +307,14 @@ fig_seq_percent.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1
 fig_seq_percent.update_xaxes(matches=None, showticklabels=True)
 
 # Manually set ranges to prevent text cutoff
-fig_seq_percent.update_xaxes(range=[0, 2.5], col=1)
-fig_seq_percent.update_xaxes(range=[0, 55], col=2)
+fig_seq_percent.update_xaxes(range=[0, 2.5], col=1, title_text="Percentage of Dataset (%)")
+fig_seq_percent.update_xaxes(range=[0, 1300], col=2, title_text="Frames in Dataset (Count)")
 
 # Configure dual-axis scaling and formatting
 fig_seq_percent.update_layout(
     legend=dict(
-        title_font_size=11 * 1.333,
-        font_size=11 * 1.333,
+        title_font_size=15.5,
+        font_size=15.5,
         orientation="h",
         y=-0.2,
     ),
@@ -320,8 +324,6 @@ fig_seq_percent.update_layout(
 fig_seq_percent.update_yaxes(autorange='reversed')
 fig_seq_percent.layout.yaxis.title.text = "Sequence"
 fig_seq_percent.layout.yaxis2.title.text = ""
-
-fig_seq_percent.update_xaxes(title_text="Percentage of Dataset (%)")
 
 save_figure(fig_seq_percent, height=400, name='instrument_dataset_distribution', margin=(40, 40, 20, 0))
 
@@ -336,21 +338,21 @@ custom_splits_df['subset_full'] = custom_splits_df['subset'].map(subset_mapping)
 # (Reusing total_dataset_pixels computed earlier)
 custom_splits_df['percentage'] = (custom_splits_df['pixel_count'] / total_dataset_pixels) * 100
 
-# Calculate frame percentage relative to total frames in the dataset
-total_dataset_frames = combined_counts_df[combined_counts_df['instrument'] == 'background']['frame_count'].sum()
-custom_splits_df['frame_percentage'] = (custom_splits_df['frame_count'] / total_dataset_frames) * 100
-
 # Filter out entries with zero pixels (and exclude background)
 plot_split_df = custom_splits_df[(custom_splits_df['pixel_count'] > 0) & (custom_splits_df['instrument'] != 'background')].copy()
 
-# Melt the dataframe to have multiple rows per instrument/subset pair
+# Melt the dataframe using raw frame_count to match the first graph
 melted_split_df = plot_split_df.melt(
-    id_vars=['instrument', 'subset_full', 'pixel_count', 'frame_count'],
-    value_vars=['percentage', 'frame_percentage'],
+    id_vars=['instrument', 'subset_full', 'pixel_count'],
+    value_vars=['percentage', 'frame_count'], 
     var_name='metric',
     value_name='value'
 )
 
+metric_mapping = {
+    'percentage': 'Relative Pixel Count', 
+    'frame_count': 'Occurrences'
+}
 melted_split_df['metric'] = melted_split_df['metric'].map(metric_mapping)
 
 display_map = {k: k.replace('_', ' ').title() for k in abbr_map.keys()}
@@ -359,15 +361,16 @@ display_instrument_order = [display_map[instr] for instr in instrument_order]
 
 def get_text_label(row):
     is_pixel = row['metric'] == 'Relative Pixel Count'
-    threshold = 0.01 if is_pixel else 0.09
+    # Updated threshold: 0.01 for percentage, 50 for raw frame counts
+    threshold = 0.01 if is_pixel else 50
     
     if row['value'] < threshold:
-        raw_val = row['pixel_count'] if is_pixel else row['frame_count']
+        raw_val = row['pixel_count'] if is_pixel else row['value']
         unit = "px" if is_pixel else "frames"
         return f"{int(raw_val)} {unit}"
     return ""
 
-# Add text labels for very small bars (< 0.01% / 0.09%) to remain legible
+# Add text labels for very small bars to remain legible
 melted_split_df['text_label'] = melted_split_df.apply(get_text_label, axis=1)
 
 # Generate a descriptive title specifying the current active split's mapping
@@ -385,10 +388,10 @@ fig_split_percent = px.bar(
     barmode='group',
     text='text_label',
     #title=title_str,
-    labels={'subset_full': 'Dataset Split', 'value': 'Percentage of Total Dataset (%)', 'instrument': 'Instrument'},
+    labels={'subset_full': 'Dataset Split', 'value': '', 'instrument': 'Instrument'},
     category_orders={
-        "subset_full": ["Test Set", "Validation Set", "Training Set"], # Reversed so Training draws at the top of each item's group
-        "metric": ["Relative Pixel Count", "Relative Frame Occurence"]
+        "subset_full": ["Test Set", "Validation Set", "Training Set"], # Reversed so Training draws at the top
+        "metric": ["Relative Pixel Count", "Occurrences"] # Updated to match new mapping
     },
     color_discrete_map={
         "Training Set": px.colors.qualitative.Plotly[0], # Standard Plotly Blue
@@ -409,12 +412,12 @@ fig_split_percent.update_xaxes(matches=None, showticklabels=True)
 fig_split_percent.update_layout(
     legend=dict(
         traceorder='reversed',
-        title_font_size=11 * 1.333,
-        font_size=11 * 1.333,
+        title_font_size=15.5,
+        font_size=15.5,
         orientation="h",
         y=-0.2,
-        ), # Reverse legend to match visual top-to-bottom order
-    yaxis={'categoryorder': 'array', 'categoryarray': display_instrument_order[::-1]} # Reverses instrument order explicitly so Bipolar Forceps is on top in this barmode
+        ), 
+    yaxis={'categoryorder': 'array', 'categoryarray': display_instrument_order[::-1]} 
 )
 
 # Prevent doubled y-axis titles
@@ -423,11 +426,12 @@ if hasattr(fig_split_percent.layout, 'yaxis'):
 if hasattr(fig_split_percent.layout, 'yaxis2'):
     fig_split_percent.layout.yaxis2.title.text = ""
 
-fig_split_percent.update_xaxes(title_text="Percentage of Dataset (%)")
+# Set independent x-axis titles so the right side doesn't say "Percentage"
+fig_split_percent.update_xaxes(title_text="Percentage of Dataset (%)", col=1)
+fig_split_percent.update_xaxes(title_text="Frames in Dataset (Count)", col=2)
 
 save_figure(fig_split_percent, height=400, name='instrument_dataset_distribution_split', margin=(0, 0, 20, 0))
 
-# %%
 
 # %%
 # --- Co-occurrence Matrix for Training Set ---
@@ -466,11 +470,11 @@ fig_co = px.imshow(
 
 fig_co.update_layout(
     coloraxis_colorbar=dict(
-        len=0.9,
-        y=0.53,
+        len=0.84,
+        y=0.535,
         yanchor="middle",
-        title_font_size=11 * 1.333,
-        tickfont_size=11 * 1.333,
+        title_font_size=15.5,
+        tickfont_size=15.5,
     ),
 )
 
