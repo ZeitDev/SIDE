@@ -95,7 +95,7 @@ training:
         criterion:
           name: criterions.segmentation.ChannelWiseKLDivLoss
           params:
-            temperature: 4.0
+            temperature: 3.5
 
     disparity: 
       enabled: false
@@ -115,7 +115,7 @@ training:
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
-            temperature: 2.0
+            temperature: 1.5
 
   weighting:
     inter:

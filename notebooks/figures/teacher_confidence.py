@@ -22,7 +22,7 @@ from notebooks.figures.helpers import save_figure
 
 import math
 
-def entropy_confidence(logits, prob_dim=1):
+def entropy_confidence(logits, c_min=0, c_max=1, prob_dim=1):
     probs = F.softmax(logits, dim=prob_dim)
     entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim)
     num_bins = logits.shape[prob_dim]
@@ -30,8 +30,6 @@ def entropy_confidence(logits, prob_dim=1):
     normalized_entropy = entropy / max_entropy
     base_confidence = 1.0 - normalized_entropy
     
-    c_min = 0.39
-    c_max = 0.8981
     denominator = max(c_max - c_min, 1e-6)
     
     scaled_conf = (base_confidence - c_min) / denominator
@@ -100,6 +98,7 @@ if False:
     print(f"Calculated c_min (5th Percentile) : {dataset_c_min:.4f}")
     print(f"Calculated c_max (95th Percentile): {dataset_c_max:.4f}")
     print("="*40 + "\n")
+    
 
 # %%
 # Settings
@@ -263,10 +262,10 @@ for mode_name in ['train', 'val', 'test']:
             
             if logits.dim() == 4:
                 #probs = F.softmax(logits, dim=1)
-                conf = entropy_confidence(logits, prob_dim=1).squeeze(0)
+                conf = entropy_confidence(logits, c_min=0.39, c_max=0.8981, prob_dim=1).squeeze(0)
             elif logits.dim() == 3:
                 #probs = F.softmax(logits, dim=0)
-                conf = entropy_confidence(logits, prob_dim=0).squeeze(0)
+                conf = entropy_confidence(logits, c_min=0.39, c_max=0.8981, prob_dim=0).squeeze(0)
             else:
                 continue
             

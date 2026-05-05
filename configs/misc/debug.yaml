@@ -42,10 +42,7 @@ training:
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
-            temperature_start: 1.0
-            temperature_end: 4.0
-            total_epochs: 50
-            steps_per_epoch: 169
+            temperature: 1.5
 
   weighting:
     inter:

@@ -1,4 +1,4 @@
-description: 05 - convnext nano
+description: 01 - 1024x1024
 
 data:
   dataset: data.datasets.EndoVis17
@@ -25,7 +25,7 @@ training:
   encoder:
     name: models.encoders.timm.Encoder
     params:
-      model_name: convnextv2_nano # atto, femto, pico, nano, tiny, base, large, huge
+      model_name: convnextv2_tiny # atto, femto, pico, nano, tiny, base, large, huge
       pretrained: true
 
   tasks:
@@ -33,6 +33,10 @@ training:
       enabled: true
       distillation:
         enabled: true
+        criterion:
+          name: criterions.segmentation.ChannelWiseKLDivLoss
+          params:
+            temperature: 3.5
     disparity:
       enabled: true
       distillation:
@@ -40,10 +44,7 @@ training:
         criterion:
           name: criterions.disparity.PixelWiseKLDivLoss
           params:
-            temperature_start: 1.0
-            temperature_end: 4.0
-            total_epochs: 50
-            steps_per_epoch: 169
+            temperature: 1.5
 
   weighting:
     inter:

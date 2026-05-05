@@ -1,7 +1,9 @@
-description: 02 - Increased LR, temperature decay for disp, decreased disp alpha, increased seg alpha
+description: 04 - Multiclass Segmentation
 
 data:
   dataset: data.datasets.EndoVis17
+  num_of_classes:
+    segmentation: 8
 
 training:
   epochs: 50
@@ -32,11 +34,19 @@ training:
     segmentation:
       enabled: true
       distillation:
-        enabled: false
+        enabled: true
+        criterion:
+          name: criterions.segmentation.ChannelWiseKLDivLoss
+          params:
+            temperature: 3.0
     disparity:
       enabled: true
       distillation:
-        enabled: false
+        enabled: true
+        criterion:
+          name: criterions.disparity.PixelWiseKLDivLoss
+          params:
+            temperature: 1.5
 
   weighting:
     inter:
@@ -48,3 +58,19 @@ training:
         metric_is_score_segmentation: true
         metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
         metric_is_score_disparity: false
+    intra_segmentation:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher faster
+        teacher_performance: 0.6332
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptDICE_score'
+        metric_is_score: true
+    intra_disparity:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher faster
+        teacher_performance: 0.0809
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+        metric_is_score: false

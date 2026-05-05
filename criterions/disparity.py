@@ -1,8 +1,5 @@
-import math
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms.functional as TF
 
 class MaskedL1Loss(nn.Module):
     def __init__(self):
@@ -41,24 +38,13 @@ class MaskedSmoothL1Loss(nn.Module):
         return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature_start: float = 1.0, temperature_end: float = 4.0, total_epochs: int = 100, steps_per_epoch: int = 100):
+    def __init__(self, temperature: float = 1.0):
         super().__init__()
-        self.current_step = 0
-        self.temperature_start = temperature_start
-        self.temperature_end = temperature_end
-        self.total_epoch_steps = total_epochs * steps_per_epoch
+        self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='none', log_target=False)
     
-    def get_current_temperature(self):
-        if self.current_step >= self.total_epoch_steps: return self.temperature_end
-        
-        progress = self.current_step / self.total_epoch_steps
-        
-        temperature = self.temperature_start + (self.temperature_end - self.temperature_start) * progress
-        return temperature
-    
     def forward(self, student_logits, teacher_logits, targets, teacher_confidence):
-        T = self.get_current_temperature()
+        T = self.temperature
         
         B, D, H, W = student_logits.shape
         teacher_logits = teacher_logits.detach()
@@ -84,21 +70,3 @@ class PixelWiseKLDivLoss(nn.Module):
         if self.training: self.current_step += 1
         
         return loss
-    
-class EntropyConfidence(nn.Module):
-    def __init__(self, c_min=0.3900, c_max=0.8981):
-        super().__init__()
-        self.c_min = c_min
-        self.c_max = c_max
-        self.denominator = max(self.c_max - self.c_min, 1e-6)
-
-    def forward(self, logits, prob_dim=1):
-        probs = F.softmax(logits, dim=prob_dim)
-        entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim, keepdim=True)
-        
-        num_bins = logits.shape[prob_dim]
-        max_entropy = math.log2(num_bins)
-        base_confidence = 1.0 - (entropy / max_entropy)
-        
-        scaled_conf = (base_confidence - self.c_min) / self.denominator
-        return torch.clamp(scaled_conf, min=0.0, max=1.0)
