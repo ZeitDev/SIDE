@@ -112,4 +112,3 @@ if not df_images.empty:
 else:
     print("No data collected for the image histogram.")
 
-

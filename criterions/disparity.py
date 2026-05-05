@@ -1,3 +1,5 @@
+import math
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
@@ -55,7 +57,7 @@ class PixelWiseKLDivLoss(nn.Module):
         temperature = self.temperature_start + (self.temperature_end - self.temperature_start) * progress
         return temperature
     
-    def forward(self, student_logits, teacher_logits, targets):
+    def forward(self, student_logits, teacher_logits, targets, teacher_confidence):
         T = self.get_current_temperature()
         
         B, D, H, W = student_logits.shape
@@ -66,10 +68,6 @@ class PixelWiseKLDivLoss(nn.Module):
         
         if valid.sum() == 0:
             return (student_logits * 0.0).sum()
-        
-        raw_teacher_probabilities = F.softmax(teacher_logits, dim=1)
-        teacher_confidence = raw_teacher_probabilities.max(dim=1, keepdim=True)[0]
-        teacher_confidence = TF.gaussian_blur(teacher_confidence, kernel_size=7, sigma=2.0) # smooth confidence to avoid sharp gradients
         
         student_logits = student_logits / T
         teacher_logits = teacher_logits / T
@@ -86,3 +84,21 @@ class PixelWiseKLDivLoss(nn.Module):
         if self.training: self.current_step += 1
         
         return loss
+    
+class EntropyConfidence(nn.Module):
+    def __init__(self, c_min=0.3900, c_max=0.8981):
+        super().__init__()
+        self.c_min = c_min
+        self.c_max = c_max
+        self.denominator = max(self.c_max - self.c_min, 1e-6)
+
+    def forward(self, logits, prob_dim=1):
+        probs = F.softmax(logits, dim=prob_dim)
+        entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim, keepdim=True)
+        
+        num_bins = logits.shape[prob_dim]
+        max_entropy = math.log2(num_bins)
+        base_confidence = 1.0 - (entropy / max_entropy)
+        
+        scaled_conf = (base_confidence - self.c_min) / self.denominator
+        return torch.clamp(scaled_conf, min=0.0, max=1.0)

@@ -41,7 +41,8 @@ class LossComposer(nn.Module):
             if 'disparity_distillation' in task:
                 intercept_features = outputs['disparity_intercept_features']
                 true_targets = targets['disparity']
-                raw_loss = criterion(intercept_features, targets[task], true_targets) # custom kd loss needs 3 args
+                teacher_confidence = targets['disparity_distillation_confidence']
+                raw_loss = criterion(intercept_features, targets[task], true_targets, teacher_confidence) # custom kd loss needs 4 args
             elif 'segmentation_distillation' in task:
                 intercept_features = outputs['segmentation_intercept_features']
                 raw_loss = criterion(intercept_features, targets[task]) # custom kd loss needs 2 args

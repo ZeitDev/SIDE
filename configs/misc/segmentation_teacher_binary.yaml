@@ -3,86 +3,8 @@ description: Finetune the SegFormer segmentation teacher on EndoVis17 in a noteb
 data:
   dataset: data.datasets.EndoVis17
 
-  transforms:
-    train:
-      - name: CenterCrop
-        params:
-          height: 1024
-          width: 1024
-      - name: Resize
-        params:
-          height: 1024
-          width: 1024
-      - name: Affine # Simulate camera distance changes and rotations
-        params:
-          scale: [0.8, 1.2]
-          translate_percent: [0.0, 0.0625]
-          rotate: [-45, 45]
-          p: 0.5
-      - name: HorizontalFlip # Instruments can come from either side
-        params:
-          p: 0.5
-      - name: VerticalFlip # Instruments can come from top or bottom
-        params:
-          p: 0.5
-      - name: GridDistortion # Simulate lens distortion of endoscopic cameras
-        params:
-          num_steps: 5
-          distort_limit: 0.3
-          p: 0.3
-      - name: RandomBrightnessContrast # Vary lighting conditions
-        params:
-          brightness_limit: 0.2
-          contrast_limit: 0.2
-          p: 0.5
-      - name: OneOf # Simulate smoke / fog
-        params:
-          transforms:
-            - name: GaussianBlur
-              params:
-                blur_limit: [3, 5]
-            - name: MotionBlur
-              params:
-                blur_limit: [3, 5]
-          p: 0.2
-      - name: GaussNoise # Simulate sensor noise
-        params:
-          std_range: [0.01, 0.03]
-          p: 0.2
-      - name: CoarseDropout # Simulates Occlusion (Tissue/Blood)
-        params:
-          num_holes_range: [1, 8]
-          hole_height_range: [1, 20]
-          hole_width_range: [1, 20]
-          fill: 0
-          p: 0.2
-      - name: CoarseDropout # Simulates Glare on Metal
-        params:
-          num_holes_range: [1, 5]
-          hole_height_range: [1, 15]
-          hole_width_range: [1, 15]
-          fill: 255
-          p: 0.2
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-    test:
-      - name: CenterCrop
-        params:
-          height: 1024
-          width: 1024
-      - name: Resize
-        params:
-          height: 1024
-          width: 1024
-      - name: Normalize
-        params:
-          mean: [0.485, 0.456, 0.406]
-          std: [0.229, 0.224, 0.225]
-
 training:
-  epochs: 15
+  epochs: 50
   validation: true
 
   batch_size:  1
@@ -97,7 +19,7 @@ training:
     name: schedulers.custom.WarmupCosineAnnealingLR
     params:
       warmup_epochs: 1
-      total_epochs: 15
+      total_epochs: 50
       steps_per_epoch: 169
       start_factor: 0.5
       eta_min: 2.8e-7 # lr / 1000

@@ -19,3 +19,5 @@ external/
 mlflow/
 output/
 input/
+mlflow_DEP/
+*.zip

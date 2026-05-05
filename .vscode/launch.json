@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "main.py", // ${file}
             "console": "integratedTerminal",
-            "args": ["--config", "configs/misc/debug.yaml", "--cuda_device", "0"],
+            "args": ["--config", "configs/misc/debug.yaml", "--cuda_device", "1"],
             "justMyCode": true,
             "rules": [
                     // {"path": "${workspaceFolder}/utils/*.py", "include": false},

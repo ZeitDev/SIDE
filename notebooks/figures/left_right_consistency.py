@@ -128,6 +128,7 @@ fig2 = px.histogram(
     facet_col='ModeLabel',
     barmode='overlay',
     nbins=50,
+    histnorm='percent',
     category_orders={
         'SequenceLabel': sequences,
         'ModeLabel': ['Train Set', 'Validation Set', 'Test Set']
@@ -157,7 +158,7 @@ fig2.update_layout(
         entrywidth=0.2,
         entrywidthmode='fraction'
     ),
-    yaxis_title='Count'
+    yaxis_title='Percent of Sequence (%)'
 )
 fig2.update_traces(xbins=dict(start=0.0, end=1.0, size=0.02))
 
@@ -242,7 +243,7 @@ overlay[valid_region] = err_color[valid_region]
 # Plotting with Plotly
 fig3 = sp.make_subplots(
     rows=1, cols=3,
-    subplot_titles=("Left-Sided<br>Disparity", "Right-Sided<br>Disparity", f"3px Agreement<br>({mean_consistency:.1%})"),
+    subplot_titles=("Left-Sided<br>Disparity", "Right-Sided<br>Disparity", f"3px Agreement<br>(Mean: {mean_consistency:.1%})"),
     horizontal_spacing=0.01
 )
 
@@ -253,13 +254,19 @@ right_disp_np = right_disp_tensor.squeeze().numpy().copy()
 left_disp_np[left_disp_np <= 0] = 0
 right_disp_np[right_disp_np <= 0] = 0
 
+# Set a common scale for both heatmaps to ensure colors are comparable
+zmin = 0
+max_disparity = None # Set this to a value like 80 if you want a fixed scale
+zmax = max_disparity if max_disparity is not None else max(left_disp_np.max(), right_disp_np.max())
+
 # Flip the arrays vertically [::-1] because Plotly heatmaps draw from bottom up
 # Disparity corresponds to 'Magma' to match 'Magma_r' for Depth
-fig3.add_trace(go.Heatmap(z=left_disp_np[::-1], colorscale='Magma', showscale=False), row=1, col=1)
+fig3.add_trace(go.Heatmap(z=left_disp_np[::-1], colorscale='Magma', zmin=zmin, zmax=zmax, showscale=False), row=1, col=1)
 
 fig3.add_trace(
     go.Heatmap(
         z=right_disp_np[::-1], colorscale='Magma', 
+        zmin=zmin, zmax=zmax,
         showscale=True, 
         colorbar=dict(
             title=dict(text="Disparity [px]", side="right", font=dict(size=14)), 
@@ -271,9 +278,8 @@ fig3.add_trace(
 )
 
 # Image trace natively draws top-to-bottom, but axes are linked so we must flip the image too
-# Removing the [::-1] flip because linked axes are already handling the orientation 
-# for consistency between Heatmap and Image in this specific setup.
-fig3.add_trace(go.Image(z=overlay), row=1, col=3)
+# We flip the overlay [::-1] to match the Heatmap's bottom-up orientation since axes are shared/linked.
+fig3.add_trace(go.Image(z=overlay[::-1]), row=1, col=3)
 
 # Add matching colorbar for Difference
 ERROR_GREEN = np.array([0, 200, 0])

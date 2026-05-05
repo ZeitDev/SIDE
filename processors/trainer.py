@@ -359,8 +359,11 @@ class Trainer(BaseProcessor):
                         else:
                             with torch.no_grad():
                                 teacher_outputs = kd_teacher(left_images, right_images)[task]
+                        
                         outputs[f'{task}_distillation'] = outputs[task]
                         targets[f'{task}_distillation'] = teacher_outputs
+                        if f'teacher_{task}_confidence' in data:
+                            targets[f'{task}_distillation_confidence'] = data[f'teacher_{task}_confidence'].to(self.device)
                 
             inter_loss, inter_loss_weights, intra_losses, intra_loss_weights, raw_task_losses = self.loss_composer(outputs, targets)
             accumulated_loss = inter_loss / self.accumulation_steps
