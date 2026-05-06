@@ -39,7 +39,8 @@ from utils.helpers import load, upsample_logits
 from data.transforms import build_transforms
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
-setup_environment(skip_cuda=True)
+cuda_device = 1
+setup_environment(skip_cuda=True, cuda_device=cuda_device, delete_temp=True)
 
 from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
@@ -50,6 +51,7 @@ mlflow.pytorch.autolog()
 # %%
 # Dataloader
 config_name = 'segmentation_teacher_multi'
+print(f'Running with config: {config_name}')
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
 with open(os.path.join('configs', 'misc', config_name + '.yaml'), 'r') as f: experiment_config = yaml.safe_load(f)
@@ -111,7 +113,7 @@ helpers.check_dataleakage('test', dataset_test)
 
 # %%
 # model
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device(f'cuda:{cuda_device}')
 torch.cuda.empty_cache()
 
 model_name = 'nvidia/mit-b5' # Huggingface SegFormer
@@ -120,7 +122,7 @@ model = SegformerForSemanticSegmentation.from_pretrained(
     num_labels=config['data']['num_of_classes']['segmentation'],
     ignore_mismatched_sizes=True
 ).to(device)
-print(model.config.semantic_loss_ignore_index) # 255
+#print(model.config.semantic_loss_ignore_index) # 255
 
 # %%
 # Settings

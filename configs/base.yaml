@@ -13,6 +13,7 @@ data:
     disparity: 1
   max_disparity: 512
   focal_length_scale_factor: 1.0
+  confidence_gate: 0.6
 
   transforms:
     train:

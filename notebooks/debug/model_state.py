@@ -28,7 +28,7 @@ setup_environment(skip_cuda=True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
-with open('./configs/ConvNext/MT-KD.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
+with open('./configs/misc/segmentation_teacher_multi.yaml', 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 
 # %%
@@ -56,11 +56,12 @@ model = load(
     decoders=decoders
 ).to(device)
 
-model_state_path = os.path.join('./.temp', 'model_state.pth')
+model_state_path = os.path.join('./.temp_1', 'model_state.pth')
 state_dict = torch.load(model_state_path)
 model.load_state_dict(state_dict['model_state_dict'])
 model.to('cpu')
 model.eval()
+
 # %%
 train_transforms = build_transforms(config, mode='train')
 dataset_class = load(config['data']['dataset'])
@@ -80,17 +81,17 @@ with torch.no_grad():
 signature = infer_signature(signature_input_example.numpy(), signature_output_example)
 
 # %%
-mlflow.set_experiment('debug')
-with mlflow.start_run(run_name='save_broken_model_state2') as run:
+mlflow.set_experiment('segmentation_teacher_multi')
+with mlflow.start_run(run_name='260505:1534_fixed') as run:
     mlflow.pytorch.log_model(
         pytorch_model=model,
-        name=f'best_model_',
+        name='best_model',
         code_paths=['models/'],
         signature=signature
     )
 
 # %%
-tester = Tester(config, run_id='c70171f3deff4290844756fe87f73f23')
+tester = Tester(config, run_id='498d4c0fa5e54c8e934faec579ec6575')
 test_metrics = tester.test()
 [print(f'{k}: {v}') for k, v in test_metrics.items()]
 

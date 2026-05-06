@@ -13,7 +13,7 @@ training:
   optimizer:
     name: torch.optim.AdamW
     params:
-      lr: 2.8e-4
+      lr: 1.0e-4
 
   scheduler:
     name: schedulers.custom.WarmupCosineAnnealingLR
@@ -22,7 +22,7 @@ training:
       total_epochs: 50
       steps_per_epoch: 169
       start_factor: 0.5
-      eta_min: 2.8e-7 # lr / 1000
+      eta_min: 1.0e-7 # lr / 1000
 
   tasks:
     segmentation:

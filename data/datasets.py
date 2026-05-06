@@ -5,11 +5,8 @@ from PIL import Image
 from typing import List, Dict, Any, Optional, Tuple
 
 import torch
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 import albumentations as A
-
-from criterions.disparity import EntropyConfidence
 
 class BaseDataset(Dataset):
     """
@@ -36,8 +33,6 @@ class BaseDataset(Dataset):
         self.class_mappings = None
         self.n_segmentation_classes = self.config['data']['num_of_classes']['segmentation']
         self.focal_length_scale_factor = self.config['data']['focal_length_scale_factor']
-        
-        self.entropy_confidence = EntropyConfidence(c_min=0.3900, c_max=0.8981) # Numbers derived by dataset stats, TODO: move to config
         
         self._get_class_mappings()
         self._load_samples()
@@ -135,7 +130,7 @@ class BaseDataset(Dataset):
                 teacher_disparity_confidence = torch.from_numpy(teacher_disparity_confidence_raw.astype(np.int32)).float() / 65535.0
                 data['teacher_disparity_confidence'] = teacher_disparity_confidence.unsqueeze(0)
                 
-                if data['teacher_disparity_confidence'].mean() < 0.6:
+                if data['teacher_disparity_confidence'].mean() < self.config['data']['confidence_gate']: # 0.0 for no gating, 0.6 for more strict gating
                     data['disparity'] = torch.zeros_like(data['disparity'])
                     data['teacher_disparity'] = torch.zeros_like(data['teacher_disparity'])
         

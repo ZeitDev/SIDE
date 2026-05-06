@@ -19,9 +19,6 @@ from utils.logger import setup_logging, CustomLogger
 logger = cast(CustomLogger, logging.getLogger(__name__))
 logging.getLogger('mlflow.utils.environment').setLevel(logging.ERROR)
 
-
-# TODO: Translation Layer for Segmentation, because of the resolution mismatch between teacher and student
-
 def main():
     try:
         parser = argparse.ArgumentParser(description='SIDE Training and Testing')
