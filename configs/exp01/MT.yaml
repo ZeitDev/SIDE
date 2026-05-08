@@ -1,0 +1,8 @@
+description: Experiment 01 - Baseline / Dynamic Loss Weighting
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+    disparity:
+      enabled: true

@@ -27,7 +27,7 @@ def entropy_confidence(logits, c_min=0, c_max=1, prob_dim=1):
 
 image_records = []
 #for task in ['disparity_128_256_256', 'segmentation_8_256_256', 'segmentation_2_256_256']:
-for task in ['disparity_64_128_128', 'segmentation_2_128_128']:
+for task in ['disparity_64_128_128', 'segmentation_8_128_128', 'segmentation_2_128_128']:
     for mode_name in ['train']:
         mode_path = Path(f'/data/Zeitler/SIDED/EndoVis17/processed/{mode_name}')
         if not mode_path.exists():
@@ -48,7 +48,16 @@ for task in ['disparity_64_128_128', 'segmentation_2_128_128']:
             for pt_file in tqdm(pt_files, desc=f"Collecting confidence {mode_name}/{seq}"):
                 logits = torch.load(pt_file, map_location='cpu', weights_only=True).float()
                 
-                temperatures = [1.0, 1.5, 2.0, 3.0, 4.0]
+                temperatures = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+                #temperatures = [2.2] if 'disparity' in task else [3.31]
+                # if 'disparity' in task:
+                #     temperatures = [1.66]
+                # elif 'segmentation_2' in task:
+                #     temperatures = [3.42]
+                # elif 'segmentation_8' in task:
+                #     temperatures = [3.2]
+                    
+                    
                 for T in temperatures:
                     scaled_logits = logits / T 
     
@@ -77,32 +86,37 @@ print(pivot_summary)
 
 # %%
 '''
-Complete dataset
-Temperature                  1.0       1.5       2.0       3.0       4.0
-Task                                                                    
-disparity_128_256_256   0.773823  0.719746  0.671776  0.572094  0.457019
-segmentation_2_256_256  0.973566  0.948038  0.904616  0.771096  0.622796
-segmentation_8_256_256  0.989641  0.970135  0.911634  0.690573  0.466522
-___
- 
 Train only
-Temperature                  1.0       1.5       2.0       3.0       4.0
-Task                                                                    
-disparity_128_256_256   0.770954  0.715840  0.666788  0.564569  0.447254
-segmentation_2_256_256  0.972196  0.945113  0.899848  0.763570  0.614543
-segmentation_8_256_256  0.991238  0.972873  0.915289  0.695270  0.471549
+Temperature                  1.0       1.5       2.0       2.5       3.0       3.5       4.0
+Task                                                                       
+disparity_128_256_256   0.770954  0.715840  0.666788  0.617503  0.564569  0.507206  0.447254 
+segmentation_2_256_256  0.978072  0.956652  0.911692  0.844661  0.765904  0.685089  0.608310 
+segmentation_8_256_256  0.993996  0.981560  0.937401  0.853292  0.743663  0.628890  0.523107 
 
-disparity_128_256_256 -> 0.72 -> 1.5
-segmentation_2_256_256 -> 0.69  -> 3.5
-segmentation_8_256_256 -> 0.70 -> 3.0
+disparity_128_256_256 -> 1.66
+segmentation_2_256_256 -> 3.41
+segmentation_8_256_256 -> 3.19
 ___
 
 512x512 train only
-Temperature                  1.0       1.5       2.0       3.0       4.0
-Task                                                                    
-disparity_64_128_128    0.814454  0.763736  0.718225  0.627571  0.530494
-segmentation_2_128_128  0.960634  0.928301  0.880438  0.745146  0.599935
+Temperature                  1.0       1.5       2.0       2.5       3.0       3.5       4.0
+Task                                                                       
+disparity_64_128_128    0.814454  0.763736  0.718225  0.673438  0.627571  0.579848  0.530494 
+segmentation_2_128_128  0.965404  0.938410  0.890660  0.823676  0.746705  0.668383  0.594174
+segmentation_8_128_128  0.988556  0.972200  0.923196  0.835277  0.724060  0.609683  0.505468
 
-disparity_64_128_128 -> 0.72 -> 2.0
-segmentation_2_128_128 -> 0.67 -> 3.5
+disparity_64_128_128 -> 2.20
+segmentation_2_128_128 -> 3.30
+segmentation_8_128_128 -> 3.11
 '''
+
+# %%
+T_1 = 3.0
+C_1 = 0.724060
+T_2 = 3.5
+C_2 = 0.609683
+C_target = 0.7
+
+T = T_1 + ((C_target - C_1) * (T_2 - T_1)) / (C_2 - C_1)
+
+print(round(T, 2))

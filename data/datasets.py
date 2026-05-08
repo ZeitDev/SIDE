@@ -213,7 +213,6 @@ class EndoVis17(BaseDataset):
             sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', f'disparity_{n_classes_disparity}_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name.replace('.png', '.pt'))
             sample_paths['teacher_disparity_confidence'] = os.path.join(subset_path, 'teacher', 'disparity_confidence', file_name)
             
-            
         return sample_paths
     
     

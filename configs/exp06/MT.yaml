@@ -1,0 +1,13 @@
+description: Experiment 06 - Fixed Weighting
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+    disparity:
+      enabled: true
+
+  weighting:
+    inter:
+      name: criterions.weighting.Unweighted
+      params: {}

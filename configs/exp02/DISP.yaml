@@ -1,0 +1,9 @@
+description: Experiment 02 - Raw Dataset / No Confidence Gate
+
+training:
+  tasks:
+    disparity:
+      enabled: true
+
+data:
+  confidence_gate: 0.0 # Disable confidence gate to use all samples for disparity training

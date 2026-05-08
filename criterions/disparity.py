@@ -38,10 +38,11 @@ class MaskedSmoothL1Loss(nn.Module):
         return loss
         
 class PixelWiseKLDivLoss(nn.Module):
-    def __init__(self, temperature: float = 1.0):
+    def __init__(self, temperature: float = 1.0, confidence_scaling: bool = True):
         super().__init__()
         self.temperature = temperature
         self.criterion = nn.KLDivLoss(reduction='none', log_target=False)
+        self.confidence_scaling = confidence_scaling
     
     def forward(self, student_logits, teacher_logits, targets, teacher_confidence):
         T = self.temperature
@@ -62,11 +63,9 @@ class PixelWiseKLDivLoss(nn.Module):
         teacher_probabilities = F.softmax(teacher_logits, dim=1)
         
         pixel_loss = self.criterion(student_log_probabilities, teacher_probabilities)
-        weighted_pixel_loss = pixel_loss * teacher_confidence
-        valid_pixel_loss = weighted_pixel_loss * valid.float()
+        if self.confidence_scaling: pixel_loss = pixel_loss * teacher_confidence
+        valid_pixel_loss = pixel_loss * valid.float()
         
         loss = (valid_pixel_loss.sum() / valid.sum()) * (T ** 2)
-        
-        if self.training: self.current_step += 1
         
         return loss

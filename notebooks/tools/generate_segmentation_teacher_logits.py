@@ -22,9 +22,9 @@ setup_environment()
 
 # %%
 # Settings
-run = 'segmentation_teacher_multi/260421:1409/train' # best binary teacher 'segmentation_teacher/260324:1809/train'
-num_classes = 8
-resolution = (1024, 1024)
+run = 'segmentation_teacher_multi/260506:1024/train' # best multi teacher 'segmentation_teacher_multi/260506:1024/train', best binary teacher 'segmentation_teacher_binary/260505:1533/train'
+num_classes = 2 if 'binary' in run else 8
+resolution = 512 # 1024 / 512
 
 # %%
 class EndoVisTeacherDataset(Dataset):
@@ -62,11 +62,11 @@ class EndoVisTeacherDataset(Dataset):
 # %% 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: config = yaml.safe_load(f)
 
-mode = 'val' # 'train' or 'test'
+mode = 'test' # 'train' or 'test'
 
 config['data']['transforms'][mode] = [
     {'name': 'CenterCrop', 'params': {'height': 1024, 'width': 1024}},
-    {'name': 'Resize', 'params': {'height': resolution[0], 'width': resolution[1]}},
+    {'name': 'Resize', 'params': {'height': resolution, 'width': resolution}},
     {'name': 'Normalize', 'params': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}}
 ]
 transform = build_transforms(config, mode=mode)
@@ -107,11 +107,10 @@ for data in tqdm(dataloader):
         #raw_segmentation = torch.argmax(logit_upsampled, dim=1)
         
         image_path = data['image_path'][0]
-        seg_former_res = resolution[0] // 4
+        seg_former_res = resolution // 4
         save_path = image_path.replace('input', 'teacher').replace('left_images', f'segmentation_{num_classes}_{seg_former_res}_{seg_former_res}').replace('.png', '.pt')
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save(logit_save, save_path)
 
 # %%
 
-# %%

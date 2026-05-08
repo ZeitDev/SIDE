@@ -6,7 +6,7 @@ DEFAULT_NAME="exp1"
 
 read -p "Enter experiment name to view (default: $DEFAULT_NAME): " EXPERIMENT_NAME
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-$DEFAULT_NAME}
-TRACKING_DIR="./mlflow/$EXPERIMENT_NAME"
+TRACKING_DIR="./mlruns_experiments/$EXPERIMENT_NAME"
 
 if [ ! -d "$TRACKING_DIR" ]; then
     echo "Error: MLflow tracking folder not found at '$TRACKING_DIR'"

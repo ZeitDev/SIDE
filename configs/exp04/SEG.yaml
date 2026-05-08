@@ -1,0 +1,12 @@
+description: Experiment 04 - Less Student Capacity
+
+training:
+  encoder:
+    name: models.encoders.timm.Encoder
+    params:
+      model_name: convnextv2_nano # nano is not enough capacity for distillation | all: atto, femto, pico, nano, tiny, base, large, huge
+      pretrained: true # pretrained on ImageNet-1k semantic classification
+
+  tasks:
+    segmentation:
+      enabled: true

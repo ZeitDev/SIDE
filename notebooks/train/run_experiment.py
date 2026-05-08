@@ -16,16 +16,9 @@ def main():
     
     configs = [f'configs/{experiment_name}/{config_file}' for config_file in os.listdir(f'configs/{experiment_name}') if config_file.endswith('.yaml')]
 
-    # configs = [
-    #     f'configs/{experiment_name}/SEG.yaml',
-    #     f'configs/{experiment_name}/DISP.yaml',
-    #     f'configs/{experiment_name}/wMT.yaml',
-    #     f'configs/{experiment_name}/wMT-KD.yaml'
-    # ]
+    seeds = [42, 4242, 424242, 42424242, 4242424242] # the meaning of life cant be larger than 32-bit integer overflow after all, right? :D
 
-    seeds = [42, 43, 44, 45, 46]
-
-    mlflow_tracking_dir = f'./mlflow/{experiment_name}'
+    mlflow_tracking_dir = f'./mlruns_experiments/{experiment_name}'
 
     env = os.environ.copy()
     env['MLFLOW_TRACKING_URI'] = f'file:{mlflow_tracking_dir}'

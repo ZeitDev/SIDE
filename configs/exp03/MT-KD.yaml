@@ -1,0 +1,17 @@
+description: Experiment 03 - No Confidence Scaling
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: true
+    disparity:
+      enabled: true
+      distillation:
+        enabled: true
+        criterion:
+          name: criterions.disparity.PixelWiseKLDivLoss
+          params:
+            temperature: 1.66
+            confidence_scaling: false # do not scale loss by teacher's confidence map

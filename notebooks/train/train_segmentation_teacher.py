@@ -50,7 +50,7 @@ mlflow.pytorch.autolog()
 
 # %%
 # Dataloader
-config_name = 'segmentation_teacher_multi'
+config_name = 'segmentation_teacher_binary'
 print(f'Running with config: {config_name}')
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)

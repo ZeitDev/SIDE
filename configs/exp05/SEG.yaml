@@ -1,0 +1,38 @@
+description: Experiment 05 - Less Input Information
+
+data:
+  max_disparity: 256 # disparity is physically tied to input resolution
+  focal_length_scale_factor: 0.5 # focal length scales with input resolution
+
+  transforms:
+    train:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+    test:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+
+training:
+  tasks:
+    segmentation:
+      enabled: true

@@ -20,8 +20,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
 
 # %%
-EXPERIMENT = 'exp3/wMT-KD'
-
+EXPERIMENT = 'exp07/MT-KD' # 
 
 # %%
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)

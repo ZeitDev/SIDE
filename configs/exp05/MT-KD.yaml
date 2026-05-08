@@ -1,0 +1,77 @@
+description: Experiment 05 - Less Input Information
+
+data:
+  max_disparity: 256 # disparity is physically tied to input resolution
+  focal_length_scale_factor: 0.5 # focal length scales with input resolution
+
+  transforms:
+    train:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+    test:
+      - name: CenterCrop
+        params:
+          height: 1024
+          width: 1024
+      - name: Resize
+        params:
+          height: 512
+          width: 512
+      - name: Normalize
+        params:
+          mean: [0.485, 0.456, 0.406]
+          std: [0.229, 0.224, 0.225]
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: true
+        criterion:
+          name: criterions.segmentation.ChannelWiseKLDivLoss
+          params:
+            temperature: 3.11 # match 0.7 confidence threshold for 8x128x128 logits
+    disparity:
+      enabled: true
+      decoder:
+        name: models.decoders.disparity.DisparityDecoder
+        params:
+          max_disparity: 256 # matches FoundationStereo's max disparity
+          intercept_at: 4 # 512 // 4 = 128, match FoundationStereo V'_c at 128x128 resolution
+          intercept_channels: 64 # matching FoundationStereo V'_c logit channels of 64 disparity bins, 256 // 4 = 64
+      distillation:
+        enabled: true
+        criterion:
+          name: criterions.disparity.PixelWiseKLDivLoss
+          params:
+            temperature: 2.20 # match 0.7 confidence threshold for 64x128x128 logits
+            confidence_scaling: true # scale loss by teacher's confidence map
+
+  weighting:
+    intra_segmentation:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher slower
+        teacher_performance: 0.5685
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptDICE_score'
+        metric_is_score: true
+    intra_disparity:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher slower
+        teacher_performance: 0.0283
+        inverse: false
+        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+        metric_is_score: false

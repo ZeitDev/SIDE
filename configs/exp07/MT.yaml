@@ -1,0 +1,12 @@
+description: Experiment 07 - Binary Distillation
+
+data:
+  num_of_classes:
+    segmentation: 2 # instrument + background
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+    disparity:
+      enabled: true
