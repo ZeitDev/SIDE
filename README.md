@@ -38,7 +38,7 @@ To run all experiment configs across multiple seeds and GPUs in parallel, use th
 python notebooks/train/run_all_experiments.py
 ```
 
-This discovers every `configs/exp*/` subfolder, pairs each config with 5 fixed seeds (`42, 4242, ...`), and dispatches runs concurrently across GPUs 0 and 1 via a thread-safe queue — one run per GPU at a time. Each experiment writes to its own MLflow tracking directory (`./mlruns_experiments/{exp_name}`), keeping results isolated per experiment group.
+This discovers every `configs/exp*/` subfolder, pairs each config with 5 fixed seeds (`42, 4242, ...`), and dispatches runs concurrently across GPUs 0 and 1 via a thread-safe queue, one run per GPU at a time. Each experiment writes to its own MLflow tracking directory (`./mlruns_experiments/{exp_name}`), keeping results isolated per experiment group.
 
 Run the test suite at any time:
 
