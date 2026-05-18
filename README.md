@@ -28,9 +28,17 @@ The framework is designed around a single YAML config that fully describes all p
 git clone https://github.com/ZeitDev/SIDE && cd SIDE
 pip install uv && uv sync
 
-uv run main.py --config configs/exp06/MT-KD.yaml   	# Choose different configurations
-mlflow ui           					# view results on 127.0.0.1:5000 in browser
+uv run main.py --config configs/exp06/MT-KD.yaml # Choose different configurations
+mlflow ui # view results on 127.0.0.1:5000 in browser
 ```
+
+To run all experiment configs across multiple seeds and GPUs in parallel, use the batch runner:
+
+```bash
+python notebooks/train/run_all_experiments.py
+```
+
+This discovers every `configs/exp*/` subfolder, pairs each config with 5 fixed seeds (`42, 4242, ...`), and dispatches runs concurrently across GPUs 0 and 1 via a thread-safe queue — one run per GPU at a time. Each experiment writes to its own MLflow tracking directory (`./mlruns_experiments/{exp_name}`), keeping results isolated per experiment group.
 
 Run the test suite at any time:
 
