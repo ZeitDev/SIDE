@@ -211,7 +211,7 @@ class EndoVis17(BaseDataset):
             disparity_logit_resolution = self.target_width // 4
             n_classes_disparity = self.config['data']['max_disparity'] // 4
             sample_paths['teacher_disparity'] = os.path.join(subset_path, 'teacher', f'disparity_{n_classes_disparity}_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name.replace('.png', '.pt'))
-            sample_paths['teacher_disparity_confidence'] = os.path.join(subset_path, 'teacher', 'disparity_confidence', file_name)
+            sample_paths['teacher_disparity_confidence'] = os.path.join(subset_path, 'teacher', f'disparity_confidence_1_{disparity_logit_resolution}_{disparity_logit_resolution}', file_name)
             
         return sample_paths
     

@@ -1,0 +1,39 @@
+description: Experiment 01 - Baseline / Dynamic Loss Weighting
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: true
+    disparity:
+      enabled: true
+      distillation:
+        enabled: true
+
+  weighting:
+    inter:
+      name: criterions.weighting.DynamicTaskPriority
+      params:
+        alpha: 0.2 # Slower reaction
+        gamma: 0.3 # Punish winning task less
+        metric_key_segmentation: 'performance/validation/segmentation/DICE_score/instrument_mean'
+        metric_is_score_segmentation: true
+        metric_key_disparity: 'performance/validation/disparity/AbsRel_rate'
+        metric_is_score_disparity: false
+    intra_segmentation:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher slower
+        teacher_performance: 0.5486
+        inverse: true
+        metric_key: 'performance/validation/misc/interceptDICE_score'
+        metric_is_score: true
+    intra_disparity:
+      name: criterions.weighting.CompetenceDecay
+      params:
+        alpha: 0.1 # Abandon teacher slower
+        teacher_performance: 0.0805
+        inverse: true
+        metric_key: 'performance/validation/misc/interceptAbsRel_rate'
+        metric_is_score: false

@@ -1,4 +1,7 @@
-#
+# Usage
+# tmux new -s zeitler
+# uv run notebooks/train/run_all_experiments.py
+# Detach with Ctrl+B, then D. Re-attach with `tmux attach -t zeitler`
 
 import os
 import time

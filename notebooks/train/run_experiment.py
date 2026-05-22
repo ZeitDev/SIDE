@@ -1,3 +1,8 @@
+# Usage
+# tmux new -s zeitler
+# uv run notebooks/train/run_experiment.py --experiment exp08 --cuda_device 0
+# Detach with Ctrl+B, then D. Re-attach with `tmux attach -t zeitler`
+
 import os
 import time
 import yaml

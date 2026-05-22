@@ -11,13 +11,13 @@ wheels/
 
 # Custom
 cache/
-mlruns/
 logs/
 .temp/
 .temp_*
 external/
-mlflow/
+mlruns*/
 output/
 input/
 mlflow_DEP/
 *.zip
+notebooks/evaluation/storage/

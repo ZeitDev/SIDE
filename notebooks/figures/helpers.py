@@ -2,11 +2,12 @@ import os
 import plotly.express as px
 import cairosvg
 
-def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff=5, fallback=True):
+def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff=5, fallback=True, folder='methods'):
     font_size = 15.5
     width = 600
     family= 'Latin Modern Roman, Computer Modern Roman, serif'
-    base_path = 'notebooks/output/methods/'
+    base_path = f'notebooks/output/{folder}/'
+    os.makedirs(base_path, exist_ok=True)
     
     fig.update_xaxes(title_standoff=standoff, title_font=dict(size=font_size, family=family))
     fig.update_yaxes(title_standoff=standoff, title_font=dict(size=font_size, family=family))
@@ -22,7 +23,7 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
         )
     )
     
-    fig.show(config={'toImageButtonOptions': {'format': 'svg', 'filename': f'notebooks/output/methods/{name}'}})
+    fig.show(config={'toImageButtonOptions': {'format': 'svg', 'filename': f'{base_path}{name}'}})
     if not fallback:
         svg_bytes = fig.to_image(
             format='svg', 

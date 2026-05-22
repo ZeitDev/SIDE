@@ -1,0 +1,22 @@
+description: Experiment 01 - Baseline / Dynamic Loss Weighting
+
+training:
+  tasks:
+    segmentation:
+      enabled: true
+      distillation:
+        enabled: true
+        criterion:
+          name: criterions.segmentation.ChannelWiseKLDivLoss
+          params:
+            temperature: 4.0
+
+    disparity: 
+      enabled: true
+      distillation:
+        enabled: true
+        criterion:
+          name: criterions.disparity.PixelWiseKLDivLoss
+          params:
+            temperature: 4.0
+            confidence_scaling: true # scale loss by teacher's confidence map
