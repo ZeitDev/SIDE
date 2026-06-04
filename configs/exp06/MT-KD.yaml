@@ -1,4 +1,4 @@
-description: Experiment 06 - Fixed Weighting
+description: Experiment 06 - Fixed Literature Weighting
 
 training:
   tasks:
@@ -12,9 +12,6 @@ training:
         enabled: true
 
   weighting: # Shu's et al. 3:1 weighting ratio for distillation (loss weights needs to sum to 2 for comparibility)
-    inter:
-      name: criterions.weighting.Unweighted
-      params: {}
     intra_segmentation:
       name: criterions.weighting.Fixed
       params:

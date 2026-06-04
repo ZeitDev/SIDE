@@ -1,8 +1,4 @@
-description: Experiment 07 - Binary Distillation
-
-data:
-  num_of_classes:
-    segmentation: 2 # instrument + background
+description: Experiment 07 - Fixed Task Weighting
 
 training:
   tasks:
@@ -10,21 +6,12 @@ training:
       enabled: true
       distillation:
         enabled: true
-        criterion:
-          name: criterions.segmentation.ChannelWiseKLDivLoss
-          params:
-            temperature: 3.41 # match 0.7 confidence threshold for 2x256x256 logits
     disparity:
       enabled: true
       distillation:
         enabled: true
 
   weighting:
-    intra_segmentation:
-      name: criterions.weighting.CompetenceDecay
-      params:
-        alpha: 0.1 # Abandon teacher slower
-        teacher_performance: 0.96 # match binary teacher's performance
-        inverse: false
-        metric_key: 'performance/validation/misc/interceptDICE_score'
-        metric_is_score: true
+    inter:
+      name: criterions.weighting.Unweighted
+      params: {}

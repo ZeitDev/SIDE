@@ -3,6 +3,10 @@
 # uv run notebooks/train/run_experiment.py --experiment exp08 --cuda_device 0
 # Detach with Ctrl+B, then D. Re-attach with `tmux attach -t zeitler`
 
+# 06: MT-KD 424242, 4242, 42 finished | MT-KD 42424242, 4242424242 left
+# 07: MT 424242, 4242, 42, finished | MT 42424242, 4242424242 left | MT-KD 42, 4242, 424242, 42424242, 4242424242 left
+
+
 import os
 import time
 import yaml
@@ -23,6 +27,16 @@ def main():
 
     seeds = [42, 4242, 424242, 42424242, 4242424242] # the meaning of life cant be larger than 32-bit integer overflow after all, right? :D
 
+    # * TEMPORARY FIX, as the workstation crashed
+    # completed_seeds = {
+    #     'exp06': {
+    #         'MT-KD': [424242, 4242, 42],
+    #     },
+    #     'exp07': {
+    #         'MT': [424242, 4242, 42],
+    #     }
+    # }
+
     mlflow_tracking_dir = f'./mlruns_experiments/{experiment_name}'
 
     env = os.environ.copy()
@@ -30,6 +44,11 @@ def main():
     
     for config_path in configs:
         for seed in seeds:
+            # * TEMPORARY FIX
+            # if seed in completed_seeds.get(experiment_name, {}).get(os.path.basename(config_path).replace('.yaml', ''), []):
+            #     print(f'Skipping {config_path} with seed {seed} as it is already completed.')
+            #     continue
+            
             print(f'=== Running {config_path} with seed {seed} ===')
             
             with open(config_path, 'r') as f: exp_config = yaml.safe_load(f)

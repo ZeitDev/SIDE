@@ -163,7 +163,7 @@ fig2.update_layout(
 fig2.update_traces(xbins=dict(start=0.0, end=1.0, size=0.02))
 
 from notebooks.figures.helpers import save_figure
-save_figure(fig2, height=320, name='left_right_consistency', lrtb_margin=(45, 10, 20, 0), standoff=0)
+#save_figure(fig2, height=320, name='left_right_consistency', lrtb_margin=(45, 10, 20, 0), standoff=0)
 
 # %%
 # Process visualization for Sequence 1 using Plotly
@@ -279,7 +279,7 @@ fig3.add_trace(
 
 # Image trace natively draws top-to-bottom, but axes are linked so we must flip the image too
 # We flip the overlay [::-1] to match the Heatmap's bottom-up orientation since axes are shared/linked.
-fig3.add_trace(go.Image(z=overlay[::-1]), row=1, col=3)
+fig3.add_trace(go.Image(z=overlay), row=1, col=3)
 
 # Add matching colorbar for Difference
 ERROR_GREEN = np.array([0, 200, 0])

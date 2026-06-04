@@ -5,6 +5,7 @@ class DisparityMetric:
     def __init__(self, max_disparity: float = 512, device: torch.device = torch.device('cpu')):
         self.device = device
         self.max_disparity = max_disparity
+        self.metric_scale = 512.0 / max_disparity # ! Quick HACK for thesis submission, clean this up later!
         
         self.total_error = torch.tensor(0.0, device=self.device)
         self.total_valid_pixels = torch.tensor(0.0, device=self.device)
@@ -45,13 +46,13 @@ class EPE(DisparityMetric):
         return epe
 
     def compute(self) -> Dict[str, float]:
-        return {'EPE_px': (self.total_error / self.total_valid_pixels).item()}
+        return {'EPE_px': (self.total_error / self.total_valid_pixels).item() * self.metric_scale}
 
 
 class Bad3(DisparityMetric):
     def get_batch_error_sum(self, predictions: torch.Tensor, targets: torch.Tensor, valid_mask: torch.Tensor, baseline: torch.Tensor, focal_length: torch.Tensor) -> torch.Tensor:
         diff = torch.abs(predictions - targets)
-        bad_pixels = ((diff > 3) & valid_mask).float().sum()
+        bad_pixels = (((diff * self.metric_scale) > 3) & valid_mask).float().sum()
         return bad_pixels
 
     def compute(self) -> Dict[str, float]:

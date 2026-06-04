@@ -25,7 +25,9 @@ for exp_folder in exp_folders:
 
     experiments = client.search_experiments()
     for experiment in experiments:
+        exp_id = os.path.basename(exp_folder)
         if experiment.name == 'Default': continue # skip empty default experiment
+        if exp_id in ['exp05_DEP', 'exp06_DEP']: continue 
         print(f'Loading from tracking URL: {exp_folder} -> experiment: {experiment.name} (ID: {experiment.experiment_id})')
             
         runs = client.search_runs(experiment_ids=[experiment.experiment_id])
@@ -35,13 +37,14 @@ for exp_folder in exp_folders:
             if '/' not in run_name: continue # skip parent with no information
                 
             # general meta data
-            identifier = f'{os.path.basename(exp_folder)}/{experiment.name}/{run_name}'
+            identifier = f'{exp_id}/{experiment.name}/{run_name}'
             run_info = {
                 'identifier': identifier,
-                'experiment': os.path.basename(exp_folder),
+                'experiment': exp_id,
                 'config': experiment.name,
                 'run_name': run_name,
                 'mode': run_name.split('/')[-1],
+                'status': run.info.status,
             }
                 
             # final metrics values
@@ -101,5 +104,31 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'wb') as f:
     pickle.dump(data_df, f)
     
 print('Dataframes saved to ./notebooks/evaluation/storage/dataframes.pkl')
+
+# # %%
+# import os, glob
+# from mlflow.tracking import MlflowClient
+
+# mlflow_base_path = './mlruns_experiments'
+# exp_folders = sorted(glob.glob(os.path.join(mlflow_base_path, 'exp*')))
+
+# non_finished = []
+
+# for exp_folder in exp_folders:
+#     tracking_uri = f'file://{os.path.abspath(exp_folder)}'
+#     client = MlflowClient(tracking_uri)
+    
+#     # Loop over all experiments in this folder
+#     for experiment in client.search_experiments():
+#         runs = client.search_runs(experiment_ids=[experiment.experiment_id])
+#         non_finished.extend([
+#             {'run_id': r.info.run_id, 'experiment': experiment.name, 'status': r.info.status} 
+#             for r in runs if r.info.status != 'FINISHED'
+#         ])
+
+# print(f"Found {len(non_finished)} non-completed runs.")
+# if non_finished:
+#     for run in non_finished:
+#         print(run)
 
 # %%

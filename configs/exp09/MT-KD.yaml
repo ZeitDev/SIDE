@@ -1,4 +1,4 @@
-description: Experiment 01 - Baseline / Dynamic Loss Weighting
+description: Experiment 09 - Literature Temperature Scaling
 
 training:
   tasks:

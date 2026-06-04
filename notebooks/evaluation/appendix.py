@@ -63,7 +63,7 @@ for short_name, (_, _, _, task_type) in metrics_mapping_app.items():
     else:
         melted_app = melted_app[~((melted_app['Metric'] == short_name) & (melted_app['config'] == 'SEG'))]
 
-melted_app['config'] = melted_app['config'].replace({'SEG': 'Single-Task', 'DISP': 'Single-Task'})
+melted_app['config'] = melted_app['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
 pivot_app = melted_app.pivot(index=['Metric', 'experiment'], columns='config', values='Value')
 
 pivot_app.index = pivot_app.index.set_levels(
@@ -76,7 +76,7 @@ pivot_app = pivot_app.reindex(app_metrics_order, level=0)
 pivot_app.index.names = ['Metric', 'ID']
 pivot_app.columns.name = None
 
-desired_order_app = ['Single-Task', 'MT', 'MT-KD']
+desired_order_app = ['ST', 'MT', 'MT-KD']
 ordered_cols_app = [c for c in desired_order_app if c in pivot_app.columns]
 remaining_cols_app = [c for c in pivot_app.columns if c not in ordered_cols_app]
 pivot_app = pivot_app[ordered_cols_app + remaining_cols_app]
@@ -84,6 +84,7 @@ pivot_app = pivot_app[ordered_cols_app + remaining_cols_app]
 print(pivot_app.to_latex(
     escape=False, 
     index=True, 
+    longtable=True, 
     multirow=True, 
     index_names=True,
     column_format='ll' + 'c' * len(pivot_app.columns)

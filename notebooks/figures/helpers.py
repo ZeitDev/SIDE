@@ -1,11 +1,15 @@
 import os
+import shutil
+import subprocess
 import plotly.express as px
 import cairosvg
 
-def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff=5, fallback=True, folder='methods'):
+def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff=5, fallback=True, folder='methods', skip_sync=False):
     font_size = 15.5
     width = 600
-    family= 'Latin Modern Roman, Computer Modern Roman, serif'
+    family = 'Latin Modern Roman, Computer Modern Roman, serif'
+    
+    # 1. Primary local output path
     base_path = f'notebooks/output/{folder}/'
     os.makedirs(base_path, exist_ok=True)
     
@@ -24,18 +28,31 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
     )
     
     fig.show(config={'toImageButtonOptions': {'format': 'svg', 'filename': f'{base_path}{name}'}})
-    if not fallback:
-        svg_bytes = fig.to_image(
-            format='svg', 
-            width=width,
-            height=height,
-        )
-        cairosvg.svg2pdf(bytestring=svg_bytes, write_to=os.path.join(base_path, f'{name}.pdf'))
-    else:
-        fig.write_image(
-            os.path.join(base_path, f'{name}.png'),
-            width=width,
-            height=height,
-            scale=3
-        )
     
+    # 2. Save the file locally
+    generated_file_path = ""
+    if not fallback:
+        svg_bytes = fig.to_image(format='svg', width=width, height=height)
+        generated_file_path = os.path.join(base_path, f'{name}.pdf')
+        cairosvg.svg2pdf(bytestring=svg_bytes, write_to=generated_file_path)
+    else:
+        generated_file_path = os.path.join(base_path, f'{name}.png')
+        fig.write_image(generated_file_path, width=width, height=height, scale=3)
+        
+    # 3. Automatically sync to Overleaf if a repo path is provided
+    if not skip_sync: sync_to_overleaf(generated_file_path, folder, name)
+
+
+def sync_to_overleaf(source_file, folder, name):
+    """Copies the generated image to a local Overleaf Git repo and pushes it."""
+    # Define and create target directory inside the Overleaf repository
+    repo_path = '/data/Zeitler/masterthesis'
+    target_dir = os.path.join(repo_path, 'figures', folder)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Copy file over
+    filename = os.path.basename(source_file)
+    target_file = os.path.join(target_dir, filename)
+    shutil.copy2(source_file, target_file)
+    
+    #subprocess.run(['git', 'add', target_file], cwd=repo_path, check=True, capture_output=True)
