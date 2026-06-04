@@ -21,3 +21,4 @@ input/
 mlflow_DEP/
 *.zip
 notebooks/evaluation/storage/
+notebooks/output/
