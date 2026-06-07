@@ -100,10 +100,15 @@ data_df = {
     'historic': df_historic
 }
 
-with open('./notebooks/evaluation/storage/dataframes.pkl', 'wb') as f:
-    pickle.dump(data_df, f)
+# with open('./notebooks/evaluation/storage/dataframes.pkl', 'wb') as f:
+#     pickle.dump(data_df, f)
     
 print('Dataframes saved to ./notebooks/evaluation/storage/dataframes.pkl')
+
+# %%
+
+df_historic.to_csv('./notebooks/evaluation/storage/historic.csv', index=False)
+print('Historic dataframe saved to ./notebooks/evaluation/storage/historic.csv')
 
 # # %%
 # import os, glob
