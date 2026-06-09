@@ -177,8 +177,8 @@ latex_output = pivot_combined.to_latex(
 
 print(latex_output)
 
-# %% H01F01_Boxplot_E01ConfigStability (ST vs. MT vs. MT-KD of Exp01)
-# H01F01_Boxplot_ConfigStability (ST vs. MT vs. MT-KD of Exp01)
+# %% H01F01_Barplot_E01ConfigStability (ST vs. MT vs. MT-KD of Exp01)
+# H01F01_Barplot_ConfigStability (ST vs. MT vs. MT-KD of Exp01)
 
 target_exp = 'exp01'
 df_target = df_bench[df_bench['experiment'] == target_exp].copy()
@@ -207,52 +207,47 @@ df_disp_box['config'] = df_disp_box['config'].replace({'DISP': 'ST'})
 df_disp_box['config'] = pd.Categorical(df_disp_box['config'], categories=['ST', 'MT', 'MT-KD'], ordered=True)
 df_disp_box = df_disp_box.sort_values('config')
 
-fig_box = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"))
+fig_bar = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
 
 for config in ['ST', 'MT', 'MT-KD']:
-    fig_box.add_trace(go.Box(
-        y=df_seg_box[df_seg_box['config'] == config][seg_metric],
+    seg_data = df_seg_box[df_seg_box['config'] == config][seg_metric]
+    disp_data = df_disp_box[df_disp_box['config'] == config][disp_metric]
+    
+    fig_bar.add_trace(go.Bar(
+        x=[seg_data.mean()],
+        y=[config],
+        error_x=dict(type='data', array=[seg_data.std()]),
+        orientation='h',
         name=config,
         marker_color=colors_dict[config],
-        boxpoints='all',   # Show all raw data points
         showlegend=False
     ), row=1, col=1)
     
-    fig_box.add_trace(go.Box(
-        y=df_disp_box[df_disp_box['config'] == config][disp_metric],
+    fig_bar.add_trace(go.Bar(
+        x=[disp_data.mean()],
+        y=[config],
+        error_x=dict(type='data', array=[disp_data.std()]),
+        orientation='h',
         name=config,
         marker_color=colors_dict[config],
-        boxpoints='all',
         showlegend=False
     ), row=1, col=2)
 
-fig_box.update_layout(
+fig_bar.update_layout(
     template='plotly_white',
     height=400,
 )
-fig_box.update_yaxes(title_text=f"{seg_meta['label']} ({seg_meta['arrow']})", row=1, col=1)
-fig_box.update_yaxes(title_text=f"{disp_meta['label']} ({disp_meta['arrow']})", row=1, col=2)
-fig_box.update_xaxes(title_text="Experiment 01 Config", row=1, col=1)
-fig_box.update_xaxes(title_text="Experiment 01 Config", row=1, col=2)
+fig_bar.update_xaxes(title_text=f"{seg_meta['label']} ({seg_meta['arrow']})", rangemode='tozero', row=1, col=1)
+fig_bar.update_xaxes(
+    title_text=f"{disp_meta['label']} ({disp_meta['arrow']})", 
+    rangemode='tozero', 
+    autorange="reversed" if disp_meta['arrow'] == '↓' else None,
+    row=1, col=2
+)
+fig_bar.update_yaxes(title_text="Experiment 01 Config", autorange="reversed", row=1, col=1)
+fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2) # Hide tick labels and title
 
-# Calculate equivalent spans to make metrics have the exact same visual scale (% per pixel)
-seg_min, seg_max = df_seg_box[seg_metric].min(), df_seg_box[seg_metric].max()
-disp_min, disp_max = df_disp_box[disp_metric].min(), df_disp_box[disp_metric].max()
-
-# Find the maximum span between the two metrics and pad it slightly (e.g. 5%)
-max_span = max(seg_max - seg_min, disp_max - disp_min) * 1.05
-
-seg_center = (seg_max + seg_min) / 2
-disp_center = (disp_max + disp_min) / 2
-
-# Apply the strict ranges and reverse if arrow is down so "up" is always better
-fig_box.update_yaxes(range=[seg_center - max_span/2, seg_center + max_span/2], row=1, col=1)
-if disp_meta['arrow'] == '↓':
-    fig_box.update_yaxes(range=[disp_center + max_span/2, disp_center - max_span/2], row=1, col=2)
-else:
-    fig_box.update_yaxes(range=[disp_center - max_span/2, disp_center + max_span/2], row=1, col=2)
-
-save_figure(fig_box, name='H01F01_Boxplot_E01ConfigStability', lrtb_margin=(40, 0, 20, 0), folder='results', skip_sync=skip_sync)
+save_figure(fig_bar, name='H01F01_Barplot_E01ConfigStability', lrtb_margin=(40, 20, 20, 0), folder='results', skip_sync=skip_sync)
 
 # %% H01F02_Dumbbell_ConfigComparison (ST vs. MT vs. MT-KD)
 # H01F02_Dumbbell_ConfigComparison (ST vs. MT vs. MT-KD)
@@ -260,7 +255,7 @@ save_figure(fig_box, name='H01F01_Boxplot_E01ConfigStability', lrtb_margin=(40, 
 fig_dumb = make_subplots(
     rows=1, cols=2, 
     subplot_titles=("Segmentation", "Disparity"),
-    horizontal_spacing=0.1
+    horizontal_spacing=0.05
 )
 
 # Legend-only dummy traces for full opacity
@@ -276,27 +271,32 @@ for config in ['ST', 'MT', 'MT-KD']:
 
 # For Segmentation (Col 1)
 for i, exp in enumerate(experiments):
-    row_vals = seg_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
-    if not row_vals.empty:
-        fig_dumb.add_trace(go.Scatter(
-            x=[row_vals.min(), row_vals.max()],
-            y=[y_labels[i], y_labels[i]],
-            mode='lines',
-            line=dict(color='gray', width=2),
-            showlegend=False,
-            hoverinfo='skip'
-        ), row=1, col=1)
+    is_fb = seg_is_fallback.loc[exp, ['ST', 'MT', 'MT-KD']]
+    if not is_fb.all(): # Only plot line if at least one config is NOT a fallback
+        row_vals = seg_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
+        if not row_vals.empty:
+            fig_dumb.add_trace(go.Scatter(
+                x=[row_vals.min(), row_vals.max()],
+                y=[y_labels[i], y_labels[i]],
+                mode='lines',
+                line=dict(color='gray', width=2),
+                showlegend=False,
+                hoverinfo='skip'
+            ), row=1, col=1)
 
 for config in ['ST', 'MT', 'MT-KD']:
+    # Show markers only for experiments that have at least one actual (non-fallback) measurement
+    # This avoids rows filled entirely with ghost/baseline data
+    has_actual = ~seg_is_fallback.all(axis=1)
     fig_dumb.add_trace(go.Scatter(
-        x=seg_matrix[config],
-        y=y_labels,
+        x=seg_matrix.loc[has_actual, config],
+        y=[y_labels[i] for i, actual in enumerate(has_actual) if actual],
         mode='markers',
         name=config,
         marker=dict(
             color=colors_dict[config], 
             size=10,
-            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in seg_is_fallback[config]]
+            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in seg_is_fallback.loc[has_actual, config]]
         ),
         legendgroup=config,
         showlegend=False
@@ -304,27 +304,30 @@ for config in ['ST', 'MT', 'MT-KD']:
 
 # For Disparity (Col 2)
 for i, exp in enumerate(experiments):
-    row_vals = disp_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
-    if not row_vals.empty:
-        fig_dumb.add_trace(go.Scatter(
-            x=[row_vals.min(), row_vals.max()],
-            y=[y_labels[i], y_labels[i]],
-            mode='lines',
-            line=dict(color='gray', width=2),
-            showlegend=False,
-            hoverinfo='skip'
-        ), row=1, col=2)
+    is_fb = disp_is_fallback.loc[exp, ['ST', 'MT', 'MT-KD']]
+    if not is_fb.all():
+        row_vals = disp_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
+        if not row_vals.empty:
+            fig_dumb.add_trace(go.Scatter(
+                x=[row_vals.min(), row_vals.max()],
+                y=[y_labels[i], y_labels[i]],
+                mode='lines',
+                line=dict(color='gray', width=2),
+                showlegend=False,
+                hoverinfo='skip'
+            ), row=1, col=2)
 
 for config in ['ST', 'MT', 'MT-KD']:
+    has_actual = ~disp_is_fallback.all(axis=1)
     fig_dumb.add_trace(go.Scatter(
-        x=disp_matrix[config],
-        y=y_labels,
+        x=disp_matrix.loc[has_actual, config],
+        y=[y_labels[i] for i, actual in enumerate(has_actual) if actual],
         mode='markers',
         name=config,
         marker=dict(
             color=colors_dict[config], 
             size=10,
-            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in disp_is_fallback[config]]
+            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in disp_is_fallback.loc[has_actual, config]]
         ),
         legendgroup=config,
         showlegend=False
@@ -340,9 +343,22 @@ fig_dumb.update_layout(
 
 fig_dumb.update_xaxes(title_text=f"{seg_meta['label']} ({seg_meta['arrow']})", row=1, col=1)
 fig_dumb.update_xaxes(title_text=f"{disp_meta['label']} ({disp_meta['arrow']})", autorange="reversed" if disp_meta['arrow'] == '↓' else None, row=1, col=2)
-fig_dumb.update_yaxes(title_text="Experiment", row=1, col=1)
-fig_dumb.update_yaxes(autorange="reversed", row=1, col=1)
-fig_dumb.update_yaxes(autorange="reversed", row=1, col=2)
+fig_dumb.update_yaxes(
+    title_text="Experiment", 
+    type='category',
+    categoryorder='array',
+    categoryarray=y_labels,
+    autorange="reversed", 
+    row=1, col=1
+)
+fig_dumb.update_yaxes(
+    showticklabels=False, 
+    type='category',
+    categoryorder='array',
+    categoryarray=y_labels,
+    autorange="reversed", 
+    row=1, col=2
+)
 
 save_figure(fig_dumb, name='H01F02_Dumbbell_ConfigComparison', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
 
@@ -356,7 +372,7 @@ disp_delta = disp_matrix.sub(disp_matrix['ST'], axis=0)
 fig_heat = make_subplots(
     rows=1, cols=2, 
     subplot_titles=("Segmentation", "Disparity"),
-    horizontal_spacing=0.25
+    horizontal_spacing=0.2
 )
 
 # Overlay setup: Translucent white for fallback cells (so it looks translucent instead of grey)
@@ -373,7 +389,7 @@ fig_heat.add_trace(go.Heatmap(
     colorscale='RdBu', zmid=0,
     text=np.round(seg_delta.values, 2), texttemplate="%{text}",
     showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=0.38, title=f"Δ {seg_meta['short']}<br>(pp, {seg_meta['arrow']})", dtick=2)
+    colorbar=dict(x=0.4, title=f"Δ {seg_meta['short']}<br>(pp, {seg_meta['arrow']})", dtick=2)
 ), row=1, col=1)
 
 fig_heat.add_trace(go.Heatmap(
@@ -393,7 +409,7 @@ fig_heat.add_trace(go.Heatmap(
     colorscale='RdBu', zmin=-disp_max_bound, zmax=disp_max_bound,
     text=np.round(disp_delta.values, 2), texttemplate="%{text}",
     showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=1.02, title=f"Δ {disp_meta['short']}<br>(pp, {disp_meta['arrow']})", tickmode='array', tickvals=tick_vals, ticktext=[(v if disp_meta['arrow'] == '↑' else -v) for v in tick_vals])
+    colorbar=dict(x=1.0, title=f"Δ {disp_meta['short']}<br>(pp, {disp_meta['arrow']})", tickmode='array', tickvals=tick_vals, ticktext=[(v if disp_meta['arrow'] == '↑' else -v) for v in tick_vals])
 ), row=1, col=2)
 
 fig_heat.add_trace(go.Heatmap(
@@ -410,10 +426,10 @@ fig_heat.update_layout(
 
 # Axis titles
 fig_heat.update_xaxes(title_text="Config")
-fig_heat.update_yaxes(title_text="Experiment", row=1, col=1)
+fig_heat.update_yaxes(title_text="Experiment", autorange="reversed", row=1, col=1)
 
-# Reverse y-axis to put Exp 01 at the top
-fig_heat.update_yaxes(autorange="reversed")
+# Reverse y-axis to put Exp 01 at the top and hide tick labels on right plot
+fig_heat.update_yaxes(showticklabels=False, autorange="reversed", row=1, col=2)
 
 save_figure(fig_heat, name='H01F03_Heatmap_ConfigComparison', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
 

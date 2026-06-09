@@ -13,8 +13,26 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
     base_path = f'notebooks/output/{folder}/'
     os.makedirs(base_path, exist_ok=True)
     
-    fig.update_xaxes(title_standoff=standoff, title_font=dict(size=font_size, family=family))
-    fig.update_yaxes(title_standoff=standoff, title_font=dict(size=font_size, family=family))
+    fig.update_xaxes(title_standoff=standoff, title_font=dict(size=font_size+2, family=family), tickfont=dict(size=font_size, family=family))
+    fig.update_yaxes(title_standoff=standoff, title_font=dict(size=font_size+2, family=family), tickfont=dict(size=font_size, family=family))
+    fig.update_annotations(font=dict(size=font_size+2, family=family)) # Subplot titles
+    
+    # Standardize Colorbars if they exist
+    fig.update_coloraxes(
+        colorbar_title_font_size=font_size+2,
+        colorbar_title_font_family=family,
+        colorbar_tickfont_size=font_size,
+        colorbar_tickfont_family=family
+    )
+    
+    for trace in fig.data:
+        if 'colorbar' in trace:
+            trace.update(
+                colorbar_title_font_size=font_size+2,
+                colorbar_title_font_family=family,
+                colorbar_tickfont_size=font_size,
+                colorbar_tickfont_family=family
+            )
 
     fig.update_layout(
         width=width,
@@ -24,6 +42,10 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
             family=family,
             size=font_size,
             color='black'
+        ),
+        legend=dict(
+            title_font=dict(family=family, size=font_size+2),
+            font=dict(family=family, size=font_size)
         )
     )
     
