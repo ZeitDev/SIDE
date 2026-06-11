@@ -17,12 +17,12 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Appendix Table 1 - Performance Summary All metrics
 
 metrics_mapping_app = {
-    'DICE ($\\uparrow$)': ('metric.best_combined/performance/testing/segmentation/DICE_score/instrument_mean', 'metric.best_segmentation/performance/testing/segmentation/DICE_score/instrument_mean', True, 'seg'),
-    'IoU ($\\uparrow$)': ('metric.best_combined/performance/testing/segmentation/IoU_score/instrument_mean', 'metric.best_segmentation/performance/testing/segmentation/IoU_score/instrument_mean', True, 'seg'),
-    'AbsRel ($\\downarrow$)': ('metric.best_combined/performance/testing/disparity/AbsRel_rate', 'metric.best_disparity/performance/testing/disparity/AbsRel_rate', False, 'disp'),
-    'Bad3 ($\\downarrow$)': ('metric.best_combined/performance/testing/disparity/Bad3_rate', 'metric.best_disparity/performance/testing/disparity/Bad3_rate', False, 'disp'),
-    'EPE ($\\downarrow$)': ('metric.best_combined/performance/testing/disparity/EPE_px', 'metric.best_disparity/performance/testing/disparity/EPE_px', False, 'disp'),
-    'MAE ($\\downarrow$)': ('metric.best_combined/performance/testing/disparity/MAE_mm', 'metric.best_disparity/performance/testing/disparity/MAE_mm', False, 'disp')
+    'DICE [\\% $\\uparrow$]': ('metric.best_combined/performance/testing/segmentation/DICE_score/instrument_mean', 'metric.best_segmentation/performance/testing/segmentation/DICE_score/instrument_mean', True, 'seg'),
+    'IoU [\\% $\\uparrow$]': ('metric.best_combined/performance/testing/segmentation/IoU_score/instrument_mean', 'metric.best_segmentation/performance/testing/segmentation/IoU_score/instrument_mean', True, 'seg'),
+    'AbsRel [\\% $\\downarrow$]': ('metric.best_combined/performance/testing/disparity/AbsRel_rate', 'metric.best_disparity/performance/testing/disparity/AbsRel_rate', False, 'disp'),
+    'Bad3 [\\% $\\downarrow$]': ('metric.best_combined/performance/testing/disparity/Bad3_rate', 'metric.best_disparity/performance/testing/disparity/Bad3_rate', False, 'disp'),
+    'EPE [px $\\downarrow$]': ('metric.best_combined/performance/testing/disparity/EPE_px', 'metric.best_disparity/performance/testing/disparity/EPE_px', False, 'disp'),
+    'MAE [mm $\\downarrow$]': ('metric.best_combined/performance/testing/disparity/MAE_mm', 'metric.best_disparity/performance/testing/disparity/MAE_mm', False, 'disp')
 }
 
 df_app = df_final.copy()
@@ -42,16 +42,22 @@ for short_name, (comb_col, sing_col, higher_is_better, task_type) in metrics_map
         df_app[short_name] = df_app[sing_col]
         active_metrics.append(short_name)
 
-grouped_app = df_app.groupby(['experiment', 'config'])[active_metrics].agg(['mean', 'std']).reset_index()
+grouped_app = df_app.groupby(['experiment', 'config'])[active_metrics].agg(['median', 'min', 'max']).reset_index()
 
 melted_app_list = []
 for idx, row in grouped_app.iterrows():
     exp = row[('experiment', '')]
     cfg = row[('config', '')]
     for m in active_metrics:
-        mean_val = row[(m, 'mean')]
-        std_val = row[(m, 'std')]
-        val_str = f"{mean_val:05.2f} ± {std_val:05.2f}" if pd.notna(mean_val) else "-"
+        med = row[(m, 'median')]
+        vmin = row[(m, 'min')]
+        vmax = row[(m, 'max')]
+        
+        if pd.notna(med):
+            val_str = f"${med:05.2f}_{{-{med - vmin:05.2f}}}^{{+{vmax - med:05.2f}}}$"
+        else:
+            val_str = "-"
+            
         melted_app_list.append({'experiment': exp, 'config': cfg, 'Metric': m, 'Value': val_str})
 
 melted_app = pd.DataFrame(melted_app_list)
@@ -81,6 +87,7 @@ ordered_cols_app = [c for c in desired_order_app if c in pivot_app.columns]
 remaining_cols_app = [c for c in pivot_app.columns if c not in ordered_cols_app]
 pivot_app = pivot_app[ordered_cols_app + remaining_cols_app]
 
+print("\\renewcommand{{\\arraystretch}}{{1.4}}")
 print(pivot_app.to_latex(
     escape=False, 
     index=True, 

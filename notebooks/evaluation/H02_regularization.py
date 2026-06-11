@@ -25,7 +25,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 
 # %% Settings
 # Settings
-skip_sync = False
+skip_sync = True
 
 # %% Data preperation
 # Data preperation
@@ -52,14 +52,14 @@ df_hist_filtered['epoch'] = df_hist_filtered['step'] / steps_per_epoch
 metrics_dict = {
     'segmentation': {
         'val': 'performance/validation/segmentation/DICE_score/instrument_mean',
-        'short': 'Validation DICE Score',
-        'arrow': '↑',
+        'short': 'DICE Score',
+        'arrow': '% ↑',
         'st_config': 'SEG'
     },
     'disparity': {
         'val': 'performance/validation/disparity/AbsRel_rate',
-        'short': 'Validation AbsRel Rate',
-        'arrow': '↓',
+        'short': 'AbsRel Rate',
+        'arrow': '% ↓',
         'st_config': 'DISP'
     }
 }
@@ -101,7 +101,7 @@ def add_metric_traces(fig, df, metric_meta, col):
         # Filter out early epochs (start at epoch 2)
         df_val = df_val[df_val['epoch'] >= 2]
         
-        grouped_val = df_val.groupby('epoch')['value'].agg(['mean', 'std']).reset_index()
+        grouped_val = df_val.groupby('epoch')['value'].agg(['median', 'min', 'max']).reset_index()
         
         if grouped_val.empty:
             continue
@@ -111,7 +111,7 @@ def add_metric_traces(fig, df, metric_meta, col):
         # Val Ribbon
         fig.add_trace(go.Scatter(
             y=list(grouped_val['epoch']) + list(grouped_val['epoch'])[::-1],
-            x=list(grouped_val['mean'] + grouped_val['std']) + list(grouped_val['mean'] - grouped_val['std'])[::-1],
+            x=list(grouped_val['max']) + list(grouped_val['min'])[::-1],
             fill='toself',
             fillcolor=colors[color_key]['fill'],
             line=dict(color='rgba(255,255,255,0)'),
@@ -122,7 +122,7 @@ def add_metric_traces(fig, df, metric_meta, col):
         # Val Line
         fig.add_trace(go.Scatter(
             y=grouped_val['epoch'],
-            x=grouped_val['mean'],
+            x=grouped_val['median'],
             mode='lines',
             line=dict(color=colors[color_key]['val'], width=2),
             name=display_name,
@@ -141,11 +141,11 @@ fig.update_layout(
     legend_title_text="Experiment 01 Config"
 )
 
-fig.update_yaxes(title_text="Epoch", tickvals=[2, 10, 20, 30, 40, 50], row=1, col=1)
+fig.update_yaxes(title_text="Validation Epoch", tickvals=[2, 10, 20, 30, 40, 50], row=1, col=1)
 fig.update_yaxes(tickvals=[2, 10, 20, 30, 40, 50], showticklabels=False, row=1, col=2)
-fig.update_xaxes(title_text=f"{metrics_dict['segmentation']['short']} ({metrics_dict['segmentation']['arrow']})", row=1, col=1)
+fig.update_xaxes(title_text=f"{metrics_dict['segmentation']['short']} [{metrics_dict['segmentation']['arrow']}]", row=1, col=1)
 fig.update_xaxes(
-    title_text=f"{metrics_dict['disparity']['short']} ({metrics_dict['disparity']['arrow']})", 
+    title_text=f"{metrics_dict['disparity']['short']} [{metrics_dict['disparity']['arrow']}]", 
     autorange="reversed",
     row=1, col=2
 )
@@ -167,12 +167,12 @@ metrics_dict_f02 = {
     'segmentation': {
         'best': 'metric.best/combined/performance_validation_segmentation_DICE_score_instrument_mean',
         'intercept': 'metric.best/combined/performance_validation_misc_interceptDICE_score',
-        'y_label': "DICE Score (↑)"
+        'y_label': "DICE Score [% ↑]"
     },
     'disparity': {
         'best': 'metric.best/combined/performance_validation_disparity_AbsRel_rate',
         'intercept': 'metric.best/combined/performance_validation_misc_interceptAbsRel_rate',
-        'y_label': "AbsRel Rate (↓)"
+        'y_label': "AbsRel Rate [% ↓]"
     }
 }
 
@@ -187,23 +187,27 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
     for config in target_configs:
         config_data = df_final_filtered[df_final_filtered['config'] == config]
         
-        intercept_mean = config_data[intercept_col].mean()
-        intercept_std = config_data[intercept_col].std()
+        intercept_median = config_data[intercept_col].median()
+        intercept_min = config_data[intercept_col].min()
+        intercept_max = config_data[intercept_col].max()
         
-        best_mean = config_data[best_col].mean()
-        best_std = config_data[best_col].std()
+        best_median = config_data[best_col].median()
+        best_min = config_data[best_col].min()
+        best_max = config_data[best_col].max()
         
         showlegend = True if col == 1 else False
         
         fig2.add_trace(go.Scatter(
             y=stages,
-            x=[intercept_mean, best_mean],
+            x=[intercept_median, best_median],
             mode='lines+markers',
             line=dict(color=colors[config]['val'], width=2),
             marker=dict(color=colors[config]['val'], size=8),
             error_x=dict(
                 type='data',
-                array=[intercept_std, best_std],
+                symmetric=False,
+                array=[intercept_max - intercept_median, best_max - best_median],
+                arrayminus=[intercept_median - intercept_min, best_median - best_min],
                 visible=True,
                 color=colors[config]['val'],
                 thickness=1.5,

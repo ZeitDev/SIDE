@@ -13,8 +13,12 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
     base_path = f'notebooks/output/{folder}/'
     os.makedirs(base_path, exist_ok=True)
     
-    fig.update_xaxes(title_standoff=standoff, title_font=dict(size=font_size+2, family=family), tickfont=dict(size=font_size, family=family))
-    fig.update_yaxes(title_standoff=standoff, title_font=dict(size=font_size+2, family=family), tickfont=dict(size=font_size, family=family))
+    axis_kwargs = dict(title_font=dict(size=font_size+2, family=family), tickfont=dict(size=font_size, family=family))
+    if standoff is not None:
+        axis_kwargs['title_standoff'] = standoff
+        
+    fig.update_xaxes(**axis_kwargs)
+    fig.update_yaxes(**axis_kwargs)
     fig.update_annotations(font=dict(size=font_size+2, family=family)) # Subplot titles
     
     # Standardize Colorbars if they exist

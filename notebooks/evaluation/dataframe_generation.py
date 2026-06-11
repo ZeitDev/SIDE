@@ -107,10 +107,13 @@ print('Dataframes saved to ./notebooks/evaluation/storage/dataframes.pkl')
 
 # %%
 
-df_historic.to_csv('./notebooks/evaluation/storage/historic.csv', index=False)
-print('Historic dataframe saved to ./notebooks/evaluation/storage/historic.csv')
+# df_historic.to_csv('./notebooks/evaluation/storage/historic.csv', index=False)
+# print('Historic dataframe saved to ./notebooks/evaluation/storage/historic.csv')
 
-# # %%
+# df_final.to_csv('./notebooks/evaluation/storage/final.csv', index=False)
+# print('Final dataframe saved to ./notebooks/evaluation/storage/final.csv')
+
+# %%
 # import os, glob
 # from mlflow.tracking import MlflowClient
 
