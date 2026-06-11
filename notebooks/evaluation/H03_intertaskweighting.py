@@ -275,7 +275,7 @@ fig_scatter.update_xaxes(showticklabels=False, title_text="", showgrid=True, gri
 fig_scatter.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=2)
 
 # Col 1 (Left): Show y-axis labels/titles
-fig_scatter.update_yaxes(title_text="DICE Score [% ↑]", row=1, col=1)
+fig_scatter.update_yaxes(title_text="Test DICE Score [% ↑]", row=1, col=1)
 fig_scatter.update_yaxes(title_text="Test AbsRel Rate [% ↓]", autorange="reversed", row=2, col=1)
 
 # Col 2 (Right): Hide y-axis labels/titles

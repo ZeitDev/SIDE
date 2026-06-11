@@ -32,8 +32,8 @@ skip_sync = True
 
 # Data preperation here
 
-# %% F01_Orthogonality_Scatter
-# F01 — The Boundary Attack Trajectories
+# %% H04F01_Scatter_BoundaryAttackTrajectories (Boundary Attack Trajectories for MT vs. MT-KD)
+# H04F01_Scatter_BoundaryAttackTrajectories (Boundary Attack Trajectories for MT vs. MT-KD)
 
 target_exps = ['exp01', 'exp05']
 
@@ -122,9 +122,85 @@ fig.update_layout(
     legend_title_text="Config"
 )
 
-fig.update_xaxes(title_text="AbsRel Rate [% ↓]")
-fig.update_yaxes(title_text="Bad3 Rate [% ↓]")
+fig.update_xaxes(title_text="AbsRel Rate [% ↓]", autorange="reversed")
+fig.update_yaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed")
 
-save_figure(fig, height=400, name='F01_Orthogonality_Scatter', lrtb_margin=(40, 20, 0, 60), folder='results', skip_sync=skip_sync)
+save_figure(fig, height=400, name='H04F01_Scatter_BoundaryAttackTrajectories', lrtb_margin=(40, 20, 0, 60), folder='results', skip_sync=skip_sync)
 
-# %% H04F02
+# %% H04F02_Lineplot_GatingOnBoundary (Effect of 02 on Bad3)
+# H04F02_Lineplot_GatingOnBoundary (Effect of 02 on Bad3)
+
+target_exps = ['exp01', 'exp02']
+target_configs = ['ST', 'MT', 'MT-KD']
+
+df_f02 = df_final[df_final['experiment'].isin(target_exps)].copy()
+
+# Add Bad3 column with fallback
+bad3_combined = 'metric.best_combined/performance/testing/disparity/Bad3_rate'
+bad3_task = 'metric.best_disparity/performance/testing/disparity/Bad3_rate'
+df_f02['Bad3'] = df_f02[bad3_combined].fillna(df_f02[bad3_task])
+
+# Harmonize config naming
+df_f02['config'] = df_f02['config'].replace({'DISP': 'ST'})
+df_f02 = df_f02[df_f02['config'].isin(target_configs)]
+
+stages = ['01 (ON)', '02 (OFF)']
+config_offsets = {'ST': -0.03, 'MT': 0, 'MT-KD': 0.03}
+
+fig2 = go.Figure()
+
+for config in target_configs:
+    medians = []
+    mins = []
+    maxs = []
+    
+    for exp in target_exps:
+        config_data = df_f02[(df_f02['config'] == config) & (df_f02['experiment'] == exp)]
+        
+        median_val = config_data['Bad3'].median()
+        min_val = config_data['Bad3'].min()
+        max_val = config_data['Bad3'].max()
+        
+        medians.append(median_val)
+        mins.append(min_val)
+        maxs.append(max_val)
+        
+    error_minus = [medians[i] - mins[i] for i in range(2)]
+    error_plus = [maxs[i] - medians[i] for i in range(2)]
+    
+    fig2.add_trace(go.Scatter(
+        x=[i + config_offsets[config] for i in range(len(stages))],
+        y=medians,
+        mode='lines+markers',
+        line=dict(color=colors[config], width=2),
+        marker=dict(color=colors[config], size=8),
+        error_y=dict(
+            type='data',
+            symmetric=False,
+            array=error_plus,
+            arrayminus=error_minus,
+            visible=True,
+            color=colors[config],
+            thickness=1.5,
+            width=5
+        ),
+        name=config,
+        legendgroup=config
+    ))
+
+fig2.update_layout(
+    template='plotly_white',
+    height=450,
+    width=500,
+    legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+    legend_title_text="Config",
+    xaxis=dict(
+        tickvals=[0, 1],
+        ticktext=stages
+    )
+)
+
+fig2.update_xaxes(title_text="Experiment (Confidence-Based Disparity Gating)")
+fig2.update_yaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed")
+
+save_figure(fig2, name='H04F02_Lineplot_GatingOnBoundary', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)

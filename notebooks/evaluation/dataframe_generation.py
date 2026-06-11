@@ -140,3 +140,6 @@ print('Dataframes saved to ./notebooks/evaluation/storage/dataframes.pkl')
 #         print(run)
 
 # %%
+print(f'Number of keys in df_final: {len(df_final.columns)}')
+print(f'Number of keys in df_params: {len(df_params.columns)}')
+

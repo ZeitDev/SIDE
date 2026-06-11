@@ -179,6 +179,7 @@ metrics_dict_f02 = {
 fig2 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.1)
 
 stages = ['Projection', 'Prediction']
+config_offsets = {'MT': 0.05, 'MT-KD': -0.05}
 
 for col, task in enumerate(['segmentation', 'disparity'], start=1):
     best_col = metrics_dict_f02[task]['best']
@@ -198,11 +199,11 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
         showlegend = True if col == 1 else False
         
         fig2.add_trace(go.Scatter(
-            y=stages,
+            y=[i + config_offsets[config] for i in range(len(stages))],
             x=[intercept_median, best_median],
-            mode='lines+markers',
+            mode='markers+lines',
             line=dict(color=colors[config]['val'], width=2),
-            marker=dict(color=colors[config]['val'], size=8),
+            marker=dict(color=colors[config]['val'], size=6),
             error_x=dict(
                 type='data',
                 symmetric=False,
@@ -220,9 +221,20 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
         
     fig2.update_xaxes(title_text=metrics_dict_f02[task]['y_label'], row=1, col=col)
     if col == 1:
-        fig2.update_yaxes(title_text="Head", range=[-0.25, 1.25], row=1, col=col)
+        fig2.update_yaxes(
+            title_text="Head", 
+            range=[-0.5, 1.5], 
+            tickvals=[0, 1], 
+            ticktext=stages,
+            row=1, col=col
+        )
     else:
-        fig2.update_yaxes(range=[-0.25, 1.25], showticklabels=False, row=1, col=col)
+        fig2.update_yaxes(
+            range=[-0.5, 1.5], 
+            tickvals=[0, 1], 
+            showticklabels=False, 
+            row=1, col=col
+        )
     
 fig2.update_xaxes(autorange="reversed", row=1, col=2)
 
