@@ -20,7 +20,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     df_historic = data['historic']
 
 # %% Settings
-skip_sync = True
+skip_sync = False
 seg_metric = 'DICE_score'  # options: DICE_score, IoU_score
 disp_metric = 'Bad3_rate' # options: AbsRel_rate, EPE_px, MAE_mm, Bad3_rate
 

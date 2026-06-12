@@ -26,7 +26,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 
-skip_sync = True
+skip_sync = False
 fallback_opacity = 0.5
 
 metrics = ['DICE_score', 'AbsRel_rate', 'Bad3_rate']
@@ -267,7 +267,7 @@ fig_bar.update_xaxes(
 fig_bar.update_yaxes(title_text="Experiment 01 Config", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", rangemode='tozero', row=1, col=2) # Hide tick labels and title
 
-save_figure(fig_bar, name='H01F01_Boxplot_ConfigStability', lrtb_margin=(40, 40, 20, 40), folder='results', skip_sync=skip_sync)
+save_figure(fig_bar, name='H01F01', lrtb_margin=(40, 40, 20, 40), folder='results', skip_sync=skip_sync)
 
 # %% H01F02_Boxplot_StabilityOverview (ST vs. MT vs. MT-KD across all Experiments)
 # H01F02_Boxplot_StabilityOverview (ST vs. MT vs. MT-KD across all Experiments)
@@ -304,8 +304,8 @@ for i, config_alias in enumerate(['ST', 'MT', 'MT-KD']):
             y=df_seg[seg_metric],
             x=[exp.replace('exp', '')] * len(df_seg),
             name=config_alias,
-            marker_color=grey_color if is_seg_fb else colors_dict[config_alias],
-            marker_opacity=0.6 if is_seg_fb else 1.0,
+            marker_color=colors_dict[config_alias],
+            opacity=0.5 if is_seg_fb else 1.0,
             showlegend=True if exp_idx == 0 else False,
             legendgroup=config_alias
         ), row=1, col=i+1)
@@ -314,8 +314,8 @@ for i, config_alias in enumerate(['ST', 'MT', 'MT-KD']):
             y=df_disp[disp_metric],
             x=[exp.replace('exp', '')] * len(df_disp),
             name=config_alias,
-            marker_color=grey_color if is_disp_fb else colors_dict[config_alias],
-            marker_opacity=0.6 if is_disp_fb else 1.0,
+            marker_color=colors_dict[config_alias],
+            opacity=0.5 if is_disp_fb else 1.0,
             showlegend=False,
             legendgroup=config_alias
         ), row=2, col=i+1)
@@ -339,7 +339,7 @@ for col in range(1, 4):
     fig_box.update_xaxes(title_text="Experiment", row=2, col=col, tickmode='linear', dtick=1)
     fig_box.update_xaxes(tickmode='linear', dtick=1, row=1, col=col)
 
-save_figure(fig_box, height=600, name='H01F02_Boxplot_StabilityOverview', lrtb_margin=(40, 0, 0, 40), folder='results', skip_sync=skip_sync)
+save_figure(fig_box, height=600, name='H01F02', lrtb_margin=(40, 20, 20, 40), folder='results', skip_sync=skip_sync)
 
 # %% H01F03_Dumbbell_ConfigComparisonOverview (ST vs. MT vs. MT-KD)
 # H01F03_Dumbbell_ConfigComparisonOverview (ST vs. MT vs. MT-KD)
@@ -452,7 +452,7 @@ fig_dumb.update_yaxes(
     row=1, col=2
 )
 
-save_figure(fig_dumb, name='H01F03_Dumbbell_ConfigComparisonOverview', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
+save_figure(fig_dumb, name='H01F03', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
 
 # %% H01F04_Heatmap_ConfigComparisonOverview (ST vs. MT vs. MT-KD Delta)
 # H01F04_Heatmap_ConfigComparisonOverview (ST vs. MT vs. MT-KD Delta)
@@ -515,7 +515,7 @@ fig_heat.update_yaxes(title_text="Experiment", autorange="reversed", row=1, col=
 # Reverse y-axis to put Exp 01 at the top and hide tick labels on right plot
 fig_heat.update_yaxes(showticklabels=False, autorange="reversed", row=1, col=2)
 
-save_figure(fig_heat, name='H01F04_Heatmap_ConfigComparisonOverview', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
+save_figure(fig_heat, name='H01F04', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
 
 # %% H01F05_Heatmap_AblationComparisonOverview (Exp01 vs. ...)
 # H01F05_Heatmap_AblationComparisonOverview (Exp01 vs. ...)
@@ -571,6 +571,6 @@ fig_heat_abl.update_yaxes(title_text="Experiment", autorange="reversed", row=1, 
 # Reverse y-axis to put Exp 01 at the top and hide tick labels on right plot
 fig_heat_abl.update_yaxes(showticklabels=False, autorange="reversed", row=1, col=2)
 
-save_figure(fig_heat_abl, name='H01F05_Heatmap_AblationComparisonOverview', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
+save_figure(fig_heat_abl, name='H01F05', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
 
 # %%

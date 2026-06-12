@@ -25,7 +25,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 
 # %% Settings
 # Settings
-skip_sync = True
+skip_sync = False
 
 # %% Data preperation
 # Data preperation
@@ -35,7 +35,7 @@ skip_sync = True
 # %% H04F01_Scatter_BoundaryAttackTrajectories (Boundary Attack Trajectories for MT vs. MT-KD)
 # H04F01_Scatter_BoundaryAttackTrajectories (Boundary Attack Trajectories for MT vs. MT-KD)
 
-target_exps = ['exp01', 'exp05']
+target_exps = ['exp01', 'exp05']#, 'exp02', 'exp03', 'exp04', 'exp06', 'exp07', 'exp08', 'exp09', 'exp10']
 
 df_bench = df_final[df_final['experiment'].isin(target_exps)].copy()
 
@@ -125,82 +125,79 @@ fig.update_layout(
 fig.update_xaxes(title_text="AbsRel Rate [% ↓]", autorange="reversed")
 fig.update_yaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed")
 
-save_figure(fig, height=400, name='H04F01_Scatter_BoundaryAttackTrajectories', lrtb_margin=(40, 20, 0, 60), folder='results', skip_sync=skip_sync)
+save_figure(fig, height=400, name='H04F01', lrtb_margin=(40, 20, 0, 60), folder='results', skip_sync=skip_sync)
 
-# %% H04F02_Lineplot_GatingOnBoundary (Effect of 02 on Bad3)
-# H04F02_Lineplot_GatingOnBoundary (Effect of 02 on Bad3)
+# %% H04F02_Barplot_GatingOnBoundary (Effect of Confidence-Based Gating on Performance)
+# H04F02_Barplot_GatingOnBoundary (Effect of Confidence-Based Gating on Performance)
 
 target_exps = ['exp01', 'exp02']
-target_configs = ['ST', 'MT', 'MT-KD']
+target_configs = ['MT', 'MT-KD', 'ST']
 
 df_f02 = df_final[df_final['experiment'].isin(target_exps)].copy()
 
-# Add Bad3 column with fallback
-bad3_combined = 'metric.best_combined/performance/testing/disparity/Bad3_rate'
-bad3_task = 'metric.best_disparity/performance/testing/disparity/Bad3_rate'
-df_f02['Bad3'] = df_f02[bad3_combined].fillna(df_f02[bad3_task])
+# Map SEG/DISP to ST
+df_f02['config_mapped'] = df_f02['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
+df_f02['regime'] = df_f02['experiment'].map({'exp01': '01 (ON)', 'exp02': '02 (OFF)'})
 
-# Harmonize config naming
-df_f02['config'] = df_f02['config'].replace({'DISP': 'ST'})
-df_f02 = df_f02[df_f02['config'].isin(target_configs)]
+# Metrics configuration
+metrics = {
+    'AbsRel': 'AbsRel_rate',
+    'Bad3': 'Bad3_rate'
+}
 
-stages = ['01 (ON)', '02 (OFF)']
-config_offsets = {'ST': -0.03, 'MT': 0, 'MT-KD': 0.03}
+# Process metrics with fallback logic
+for m_name, m_col in metrics.items():
+    col = f"metric.best_combined/performance/testing/disparity/{m_col}"
+    fallback = f"metric.best_disparity/performance/testing/disparity/{m_col}"
+    df_f02[m_name] = df_f02[col].fillna(df_f02[fallback])
 
-fig2 = go.Figure()
+# Styling
+colors_dict = {
+    'ST': px.colors.qualitative.Plotly[0],
+    'MT': px.colors.qualitative.Plotly[1],
+    'MT-KD': px.colors.qualitative.Plotly[2]
+}
+regimes = ['01 (ON)', '02 (OFF)']
+display_configs = ['ST', 'MT', 'MT-KD']
 
-for config in target_configs:
-    medians = []
-    mins = []
-    maxs = []
-    
-    for exp in target_exps:
-        config_data = df_f02[(df_f02['config'] == config) & (df_f02['experiment'] == exp)]
-        
-        median_val = config_data['Bad3'].median()
-        min_val = config_data['Bad3'].min()
-        max_val = config_data['Bad3'].max()
-        
-        medians.append(median_val)
-        mins.append(min_val)
-        maxs.append(max_val)
-        
-    error_minus = [medians[i] - mins[i] for i in range(2)]
-    error_plus = [maxs[i] - medians[i] for i in range(2)]
-    
-    fig2.add_trace(go.Scatter(
-        x=[i + config_offsets[config] for i in range(len(stages))],
-        y=medians,
-        mode='lines+markers',
-        line=dict(color=colors[config], width=2),
-        marker=dict(color=colors[config], size=8),
-        error_y=dict(
-            type='data',
-            symmetric=False,
-            array=error_plus,
-            arrayminus=error_minus,
-            visible=True,
-            color=colors[config],
-            thickness=1.5,
-            width=5
-        ),
-        name=config,
-        legendgroup=config
-    ))
+fig = make_subplots(rows=1, cols=2, subplot_titles=("AbsRel Rate", "Bad3 Rate"), horizontal_spacing=0.05)
 
-fig2.update_layout(
+for col, task in enumerate(['AbsRel', 'Bad3'], start=1):
+    for config in display_configs:
+        for regime in regimes:
+            data = df_f02[(df_f02['regime'] == regime) & (df_f02['config_mapped'] == config)][task]
+            
+            showlegend = True if col == 1 and regime == regimes[0] else False
+            
+            fig.add_trace(go.Box(
+                x=data,
+                y=[regime] * len(data),
+                orientation='h',
+                name=config,
+                marker_color=colors_dict[config],
+                boxpoints='all',
+                jitter=0.5,
+                pointpos=-2.0,
+                showlegend=showlegend,
+                legendgroup=config,
+                offsetgroup=config
+            ), row=1, col=col)
+
+fig.update_layout(
     template='plotly_white',
     height=450,
-    width=500,
-    legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
-    legend_title_text="Config",
-    xaxis=dict(
-        tickvals=[0, 1],
-        ticktext=stages
-    )
+    width=850,
+    boxmode='group',
+    boxgroupgap=0.6,
+    boxgap=0.3,
+    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
 )
 
-fig2.update_xaxes(title_text="Experiment (Confidence-Based Disparity Gating)")
-fig2.update_yaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed")
+fig.update_xaxes(title_text="AbsRel Rate [% ↓]", autorange="reversed", row=1, col=1)
+fig.update_xaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed", row=1, col=2)
+fig.update_yaxes(title_text="Experiment (Gating Scheme)", autorange="reversed", row=1, col=1)
+fig.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-save_figure(fig2, name='H04F02_Lineplot_GatingOnBoundary', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
+save_figure(fig, height=400, name='H04F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+
+# %%

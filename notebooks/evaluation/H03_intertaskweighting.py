@@ -25,7 +25,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 
 # %% Settings
 # Settings
-skip_sync = True
+skip_sync = False
 
 # %% Data preperation
 # Data preperation
@@ -55,8 +55,8 @@ df_bench['regime'] = df_bench['experiment'].map(exp_map)
 # Common styling
 colors_dict = {'MT': px.colors.qualitative.Plotly[1], 'MT-KD': px.colors.qualitative.Plotly[2]}
 
-# %% H03F01_Barplot_InterTaskPerformance (Inter-Task Performance Comparison for MT/MT-KD Configurations of Exp01 vs. 06)
-# H03F01_Barplot_InterTaskPerformance (Inter-Task Performance Comparison for MT/MT-KD Configurations of Exp01 vs. 06)
+# %% H03F01_Boxplot_InterTaskPerformance (Inter-Task Performance Comparison for MT/MT-KD Configurations of Exp01 vs. 06)
+# H03F01_Boxplot_InterTaskPerformance (Inter-Task Performance Comparison for MT/MT-KD Configurations of Exp01 vs. 06)
 
 seg_meta = METRIC_META['DICE_score']
 disp_meta = METRIC_META['AbsRel_rate']
@@ -94,22 +94,21 @@ fig_bar.update_layout(
     width=850,
     boxmode='group',
     boxgroupgap=0.6,
-    boxgap=0.1,
+    boxgap=0.3,
     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
 )
 
-fig_bar.update_xaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", type="log", rangemode='tozero', row=1, col=1)
+fig_bar.update_xaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", rangemode='tozero', row=1, col=1)
 fig_bar.update_xaxes(
     title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]", 
     rangemode='tozero', 
     autorange="reversed" if disp_meta['arrow'] == '% ↓' else None,
-    type="log",
     row=1, col=2
 )
 fig_bar.update_yaxes(title_text="Experiment (Inter-Task Weighting Method)", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-save_figure(fig_bar, height=450, name='H03F01_Barplot_InterTaskPerformance', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+save_figure(fig_bar, height=450, name='H03F01', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H03F02_Boxplot_BestEpochs (Best Epochs Comparison for ST/MT/MT-KD Configurations)
 # H03F02_Boxplot_BestEpochs (Best Epochs Comparison for ST/MT/MT-KD Configurations)
@@ -172,7 +171,7 @@ fig_epochs.update_layout(
     width=850,
     boxmode='group',
     boxgroupgap=0.6,
-    boxgap=0.1,
+    boxgap=0.3,
     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
 )
 
@@ -181,7 +180,7 @@ fig_epochs.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(
 fig_epochs.update_yaxes(title_text="Experiment (Inter-Task Weighting Method)", autorange="reversed", row=1, col=1)
 fig_epochs.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-save_figure(fig_epochs, height=450, name='H03F02_Boxplot_BestEpochs', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+save_figure(fig_epochs, height=450, name='H03F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 
 # %% H03F03_Scatter_PerformanceVsEpoch (Seed Performance vs. Best Validation Epoch)
@@ -282,7 +281,7 @@ fig_scatter.update_yaxes(title_text="Test AbsRel Rate [% ↓]", autorange="rever
 fig_scatter.update_yaxes(showticklabels=False, title_text="", row=1, col=2)
 fig_scatter.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=2, col=2)
 
-save_figure(fig_scatter, height=700, name='H03F03_Scatter_PerformanceVsEpoch', lrtb_margin=(40, 20, 30, 80), folder='results', skip_sync=skip_sync)
+save_figure(fig_scatter, height=700, name='H03F03', lrtb_margin=(40, 20, 30, 80), folder='results', skip_sync=skip_sync)
 
 # %% H03F04_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
 # H03F04_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
@@ -315,9 +314,13 @@ metrics_dict = {
     }
 }
 
-fig_line = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, 
-                         row_heights=[0.7, 0.3], 
-                         subplot_titles=("", ""))
+fig_line = make_subplots(
+    rows=2, cols=2, 
+    shared_xaxes=True, shared_yaxes=True,
+    vertical_spacing=0.05, horizontal_spacing=0.03,
+    row_heights=[0.7, 0.3], 
+    subplot_titles=("01 (DTP)", "06 (1:1)", "", "")
+)
 
 def hex_to_rgba(hex_color, alpha=1.0):
     if hex_color.startswith('#'):
@@ -341,25 +344,15 @@ for cfg in colors:
     colors[cfg]['val'] = hex_to_rgba(base_col, 1.0)
     colors[cfg]['fill'] = hex_to_rgba(base_col, 0.2)
 
-exp_dash = {'exp01': 'solid', 'exp06': 'dot'}
-
+# Plot Performance (Top Subplot) and Weights (Bottom Subplot)
 weight_dash_map = {
     'exp01_MT': 'solid',
     'exp01_MT-KD': 'solid',
     'exp06_MT': '4px, 8px',          # 4px dash, 8px space (Cycle=12)
     'exp06_MT-KD': '0px, 6px, 4px, 2px'  # offset to land perfectly between the MT dashes
 }
-exp_labels = {'exp01': '01 (DTP)', 'exp06': '06 (1:1)'}
 
-rank_map = {
-    'exp01_MT': 1,
-    'exp06_MT': 2,
-    'exp01_MT-KD': 3,
-    'exp06_MT-KD': 4,
-}
-
-# Plot Performance (Top Subplot) and Weights (Bottom Subplot)
-for experiment in target_exps:
+for col, experiment in enumerate(target_exps, start=1):
     for config in target_configs:
         # 1. Performance (Disparity)
         task = 'disparity'
@@ -370,27 +363,30 @@ for experiment in target_exps:
         grouped_v = df_v.groupby('epoch')['value'].agg(['median', 'min', 'max']).reset_index()
         
         if not grouped_v.empty:
-            # Ribbon
-            # fig_line.add_trace(go.Scatter(
-            #     x=list(grouped_v['epoch']) + list(grouped_v['epoch'])[::-1],
-            #     y=list(grouped_v['max']) + list(grouped_v['min'])[::-1],
-            #     fill='toself',
-            #     fillcolor=colors[config]['fill'],
-            #     line=dict(color='rgba(255,255,255,0)'),
-            #     showlegend=False,
-            #     hoverinfo='skip',
-            #     legendgroup=f"{experiment}_{config}"
-            # ), row=1, col=1)
+            # Show legend only once per config (first column)
+            showlegend = True if col == 1 else False
             
-            # Line
+            # Ribbon (Min-Max)
+            fig_line.add_trace(go.Scatter(
+                x=list(grouped_v['epoch']) + list(grouped_v['epoch'])[::-1],
+                y=list(grouped_v['max']) + list(grouped_v['min'])[::-1],
+                fill='toself',
+                fillcolor=colors[config]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=config
+            ), row=1, col=col)
+            
+            # Performance Line (Solid)
             fig_line.add_trace(go.Scatter(
                 x=grouped_v['epoch'], y=grouped_v['median'],
                 mode='lines',
-                line=dict(color=colors[config]['val'], dash=exp_dash[experiment], width=2),
-                name=f"{exp_labels[experiment]} - {config}",
-                legendgroup=f"{experiment}_{config}",
-                showlegend=False
-            ), row=1, col=1)
+                line=dict(color=colors[config]['val'], dash='solid', width=2),
+                name=config,
+                legendgroup=config,
+                showlegend=showlegend
+            ), row=1, col=col)
 
         # 2. Weights (Disparity only)
         df_w = df_hist_filtered[(df_hist_filtered['experiment'] == experiment) & 
@@ -400,67 +396,53 @@ for experiment in target_exps:
         grouped_w = df_w.groupby('epoch')['value'].agg(['median', 'min', 'max']).reset_index()
         
         if not grouped_w.empty:
-            # Ribbon
-            # fig_line.add_trace(go.Scatter(
-            #     x=list(grouped_w['epoch']) + list(grouped_w['epoch'])[::-1],
-            #     y=list(grouped_w['max']) + list(grouped_w['min'])[::-1],
-            #     fill='toself',
-            #     fillcolor=colors[config]['fill'],
-            #     line=dict(color='rgba(255,255,255,0)'),
-            #     showlegend=False,
-            #     hoverinfo='skip',
-            #     legendgroup=f"{experiment}_{config}"
-            # ), row=2, col=1)
-            
-            # Line
-            # Use dot for legend, but custom dash map for the plot
+            # Ribbon (Min-Max)
             fig_line.add_trace(go.Scatter(
-                x=[None], y=[None],
-                mode='lines',
-                line=dict(color=colors[config]['val'], dash=exp_dash[experiment], width=2),
-                name=f"{exp_labels[experiment]} - {config}",
-                legendgroup=f"{experiment}_{config}",
-                showlegend=True,
-                legendrank=rank_map[f"{experiment}_{config}"]
-            ))
+                x=list(grouped_w['epoch']) + list(grouped_w['epoch'])[::-1],
+                y=list(grouped_w['max']) + list(grouped_w['min'])[::-1],
+                fill='toself',
+                fillcolor=colors[config]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=config
+            ), row=2, col=col)
             
+            # Weight Line (Custom dash map to restore alternating pattern for exp06)
             fig_line.add_trace(go.Scatter(
                 x=grouped_w['epoch'], y=grouped_w['median'],
                 mode='lines',
                 line=dict(color=colors[config]['val'], dash=weight_dash_map[f"{experiment}_{config}"], width=2),
-                name=f"{exp_labels[experiment]} - {config}",
-                legendgroup=f"{experiment}_{config}",
+                name=config,
+                legendgroup=config,
                 showlegend=False
-            ), row=2, col=1)
+            ), row=2, col=col)
 
 fig_line.update_layout(
     template='plotly_white',
-    height=1000,
-    width=700,
+    height=800,
+    width=950,
     legend=dict(
         orientation="h", 
         yanchor="top", 
         y=-0.11, 
         xanchor="center", 
         x=0.5, 
-        title_text="Experiment - Config",
-        entrywidth=0.4,
-        entrywidthmode="fraction"
-    ),
-    xaxis2_title="Epoch",
-    yaxis_title="Validation AbsRel Rate [Log % ↓]",
-    yaxis2_title="Disparity Weight"
+        title_text="Config"
+    )
 )
 
-# Set custom range for AbsRel here
-fig_line.update_yaxes(type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
-fig_line.update_xaxes(type="log", row=1, col=1)
-fig_line.update_xaxes(type="log", row=1, col=2)
-fig_line.update_yaxes(range=[0, 1.1], title_standoff=5, row=2, col=1)
+# Axis Configuration
+fig_line.update_yaxes(title_text="Validation AbsRel Rate [Log % ↓]", range=[40, 6], row=1, col=1)#, type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
+#fig_line.update_yaxes(type="log", range=[np.log10(30), np.log10(6)], showticklabels=False, row=1, col=2)
+fig_line.update_yaxes(range=[40, 6], showticklabels=False, row=1, col=2)
+fig_line.update_yaxes(title_text="Disparity Weight", range=[0, 1.1], title_standoff=5, row=2, col=1)
+fig_line.update_yaxes(range=[0, 1.1], showticklabels=False, row=2, col=2)
 
-fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50])
+fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=1)
+fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=2)
 
-save_figure(fig_line, height=600, name='H03F04_Lineplot_InterTaskWeighting', lrtb_margin=(40, 20, 10, 80), standoff=None, folder='results', skip_sync=skip_sync)
+save_figure(fig_line, height=600, name='H03F04', lrtb_margin=(40, 40, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
 # %%
 

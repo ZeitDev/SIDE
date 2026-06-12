@@ -21,7 +21,7 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     df_historic = data['historic']
 
 # %%
-skip_sync = True  # Set to False to enable Weights & Biases sync for this notebook's figures
+skip_sync = False  # Set to False to enable Weights & Biases sync for this notebook's figures
 
 
 # %% Prepare Data for Scatter Plots (Exp01 only)
