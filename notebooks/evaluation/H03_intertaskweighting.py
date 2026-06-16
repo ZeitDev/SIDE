@@ -98,10 +98,9 @@ fig_bar.update_layout(
     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
 )
 
-fig_bar.update_xaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", rangemode='tozero', row=1, col=1)
+fig_bar.update_xaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", row=1, col=1)
 fig_bar.update_xaxes(
-    title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]", 
-    rangemode='tozero', 
+    title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]",  
     autorange="reversed" if disp_meta['arrow'] == '% ↓' else None,
     row=1, col=2
 )
@@ -281,10 +280,11 @@ fig_scatter.update_yaxes(title_text="Test AbsRel Rate [% ↓]", autorange="rever
 fig_scatter.update_yaxes(showticklabels=False, title_text="", row=1, col=2)
 fig_scatter.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=2, col=2)
 
-save_figure(fig_scatter, height=700, name='H03F03', lrtb_margin=(40, 20, 30, 80), folder='results', skip_sync=skip_sync)
+# ! omitted
+# save_figure(fig_scatter, height=700, name='H03F03', lrtb_margin=(40, 20, 30, 80), folder='results', skip_sync=skip_sync)
 
-# %% H03F04_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
-# H03F04_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
+# %% H03F03_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
+# H03F03_Lineplot_InterTaskWeighting (Inter-Task Weighting Evolution over Epochs for MT/MT-KD Configurations of Exp01 vs. 06)
 
 target_configs = ['MT', 'MT-KD']
 target_exps = ['exp01', 'exp06']
@@ -442,7 +442,7 @@ fig_line.update_yaxes(range=[0, 1.1], showticklabels=False, row=2, col=2)
 fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=1)
 fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=2)
 
-save_figure(fig_line, height=600, name='H03F04', lrtb_margin=(40, 40, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+save_figure(fig_line, height=600, name='H03F03', lrtb_margin=(40, 40, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
 # %%
 

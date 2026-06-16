@@ -20,7 +20,8 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
 
 # %%
-EXPERIMENT = 'exp07/MT-KD' # 
+EXPERIMENT = 'exp10/MT-KD' # 
+mode = 'test' # 'val
 
 # %%
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)
@@ -31,7 +32,7 @@ dataset_class = helpers.load(config['data']['dataset'])
 
 transforms = build_transforms(config, mode='test')
 dataset = dataset_class(
-    mode='val',
+    mode=mode,
     config=config,
     transforms=transforms,
 )
@@ -43,7 +44,7 @@ dataloader = DataLoader(
     pin_memory=config['general']['pin_memory'],
     persistent_workers=False
 )
-helpers.check_dataleakage('val', dataset)
+helpers.check_dataleakage(mode, dataset)
 
 # %%
 dice_metric = Dice(n_classes=config['data']['num_of_classes']['segmentation'], device='cpu')
@@ -77,6 +78,5 @@ valid_dices = [DICE for class_idx, DICE in dice_result.items() if class_idx >= 1
 dice_result = sum(valid_dices) / len(valid_dices)
 print(dice_result)
 print(absrel_result)
-
 
 # %%

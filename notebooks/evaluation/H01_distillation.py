@@ -265,7 +265,7 @@ fig_bar.update_xaxes(
     row=1, col=2
 )
 fig_bar.update_yaxes(title_text="Experiment 01 Config", autorange="reversed", row=1, col=1)
-fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", rangemode='tozero', row=1, col=2) # Hide tick labels and title
+fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2) # Hide tick labels and title
 
 save_figure(fig_bar, name='H01F01', lrtb_margin=(40, 40, 20, 40), folder='results', skip_sync=skip_sync)
 

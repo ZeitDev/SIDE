@@ -12,7 +12,7 @@ from models.manager import AttachHead, Combiner
 os.chdir('/data/Zeitler/code/SIDE')
 
 # %%
-EXPERIMENT = 'exp1/MT-KD'
+EXPERIMENT = 'exp01/MT-KD'
 
 # Load config
 with open('./configs/base.yaml', 'r') as f: base_config = yaml.safe_load(f)

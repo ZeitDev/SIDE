@@ -392,6 +392,9 @@ class Trainer(BaseProcessor):
         for task_metrics in self.metrics.values():
             for metric in task_metrics.values():
                 metric.reset()
+        # ? Reset misc metrics
+        for metric in self.misc_metrics.values():
+            metric.reset()
         
         batch_tqdm = tqdm(self.dataloader_val, desc='Validation', position=1, leave=False)
         for data in batch_tqdm:

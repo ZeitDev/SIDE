@@ -9,14 +9,14 @@ import pandas as pd
 
 # %%
 def entropy_confidence(logits, c_min=0, c_max=1, prob_dim=1):
-    probs = F.softmax(logits, dim=prob_dim)
-    entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim)
+    probs = F.softmax(logits, dim=prob_dim) # get probability distribution
+    entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim) # Shannon Entropy using log base 2 
     num_bins = logits.shape[prob_dim]
-    max_entropy = math.log2(num_bins)
-    normalized_entropy = entropy / max_entropy
+    max_entropy = math.log2(num_bins) 
+    normalized_entropy = entropy / max_entropy # make entropy log independent and scale to [0, 1]
     base_confidence = 1.0 - normalized_entropy
     
-    denominator = max(c_max - c_min, 1e-6)
+    denominator = max(c_max - c_min, 1e-6) # stretch confidence to [c_min, c_max]
     
     scaled_conf = (base_confidence - c_min) / denominator
     final_confidence = torch.clamp(scaled_conf, min=0.0, max=1.0)

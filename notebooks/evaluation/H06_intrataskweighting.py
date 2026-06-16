@@ -132,6 +132,7 @@ fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", 
 save_figure(fig_bar, height=600, name='H06F01', lrtb_margin=(40, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)
+# H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)
 
 target_config = 'MT-KD'
 target_exps = ['exp01', 'exp07', 'exp08']
@@ -148,13 +149,13 @@ df_hist_filtered['epoch'] = df_hist_filtered['step'] / steps_per_epoch
 
 metrics_dict = {
     'segmentation': {
-        'val': 'performance/validation/segmentation/DICE_score/instrument_mean',
+        'val': 'performance/validation/misc/interceptDICE_score',
         'weight': 'optimization/training/loss/weights/intra_segmentation_distillation',
         'short': 'Val DICE',
         'arrow': '↑'
     },
     'disparity': {
-        'val': 'performance/validation/disparity/AbsRel_rate',
+        'val': 'performance/validation/misc/interceptAbsRel_rate',
         'weight': 'optimization/training/loss/weights/intra_disparity_distillation',
         'short': 'Val AbsRel',
         'arrow': '↓'
@@ -257,6 +258,18 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
                 showlegend=False
             ), row=2, col=col)
 
+# Add Teacher Lines
+teacher_metrics = {'segmentation': 54.86, 'disparity': 8.05}
+for col, (task, val) in enumerate(teacher_metrics.items(), start=1):
+    fig_line.add_trace(go.Scatter(
+        x=[0, 50], y=[val, val],
+        mode='lines',
+        line=dict(color='grey', dash='dot', width=2),
+        name='Teacher',
+        showlegend=True if col == 1 else False,
+        legendgroup='Teacher'
+    ), row=1, col=col)
+
 fig_line.update_layout(
     template='plotly_white',
     height=800,
@@ -272,13 +285,13 @@ fig_line.update_layout(
 )
 
 # Axis Configuration
-fig_line.update_yaxes(title_text="Validation DICE [% ↑]", row=1, col=1)
-fig_line.update_yaxes(title_text="Validation AbsRel [% ↓]", range=[40, 6], row=1, col=2)
+fig_line.update_yaxes(title_text="Projection Head DICE [% ↑]", range=[5, 55], row=1, col=1)
+fig_line.update_yaxes(title_text="Projection Head AbsRel [% ↓]", range=[35, 6], row=1, col=2)
 fig_line.update_yaxes(title_text="Distillation Weight", title_standoff=5, row=2, col=1)
 fig_line.update_yaxes(title_text="Distillation Weight", title_standoff=5, row=2, col=2)
 
-fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=1)
-fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=2)
+fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Validation Epoch", row=2, col=1)
+fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Validation Epoch", row=2, col=2)
 
 save_figure(fig_line, height=600, name='H06F02', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
