@@ -144,7 +144,7 @@ fig_heat.add_trace(go.Heatmap(
 ), row=1, col=2)
 
 fig_heat.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=850
 )
@@ -208,7 +208,7 @@ for i, config_alias in enumerate(['ST', 'MT', 'MT-KD']):
         ), row=2, col=i+1)
 
 fig_box.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=600,
     margin=dict(t=60, b=40, l=60, r=20)
 )

@@ -26,7 +26,9 @@ from utils import helpers
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
-setup_environment(skip_cuda=True)
+setup_environment()
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '1' # Restrict to GPU 1 for this notebook
 
 # %%
 class EndoVisTeacherDataset(Dataset):
@@ -66,38 +68,50 @@ class EndoVisTeacherDataset(Dataset):
 
 # %% Settings
 # Settings
-arch = 'convnext'
-state_path = 'SEG/260407:1208/train'
-task_mode = 'segmentation' # 'disparity' or 'segmentation' or 'combined'
+experiment = 'exp05' # 'exp01'
+config = 'MT-KD' # 'DISP', 'SEG', 'MT', 'MT-KD'
+run_name = '260604:0850/train'
+task_mode = 'combined' # 'disparity', 'segmentation', 'combined'
 
-# %% Load mlflow data
-# Load mlflow data
-state_path_parts = state_path.split('/')
-experiment = state_path_parts[0]
-run_path = '/'.join(state_path_parts[1:])
+# 04
+# SEG: 260515:1250/train
+# DISP: 260516:1023/train
+# MT: 260515:0513/train
+# MT-KD: 260516:0055/train
 
-#mlflow.set_tracking_uri('../mlruns')
-mlflow_experiment = mlflow.get_experiment_by_name(experiment)
-mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f'run_name = "{state_path_parts[1]}"').iloc[0] 
+# 05
+# SEG: 260604:0053/train
+# DISP: 260604:1254/train
+# MT: 260604:0039/train
+# MT-KD: 260604:0850/train
 
-base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp')
-experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{arch}/{experiment}.yaml', dst_path='../.temp')
+# %% Load Model
+mlflow.set_tracking_uri(f'/data/Zeitler/code/SIDE/mlruns_experiments/{experiment}')
+mlflow_experiment = mlflow.get_experiment_by_name(config)
+run_date = run_name.split('/')[0]
+mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f'run_name = "{run_date}"').iloc[0]
+
+base_config_filepath = './configs/base.yaml'
+experiment_config_filepath = f'./configs/{experiment}/{config}.yaml'
 
 with open(base_config_filepath, 'r') as f: base_config = yaml.safe_load(f)
 with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)
 config = helpers.deep_merge(experiment_config, base_config)
 config['logging']['notebook_mode'] = True
 
-# %%
 model_run_id = mlflow.search_runs(
-    experiment_ids=[mlflow_experiment.experiment_id], 
-    filter_string=f'tags.mlflow.runName = "{run_path}"', 
-    order_by=['attributes.start_time DESC'], 
+    experiment_ids=[mlflow_experiment.experiment_id],
+    filter_string=f'tags.mlflow.runName = "{run_name}"',
+    order_by=['attributes.start_time DESC'],
     max_results=1
 ).iloc[0].run_id
 
-# %%
+model_path = f'runs:/{model_run_id}/best_model_{task_mode}'
+model = mlflow.pytorch.load_model(model_path, map_location='cuda')
+model.eval()
 
+
+# %%
 transform = build_transforms(config, mode='test')
 dataset = EndoVisTeacherDataset(
     mode='train',
@@ -106,11 +120,6 @@ dataset = EndoVisTeacherDataset(
 
 image = dataset[0]['image'].unsqueeze(0).to('cuda')
 image_right = dataset[0]['right_image'].unsqueeze(0).to('cuda') if 'right_image' in dataset[0] else None
-
-# model_path = f'runs:/{model_run_id}/best_model' #best_model_{task_mode}'
-model_path = f'runs:/{model_run_id}/best_model_{task_mode}'
-model = mlflow.pytorch.load_model(model_path, map_location='cuda')
-model.eval()
 
 # %%
 num_warmup = 50
@@ -155,8 +164,8 @@ print(f'Peak VRAM Usage: {peak_vram:.2f} MB')
 print(f'VRAM Usage in GB: {peak_vram / 1024:.2f} GB')
 
 # %%
-model1_fps = 20.08
-model2_fps = 13.28
+model1_fps = 75.46
+model2_fps = 49.24
 
 # NVIDIA SF = 7.14 FPS // 140.06 ms // 2114.68 MB
 # NVIDIA FS = 0.49 FPS // 2040.82 ms // 7126.30 MB in half precision

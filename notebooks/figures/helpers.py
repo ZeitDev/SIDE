@@ -69,6 +69,52 @@ def save_figure(fig, height=400, name='test', lrtb_margin=(0, 0, 0, 0), standoff
     if not skip_sync: sync_to_overleaf(generated_file_path, folder, name)
 
 
+def apply_chart_config(fig, name, config):
+    """Applies axis ranges and tick frequencies from a config dictionary."""
+    if name not in config:
+        return
+    
+    settings = config[name]
+    
+    # Handle x-axes
+    for x_key in [k for k in settings.keys() if k.startswith('x')]:
+        suffix = x_key[1:]
+        row = None
+        col = None
+        
+        if suffix.isdigit():
+            col = int(suffix)
+        elif 'r' in suffix:
+            parts = suffix.split('r')
+            if parts[0].isdigit(): col = int(parts[0])
+            if parts[1].isdigit(): row = int(parts[1])
+        
+        axis_settings = settings[x_key].copy()
+        if 'range' in axis_settings:
+            axis_settings['autorange'] = False
+            
+        fig.update_xaxes(**axis_settings, row=row, col=col)
+        
+    # Handle y-axes
+    for y_key in [k for k in settings.keys() if k.startswith('y')]:
+        suffix = y_key[1:]
+        row = None
+        col = None
+        
+        if suffix.isdigit():
+            row = int(suffix)
+        elif 'c' in suffix:
+            parts = suffix.split('c')
+            if parts[0].isdigit(): row = int(parts[0])
+            if parts[1].isdigit(): col = int(parts[1])
+        
+        axis_settings = settings[y_key].copy()
+        if 'range' in axis_settings:
+            axis_settings['autorange'] = False
+            
+        fig.update_yaxes(**axis_settings, row=row, col=col)
+
+
 def sync_to_overleaf(source_file, folder, name):
     """Copies the generated image to a local Overleaf Git repo and pushes it."""
     # Define and create target directory inside the Overleaf repository

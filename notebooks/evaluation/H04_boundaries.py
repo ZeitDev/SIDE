@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -26,6 +26,17 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 skip_sync = False
+
+CHART_CONFIG = {
+    'H04F01': {
+        'x': dict(range=[20, 0], dtick=5),
+        'y': dict(range=[90, 20], dtick=10)
+    },
+    'H04F02': {
+        'x1': dict(range=[40, 0], dtick=10),
+        'x2': dict(range=[105, 20], dtick=20),
+    }
+}
 
 # %% Data preperation
 # Data preperation
@@ -115,7 +126,7 @@ for config in target_configs:
     ))
 
 fig.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=500,
     width=600,
     legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
@@ -125,6 +136,7 @@ fig.update_layout(
 fig.update_xaxes(title_text="AbsRel Rate [% ↓]", autorange="reversed")
 fig.update_yaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed")
 
+apply_chart_config(fig, 'H04F01', CHART_CONFIG)
 save_figure(fig, height=400, name='H04F01', lrtb_margin=(40, 20, 0, 60), folder='results', skip_sync=skip_sync)
 
 # %% H04F02_Barplot_GatingOnBoundary (Effect of Confidence-Based Gating on Performance)
@@ -160,7 +172,7 @@ colors_dict = {
 regimes = ['01 (ON)', '02 (OFF)']
 display_configs = ['ST', 'MT', 'MT-KD']
 
-fig = make_subplots(rows=1, cols=2, subplot_titles=("AbsRel Rate", "Bad3 Rate"), horizontal_spacing=0.05)
+fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.05)
 
 for col, task in enumerate(['AbsRel', 'Bad3'], start=1):
     for config in display_configs:
@@ -184,7 +196,7 @@ for col, task in enumerate(['AbsRel', 'Bad3'], start=1):
             ), row=1, col=col)
 
 fig.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=850,
     boxmode='group',
@@ -195,9 +207,9 @@ fig.update_layout(
 
 fig.update_xaxes(title_text="AbsRel Rate [% ↓]", autorange="reversed", row=1, col=1)
 fig.update_xaxes(title_text="Bad3 Rate [% ↓]", autorange="reversed", row=1, col=2)
-fig.update_yaxes(title_text="Experiment (Gating Scheme)", autorange="reversed", row=1, col=1)
+fig.update_yaxes(title_text="Experiment (Disparity Gating)", autorange="reversed", row=1, col=1)
 fig.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
-
-save_figure(fig, height=400, name='H04F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+apply_chart_config(fig, 'H04F02', CHART_CONFIG)
+save_figure(fig, height=450, name='H04F02', lrtb_margin=(100, 20, 0, 0), standoff=10, folder='results', skip_sync=skip_sync)
 
 # %%

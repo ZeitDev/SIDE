@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -23,11 +23,36 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     df_params = data['params']
     df_historic = data['historic']
 
+with open('./notebooks/evaluation/storage/entropy_metrics.pkl', 'rb') as f:
+    df_entropy = pickle.load(f)
+    
 # %% Settings
 # Settings
 
 skip_sync = False
 fallback_opacity = 0.5
+
+CHART_CONFIG = {
+    'H01F01': {
+        'x1': dict(range=[30, 55], dtick=5),
+        'x2': dict(range=[35, 0], dtick=5),
+    },
+    'H01F02': {
+        'x1': dict(range=[0, 60], dtick=10),
+        'x2': dict(range=[70, 0], dtick=10),
+    },
+    'H01F03': {
+        'x': dict(range=[2, 50], dtick=5),
+        'y1': dict(range=[10, 60], dtick=10),
+        'y2': dict(range=[60, 5], dtick=10),
+    },
+    'H01F04': {
+        'y': dict(range=[0, 1], dtick=0.2)
+    },
+    'H01F05': {
+        'y': dict(range=[0, 100], dtick=10)
+    }
+}
 
 metrics = ['DICE_score', 'AbsRel_rate', 'Bad3_rate']
 
@@ -111,75 +136,7 @@ colors_dict = {'ST': px.colors.qualitative.Plotly[0], 'MT': px.colors.qualitativ
 seg_meta = METRIC_META['DICE_score']
 disp_meta = METRIC_META['AbsRel_rate']
 
-# %% H01T01_Table_GlobalResultsMatrix (DICE, AbsRel, Bad3)
-# H01T01_Table_GlobalResultsMatrix (DICE, AbsRel, Bad3)
 
-# Format strings as stacked deltas: Median_{-low}^{+high}
-for metric in metrics:
-    grouped[f'{metric}_str'] = grouped.apply(
-        lambda row: (
-            f"${row[f'{metric}_median']:05.2f}_{{-{row[f'{metric}_median'] - row[f'{metric}_min']:05.2f}}}^{{+{row[f'{metric}_max'] - row[f'{metric}_median']:05.2f}}}$"
-            if pd.notna(row[f'{metric}_median']) else "-"
-        ), 
-        axis=1
-    )
-
-# Melt and pivot
-value_vars = [f'{metric}_str' for metric in metrics]
-melted = grouped.melt(id_vars=['experiment', 'config'], value_vars=value_vars, var_name='Metric', value_name='Value')
-
-# Map metric strings to clean LaTeX labels
-metric_map = {f'{metric}_str': f"{METRIC_META[metric]['short']} [{METRIC_META[metric]['arrow'].replace('%', '\\%')}]" for metric in metrics}
-melted['Metric'] = melted['Metric'].replace(metric_map)
-
-# Exclusion logic for LaTeX table: No segmentation metrics for DISP config, No disparity metrics for SEG config
-melted_table = melted.copy()
-for metric in metrics:
-    meta = METRIC_META[metric]
-    label = metric_map[f'{metric}_str']
-    if meta['task'] == 'segmentation':
-        melted_table = melted_table[~((melted_table['Metric'] == label) & (melted_table['config'] == 'DISP'))]
-    elif meta['task'] == 'disparity':
-        melted_table = melted_table[~((melted_table['Metric'] == label) & (melted_table['config'] == 'SEG'))]
-
-# Merge SEG and DISP into 'ST'
-melted_table['config'] = melted_table['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
-
-# Pivot
-pivot_combined = melted_table.pivot(index=['Metric', 'experiment'], columns='config', values='Value')
-
-# Extract experiment number (e.g., 'exp01' -> '01')
-pivot_combined.index = pivot_combined.index.set_levels(
-    pivot_combined.index.levels[1].str.extract(r'(\d+)')[0].values,
-    level='experiment'
-)
-
-# Fill NaN with -
-pivot_combined = pivot_combined.fillna('-')
-
-# Order rows: by metric sequence, then experiment ID
-metrics_order = [metric_map[f'{metric}_str'] for metric in metrics]
-pivot_combined = pivot_combined.reindex(metrics_order, level=0)
-
-# Clean up index and column names
-pivot_combined.index.names = ['Metric', 'ID']
-pivot_combined.columns.name = None
-
-# Order columns: ST, MT, MT-KD
-desired_order = ['ST', 'MT', 'MT-KD']
-ordered_cols = [c for c in desired_order if c in pivot_combined.columns]
-pivot_combined = pivot_combined[ordered_cols]
-
-# Print LaTeX with multirow for Metric and flattened header
-latex_output = pivot_combined.to_latex(
-    escape=False, 
-    index=True, 
-    multirow=True, 
-    index_names=True,
-    column_format='ll' + 'c' * len(pivot_combined.columns)
-)
-
-print(f"\\renewcommand{{\\arraystretch}}{{1.4}}\n{latex_output}")
 
 # %% H01F01_Boxplot_ConfigStability (ST vs. MT vs. MT-KD of Exp01)
 # H01F01_Boxplot_ConfigStability (ST vs. MT vs. MT-KD of Exp01)
@@ -243,334 +200,535 @@ for config in ['ST', 'MT', 'MT-KD']:
         legendgroup=config
     ), row=1, col=2)
 
-# Manual ranges for the stability boxplots (H01F01)
-# Use [None, None] for automatic scaling
-F01_SEG_RANGE = [25, 65]
-F01_DISP_RANGE = [0, 35]
-
-fig_bar.update_layout(
-    template='plotly_white',
-    height=400,
-    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
-)
-fig_bar.update_xaxes(
-    title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", 
-    range=F01_SEG_RANGE if all(v is not None for v in F01_SEG_RANGE) else None,
-    row=1, col=1
-)
-fig_bar.update_xaxes(
-    title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]", 
-    range=F01_DISP_RANGE[::-1] if all(v is not None for v in F01_DISP_RANGE) and '↓' in disp_meta['arrow'] else (F01_DISP_RANGE if all(v is not None for v in F01_DISP_RANGE) else None),
-    autorange="reversed" if '↓' in disp_meta['arrow'] and all(v is None for v in F01_DISP_RANGE) else None,
-    row=1, col=2
-)
 fig_bar.update_yaxes(title_text="Experiment 01 Config", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2) # Hide tick labels and title
 
+apply_chart_config(fig_bar, 'H01F01', CHART_CONFIG)
 save_figure(fig_bar, name='H01F01', lrtb_margin=(40, 40, 20, 40), folder='results', skip_sync=skip_sync)
 
-# %% H01F02_Boxplot_StabilityOverview (ST vs. MT vs. MT-KD across all Experiments)
-# H01F02_Boxplot_StabilityOverview (ST vs. MT vs. MT-KD across all Experiments)
+# %% H01F02_Barplot_ConfigValidationInterceptPerformance (Inter-Head Performance Comparison for Prediction vs. Projection)
+# H01F02_Barplot_ConfigValidationInterceptPerformance (Inter-Head Performance Comparison for Prediction vs. Projection)
 
-df_fig2 = df_bench[df_bench['experiment'].isin(experiments)].copy()
+target_exp = 'exp01'
+target_configs = ['MT', 'MT-KD']
 
-fig_box = make_subplots(
-    rows=2, cols=3, 
-    subplot_titles=("", "", ""), 
-    shared_yaxes=True,
-    shared_xaxes=True,
-    vertical_spacing=0.025,
-    horizontal_spacing=0.01
-)
-grey_color = '#c0c0c0'
+df_f02 = df_final[
+    (df_final['experiment'] == target_exp) & 
+    (df_final['config'].isin(target_configs))
+].copy()
 
-for i, config_alias in enumerate(['ST', 'MT', 'MT-KD']):
-    for exp_idx, exp in enumerate(experiments):
-        # Determine data and fallback for Segmentation (Row 1)
-        target_seg_config = 'SEG' if config_alias == 'ST' else config_alias
-        df_seg = df_fig2[(df_fig2['config'] == target_seg_config) & (df_fig2['experiment'] == exp)]
-        is_seg_fb = df_seg.empty
-        if is_seg_fb:
-            df_seg = df_baseline[df_baseline['config'] == target_seg_config]
+# Metrics configuration
+metrics_meta = {
+    'segmentation': {
+        'prediction': 'metric.best/combined/performance_validation_segmentation_DICE_score_instrument_mean',
+        'projection': 'metric.best/combined/performance_validation_misc_interceptDICE_score',
+        'label': 'DICE Score [% ↑]',
+        'autorange': None
+    },
+    'disparity': {
+        'prediction': 'metric.best/combined/performance_validation_disparity_AbsRel_rate',
+        'projection': 'metric.best/combined/performance_validation_misc_interceptAbsRel_rate',
+        'label': 'AbsRel Rate [% ↓]',
+        'autorange': 'reversed'
+    }
+}
+
+fig2 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
+
+stages = ['Prediction', 'Projection']
+colors_dict = {
+    'MT': px.colors.qualitative.Plotly[1],
+    'MT-KD': px.colors.qualitative.Plotly[2]
+}
+
+for col, task in enumerate(['segmentation', 'disparity'], start=1):
+    meta = metrics_meta[task]
+    for config in target_configs:
+        for stage in stages:
+            col_name = meta['projection'] if stage == 'Projection' else meta['prediction']
+            data = df_f02[df_f02['config'] == config][col_name].dropna()
             
-        # Determine data and fallback for Disparity (Row 2)
-        target_disp_config = 'DISP' if config_alias == 'ST' else config_alias
-        df_disp = df_fig2[(df_fig2['config'] == target_disp_config) & (df_fig2['experiment'] == exp)]
-        is_disp_fb = df_disp.empty
-        if is_disp_fb:
-            df_disp = df_baseline[df_baseline['config'] == target_disp_config]
+            showlegend = True if col == 1 and stage == stages[0] else False
+            
+            fig2.add_trace(go.Box(
+                x=data,
+                y=[stage] * len(data),
+                orientation='h',
+                name=config,
+                marker_color=colors_dict[config],
+                boxpoints='all',
+                jitter=0.5,
+                pointpos=-2.0,
+                showlegend=showlegend,
+                legendgroup=config,
+                offsetgroup=config
+            ), row=1, col=col)
 
-        fig_box.add_trace(go.Box(
-            y=df_seg[seg_metric],
-            x=[exp.replace('exp', '')] * len(df_seg),
-            name=config_alias,
-            marker_color=colors_dict[config_alias],
-            opacity=0.5 if is_seg_fb else 1.0,
-            showlegend=True if exp_idx == 0 else False,
-            legendgroup=config_alias
-        ), row=1, col=i+1)
-        
-        fig_box.add_trace(go.Box(
-            y=df_disp[disp_metric],
-            x=[exp.replace('exp', '')] * len(df_disp),
-            name=config_alias,
-            marker_color=colors_dict[config_alias],
-            opacity=0.5 if is_disp_fb else 1.0,
-            showlegend=False,
-            legendgroup=config_alias
-        ), row=2, col=i+1)
-
-fig_box.update_layout(
-    template='plotly_white',
-    height=600,
-    legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, title_text="Config"),
-    margin=dict(t=20, b=40, l=60, r=20)
-)
-
-# Axis titles and styling
-fig_box.update_yaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", dtick=5, row=1, col=1)
-fig_box.update_yaxes(title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]", autorange="reversed" if '↓' in disp_meta['arrow'] else None, dtick=5, row=2, col=1)
-
-# Apply shared settings to all subplots
-for col in range(1, 4):
-    fig_box.update_yaxes(dtick=5, row=1, col=col)
-    fig_box.update_yaxes(autorange="reversed" if '↓' in disp_meta['arrow'] else None, dtick=5, row=2, col=col)
-    
-    fig_box.update_xaxes(title_text="Experiment", row=2, col=col, tickmode='linear', dtick=1)
-    fig_box.update_xaxes(tickmode='linear', dtick=1, row=1, col=col)
-
-save_figure(fig_box, height=600, name='H01F02', lrtb_margin=(40, 20, 20, 40), folder='results', skip_sync=skip_sync)
-
-# %% H01F03_Dumbbell_ConfigComparisonOverview (ST vs. MT vs. MT-KD)
-# H01F03_Dumbbell_ConfigComparisonOverview (ST vs. MT vs. MT-KD)
-
-fig_dumb = make_subplots(
-    rows=1, cols=2, 
-    subplot_titles=("Segmentation", "Disparity"),
-    horizontal_spacing=0.05
-)
-
-# Legend-only dummy traces for full opacity
-for config in ['ST', 'MT', 'MT-KD']:
-    fig_dumb.add_trace(go.Scatter(
-        x=[None], y=[None],
-        mode='markers',
-        name=config,
-        marker=dict(color=colors_dict[config], size=10, opacity=1.0),
-        legendgroup=config,
-        showlegend=True
-    ))
-
-# For Segmentation (Col 1)
-for i, exp in enumerate(experiments):
-    is_fb = seg_is_fallback.loc[exp, ['ST', 'MT', 'MT-KD']]
-    if not is_fb.all(): # Only plot line if at least one config is NOT a fallback
-        row_vals = seg_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
-        if not row_vals.empty:
-            fig_dumb.add_trace(go.Scatter(
-                x=[row_vals.min(), row_vals.max()],
-                y=[y_labels[i], y_labels[i]],
-                mode='lines',
-                line=dict(color='gray', width=2),
-                showlegend=False,
-                hoverinfo='skip'
-            ), row=1, col=1)
-
-for config in ['ST', 'MT', 'MT-KD']:
-    # Show markers only for experiments that have at least one actual (non-fallback) measurement
-    # This avoids rows filled entirely with ghost/baseline data
-    has_actual = ~seg_is_fallback.all(axis=1)
-    fig_dumb.add_trace(go.Scatter(
-        x=seg_matrix.loc[has_actual, config],
-        y=[y_labels[i] for i, actual in enumerate(has_actual) if actual],
-        mode='markers',
-        name=config,
-        marker=dict(
-            color=colors_dict[config], 
-            size=10,
-            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in seg_is_fallback.loc[has_actual, config]]
-        ),
-        legendgroup=config,
-        showlegend=False
-    ), row=1, col=1)
-
-# For Disparity (Col 2)
-for i, exp in enumerate(experiments):
-    is_fb = disp_is_fallback.loc[exp, ['ST', 'MT', 'MT-KD']]
-    if not is_fb.all():
-        row_vals = disp_matrix.loc[exp, ['ST', 'MT', 'MT-KD']].dropna()
-        if not row_vals.empty:
-            fig_dumb.add_trace(go.Scatter(
-                x=[row_vals.min(), row_vals.max()],
-                y=[y_labels[i], y_labels[i]],
-                mode='lines',
-                line=dict(color='gray', width=2),
-                showlegend=False,
-                hoverinfo='skip'
-            ), row=1, col=2)
-
-for config in ['ST', 'MT', 'MT-KD']:
-    has_actual = ~disp_is_fallback.all(axis=1)
-    fig_dumb.add_trace(go.Scatter(
-        x=disp_matrix.loc[has_actual, config],
-        y=[y_labels[i] for i, actual in enumerate(has_actual) if actual],
-        mode='markers',
-        name=config,
-        marker=dict(
-            color=colors_dict[config], 
-            size=10,
-            opacity=[fallback_opacity if is_fb else 1.0 for is_fb in disp_is_fallback.loc[has_actual, config]]
-        ),
-        legendgroup=config,
-        showlegend=False
-    ), row=1, col=2)
-
-fig_dumb.update_layout(
-    template='plotly_white',
+fig2.update_layout(
+    # template='plotly_white',
     height=450,
     width=850,
-    legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
-    legend_title_text="Config"
+    boxmode='group',
+    boxgroupgap=0.6,
+    boxgap=0.3,
+    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Experiment 01 Config")
 )
 
-fig_dumb.update_xaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", row=1, col=1)
-fig_dumb.update_xaxes(title_text=f"{disp_meta['label']} [{disp_meta['arrow']}]", autorange="reversed" if '↓' in disp_meta['arrow'] else None, row=1, col=2)
-fig_dumb.update_yaxes(
-    title_text="Experiment", 
-    type='category',
-    categoryorder='array',
-    categoryarray=y_labels,
-    autorange="reversed", 
-    row=1, col=1
-)
-fig_dumb.update_yaxes(
-    showticklabels=False, 
-    type='category',
-    categoryorder='array',
-    categoryarray=y_labels,
-    autorange="reversed", 
+fig2.update_xaxes(title_text=metrics_meta['segmentation']['label'], row=1, col=1)
+fig2.update_xaxes(
+    title_text=metrics_meta['disparity']['label'], 
+    autorange=metrics_meta['disparity']['autorange'],
     row=1, col=2
 )
+fig2.update_yaxes(title_text="Decoder Head", autorange="reversed", row=1, col=1)
+fig2.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-save_figure(fig_dumb, name='H01F03', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
+apply_chart_config(fig2, 'H01F02', CHART_CONFIG)
+save_figure(fig2, height=400, name='H01F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
-# %% H01F04_Heatmap_ConfigComparisonOverview (ST vs. MT vs. MT-KD Delta)
-# H01F04_Heatmap_ConfigComparisonOverview (ST vs. MT vs. MT-KD Delta)
 
-# Compute Deltas (Percentage points) relative to ST of the SAME experiment
-seg_delta = seg_matrix.sub(seg_matrix['ST'], axis=0)
-disp_delta = disp_matrix.sub(disp_matrix['ST'], axis=0)
+# %% H01F03_Lineplot_ConfigValidationPerformance (Train vs. Val Metrics over Epochs for MT vs. MT-KD)
+# H01F03_Lineplot_ConfigValidationPerformance (Train vs. Val Metrics over Epochs for MT vs. MT-KD)
 
-fig_heat = make_subplots(
-    rows=1, cols=2, 
-    subplot_titles=("Segmentation", "Disparity"),
-    horizontal_spacing=0.2
+target_exp = 'exp01'
+#target_configs = ['SEG', 'DISP', 'MT', 'MT-KD']
+target_configs = ['MT', 'MT-KD']
+
+# Filter data
+df_hist_filtered = df_historic[
+    (df_historic['experiment'] == target_exp) & 
+    (df_historic['config'].isin(target_configs))
+].copy()
+
+# Add epoch column
+steps_per_epoch = 675
+df_hist_filtered['epoch'] = df_hist_filtered['step'] / steps_per_epoch
+
+metrics_dict = {
+    'segmentation': {
+        'val': 'performance/validation/segmentation/DICE_score/instrument_mean',
+        'short': 'DICE Score',
+        'arrow': '% ↑',
+        'st_config': 'SEG'
+    },
+    'disparity': {
+        'val': 'performance/validation/disparity/AbsRel_rate',
+        'short': 'AbsRel Rate',
+        'arrow': '% ↓',
+        'st_config': 'DISP'
+    }
+}
+
+fig = make_subplots(rows=2, cols=1, subplot_titles=("Segmentation", "Disparity"), vertical_spacing=0.1, shared_xaxes=True)
+
+colors = {
+    'ST': {'base': px.colors.qualitative.Plotly[0]},
+    'MT': {'base': px.colors.qualitative.Plotly[1]},
+    'MT-KD': {'base': px.colors.qualitative.Plotly[2]}
+}
+
+def hex_to_rgba(hex_color, alpha=1.0):
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 6:  # Handle standard hex
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return f'rgba({r},{g},{b},{alpha})'
+    return hex_color
+
+for cfg in colors:
+    base_col = colors[cfg]['base']
+    colors[cfg]['val'] = hex_to_rgba(base_col, 1.0)
+    colors[cfg]['fill'] = hex_to_rgba(base_col, 0.2)
+    
+def add_metric_traces(fig, df, metric_meta, row):
+    metric_val = metric_meta['val']
+    st_cfg = metric_meta['st_config']
+    
+    current_configs = [st_cfg, 'MT', 'MT-KD']
+    
+    for config in current_configs:
+        # Determine display name and color key
+        display_name = 'ST' if config == st_cfg else config
+        color_key = 'ST' if config == st_cfg else config
+        
+        # Val
+        df_val = df[(df['config'] == config) & (df['metric_name'] == metric_val)]
+        
+        # Filter out early epochs (start at epoch 2)
+        df_val = df_val[df_val['epoch'] >= 2]
+        
+        grouped_val = df_val.groupby('epoch')['value'].agg(['median', 'min', 'max']).reset_index()
+        
+        if grouped_val.empty:
+            continue
+            
+        showlegend = True if row == 1 else False
+        
+        # Val Ribbon
+        fig.add_trace(go.Scatter(
+            x=list(grouped_val['epoch']) + list(grouped_val['epoch'])[::-1],
+            y=list(grouped_val['max']) + list(grouped_val['min'])[::-1],
+            fill='toself',
+            fillcolor=colors[color_key]['fill'],
+            line=dict(color='rgba(255,255,255,0)'),
+            showlegend=False,
+            hoverinfo='skip'
+        ), row=row, col=1)
+        
+        # Val Line
+        fig.add_trace(go.Scatter(
+            x=grouped_val['epoch'],
+            y=grouped_val['median'],
+            mode='lines',
+            line=dict(color=colors[color_key]['val'], width=2),
+            name=display_name,
+            showlegend=showlegend,
+            legendgroup=display_name
+        ), row=row, col=1)
+
+add_metric_traces(fig, df_hist_filtered, metrics_dict['segmentation'], row=1)
+add_metric_traces(fig, df_hist_filtered, metrics_dict['disparity'], row=2)
+
+fig.update_layout(
+    # template='plotly_white',
+    height=800,
+    width=850,
+    legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+    legend_title_text="Experiment 01 Config"
 )
 
-# Helper to format text with * for fallbacks
-def format_heatmap_text(delta_df, fallback_df):
-    return [
-        [f"{val:.2f}*" if is_fb else f"{val:.2f}<span style='color:rgba(0,0,0,0)'>*</span>" for val, is_fb in zip(d_row, f_row)]
-        for d_row, f_row in zip(delta_df.values, fallback_df.values)
-    ]
-
-# Text arrays
-seg_text = format_heatmap_text(seg_delta, seg_is_fallback)
-disp_text = format_heatmap_text(disp_delta, disp_is_fallback)
-
-# --- Segmentation (Col 1) ---
-z_seg = seg_delta.values if '↑' in seg_meta['arrow'] else -seg_delta.values
-fig_heat.add_trace(go.Heatmap(
-    z=z_seg, x=seg_delta.columns, y=y_labels,
-    colorscale='RdBu', zmid=0,
-    text=seg_text, texttemplate="%{text}", textfont=dict(size=13),
-    showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=0.4, title=f"Δ {seg_meta['short']}<br>[pp {seg_meta['arrow']}]", dtick=2)
-), row=1, col=1)
-
-# --- Disparity (Col 2) ---
-z_disp = disp_delta.values if '↑' in disp_meta['arrow'] else -disp_delta.values
-disp_max_bound = int(np.ceil(np.nanmax(np.abs(z_disp)) / 2.0) * 2)
-disp_max_bound = max(disp_max_bound, 2)
-tick_vals = list(range(-disp_max_bound, disp_max_bound + 1, 2))
-
-fig_heat.add_trace(go.Heatmap(
-    z=z_disp, x=disp_delta.columns, y=y_labels,
-    colorscale='RdBu', zmin=-disp_max_bound, zmax=disp_max_bound,
-    text=disp_text, texttemplate="%{text}", textfont=dict(size=13),
-    showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=1.0, title=f"Δ {disp_meta['short']}<br>[pp {disp_meta['arrow']}]", tickmode='array', tickvals=tick_vals, ticktext=[(v if '↑' in disp_meta['arrow'] else -v) for v in tick_vals])
-), row=1, col=2)
-
-fig_heat.update_layout(
-    template='plotly_white',
-    height=450,
-    width=850
+fig.update_xaxes(title_text="Validation Epoch", tickvals=[2, 10, 20, 30, 40, 50], row=2, col=1)
+fig.update_yaxes(title_text=f"{metrics_dict['segmentation']['short']} [{metrics_dict['segmentation']['arrow']}]", row=1, col=1)
+fig.update_yaxes(
+    title_text=f"{metrics_dict['disparity']['short']} [{metrics_dict['disparity']['arrow']}]", 
+    autorange="reversed",
+    row=2, col=1
 )
 
-# Axis titles
-fig_heat.update_xaxes(title_text="Config")
-fig_heat.update_yaxes(title_text="Experiment", autorange="reversed", row=1, col=1)
+apply_chart_config(fig, 'H01F03', CHART_CONFIG)
+save_figure(fig, name='H01F03', lrtb_margin=(40, 20, 20, 60), folder='results', skip_sync=skip_sync)
 
-# Reverse y-axis to put Exp 01 at the top and hide tick labels on right plot
-fig_heat.update_yaxes(showticklabels=False, autorange="reversed", row=1, col=2)
 
-save_figure(fig_heat, name='H01F04', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
+# %% H01T01_SERRandNLE (SERR and NLE median +- min-max for SEG vs. DISP vs. MT vs. MT-KD on x-axis with stages (Encoder, SEG Decoder, DISP Decoder) on y-axis)
+# H01T01_SERRandNLE (SERR and NLE median +- min-max for SEG vs. DISP vs. MT vs. MT-KD on x-axis with stages (Encoder, SEG Decoder, DISP Decoder) on y-axis)
 
-# %% H01F05_Heatmap_AblationComparisonOverview (Exp01 vs. ...)
-# H01F05_Heatmap_AblationComparisonOverview (Exp01 vs. ...)
+def format_layer_name_t01(col):
+    if 'encoder.stages_' in col:
+        return str(int(col.split('_')[-1]) + 1)
+    if 'decoder.blocks.' in col:
+        return str(int(col.split('.')[-1]) + 1)
+    if 'final_block' in col:
+        return '4'
+    return col
 
-# Compute Deltas (Percentage points) relative to Baseline (exp01)
-seg_delta_abl = seg_matrix - seg_matrix.loc['exp01']
-disp_delta_abl = disp_matrix - disp_matrix.loc['exp01']
+encoder_layers_t01 = [f'encoder.stages_{i}' for i in range(4)]
+seg_layers_t01 = [f'decoders.segmentation.decoder.blocks.{i}' for i in range(3)] + ['decoders.segmentation.decoder.final_block']
+disp_layers_t01 = [f'decoders.disparity.decoder.blocks.{i}' for i in range(3)] + ['decoders.disparity.decoder.final_block']
 
-fig_heat_abl = make_subplots(
-    rows=1, cols=2, 
-    subplot_titles=("Segmentation", "Disparity"),
-    horizontal_spacing=0.2
+target_exps_t01 = ['exp01']
+df_entropy_filtered_t01 = df_entropy[df_entropy['experiment'].isin(target_exps_t01)].copy()
+
+metrics_t01 = [('_erank_ratio', 'SERR [\\%]'), ('_norm_entropy', 'NLE [\\%]')]
+groups_t01 = [
+    ("Encoder", encoder_layers_t01),
+    ("SEG Decoder", seg_layers_t01),
+    ("DISP Decoder", disp_layers_t01)
+]
+
+rows_t01 = []
+
+for metric_suffix, metric_name in metrics_t01:
+    for group_name, group_layers in groups_t01:
+        for layer in group_layers:
+            col_name = f"{layer}{metric_suffix}"
+            layer_name = format_layer_name_t01(layer)
+            
+            row_data = {'Metric': metric_name, 'Module': group_name, 'Layer': layer_name}
+            
+            for cfg in ['ST', 'MT', 'MT-KD']:
+                if cfg == 'ST':
+                    if group_name == 'SEG Decoder':
+                        cfg_df = df_entropy_filtered_t01[df_entropy_filtered_t01['config'] == 'SEG']
+                    elif group_name == 'DISP Decoder':
+                        cfg_df = df_entropy_filtered_t01[df_entropy_filtered_t01['config'] == 'DISP']
+                    else:
+                        cfg_df = df_entropy_filtered_t01[df_entropy_filtered_t01['config'].isin(['SEG', 'DISP'])]
+                else:
+                    cfg_df = df_entropy_filtered_t01[df_entropy_filtered_t01['config'] == cfg]
+                    
+                if col_name in cfg_df.columns:
+                    vals = cfg_df[col_name].dropna() * 100
+                    if not vals.empty:
+                        med = vals.median()
+                        vmin = vals.min()
+                        vmax = vals.max()
+                        val_str = f"${med:05.2f}_{{-{med - vmin:05.2f}}}^{{+{vmax - med:05.2f}}}$"
+                    else:
+                        val_str = "-"
+                else:
+                    val_str = "-"
+                    
+                row_data[cfg] = val_str
+            rows_t01.append(row_data)
+
+df_t01 = pd.DataFrame(rows_t01)
+df_t01.set_index(['Metric', 'Module', 'Layer'], inplace=True)
+df_t01.columns.name = None
+
+latex_output_t01 = df_t01.to_latex(
+    escape=False, 
+    index=True, 
+    multirow=True, 
+    index_names=True,
+    column_format='lll' + 'c' * 3
+)
+print(f"\\renewcommand{{\\arraystretch}}{{1.4}}\n{latex_output_t01}")
+
+# %% H01F04_Lineplot_NLEandSERR
+# H01F04_Lineplot_NLEandSERR
+
+# * 0% SERR means representational collapse (underfitting)
+# * 50% SERR means balancing compression with Expression (keeping enough dimensions to explain)
+# * 100% SERR means no compression, just memorizing training data (overfitting)
+
+# ! Dont mix up predictive entropy (framed confidence in thesis) with representational entropy of channels
+# * Predictive entropy: Uncertainty or complement of Confidence into its predictions
+# * Representational entropy: How much information is retained in the internal representations
+# * High representational entropy means expressiveness, low covariance, features are less dependent/redundant
+
+target_exps = ['exp01']
+
+# Filter data
+df_entropy_filtered = df_entropy[
+    (df_entropy['experiment'].isin(target_exps))
+].copy()
+
+# Keep SEG and DISP separate
+df_entropy_filtered['config_mapped'] = df_entropy_filtered['config']
+target_configs = ['MT', 'MT-KD'] #['SEG', 'DISP', 'MT', 'MT-KD']
+
+df_entropy_filtered = df_entropy_filtered[df_entropy_filtered['config_mapped'].isin(target_configs)]
+
+fig_line = make_subplots(
+    rows=4, cols=2, 
+    specs=[
+        [{"colspan": 2}, None],
+        [{}, {}],
+        [{"colspan": 2}, None],
+        [{}, {}]
+    ],
+    vertical_spacing=0.08,
+    horizontal_spacing=0.05,
+    shared_yaxes='rows',
+    subplot_titles=(
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder",
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder"
+    )
 )
 
-# Text arrays
-seg_text_abl = format_heatmap_text(seg_delta_abl, seg_is_fallback)
-disp_text_abl = format_heatmap_text(disp_delta_abl, disp_is_fallback)
+def hex_to_rgba(hex_color, alpha=1.0):
+    if hex_color.startswith('#'):
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) == 6:
+            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return f'rgba({r},{g},{b},{alpha})'
+    return hex_color
 
-# --- Segmentation (Col 1) ---
-z_seg_abl = seg_delta_abl.values if '↑' in seg_meta['arrow'] else -seg_delta_abl.values
-fig_heat_abl.add_trace(go.Heatmap(
-    z=z_seg_abl, x=seg_delta_abl.columns, y=y_labels,
-    colorscale='RdBu', zmid=0,
-    text=seg_text_abl, texttemplate="%{text}", textfont=dict(size=13),
-    showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=0.4, title=f"Δ {seg_meta['short']}<br>[pp {seg_meta['arrow']}]", dtick=2)
-), row=1, col=1)
+colors = {
+    'SEG': {'base': '#3E459C', 'name': 'ST (SEG)'}, # Darker shade of ST blue
+    'DISP': {'base': '#8F97F9', 'name': 'ST (DISP)'}, # Lighter shade of ST blue
+    'MT': {'base': px.colors.qualitative.Plotly[1], 'name': 'MT'},
+    'MT-KD': {'base': px.colors.qualitative.Plotly[2], 'name': 'MT-KD'},
+}
 
-# --- Disparity (Col 2) ---
-z_disp_abl = disp_delta_abl.values if '↑' in disp_meta['arrow'] else -disp_delta_abl.values
-disp_max_bound_abl = int(np.ceil(np.nanmax(np.abs(z_disp_abl)) / 2.0) * 2)
-disp_max_bound_abl = max(disp_max_bound_abl, 2)
-tick_vals_abl = list(range(-disp_max_bound_abl, disp_max_bound_abl + 1, 2))
+for cfg in colors:
+    base_col = colors[cfg]['base']
+    colors[cfg]['val'] = hex_to_rgba(base_col, 1.0)
+    colors[cfg]['fill'] = hex_to_rgba(base_col, 0.2)
 
-fig_heat_abl.add_trace(go.Heatmap(
-    z=z_disp_abl, x=disp_delta_abl.columns, y=y_labels,
-    colorscale='RdBu', zmin=-disp_max_bound_abl, zmax=disp_max_bound_abl,
-    text=disp_text_abl, texttemplate="%{text}", textfont=dict(size=13),
-    showscale=True, xgap=2, ygap=2,
-    colorbar=dict(x=1.0, title=f"Δ {disp_meta['short']}<br>[pp {disp_meta['arrow']}]", tickmode='array', tickvals=tick_vals_abl, ticktext=[(v if '↑' in disp_meta['arrow'] else -v) for v in tick_vals_abl])
-), row=1, col=2)
+def format_layer_name(col):
+    if 'encoder.stages_' in col:
+        return str(int(col.split('_')[-1]) + 1)
+    if 'decoder.blocks.' in col:
+        return str(int(col.split('.')[-1]) + 1)
+    if 'final_block' in col:
+        return '4'
+    return col
 
-fig_heat_abl.update_layout(
-    template='plotly_white',
-    height=450,
-    width=850
+layer_names = [c for c in df_entropy.columns if c.endswith('_norm_entropy')]
+layers = [c.replace('_norm_entropy', '') for c in layer_names]
+
+encoder_layers = [f'encoder.stages_{i}' for i in range(4)]
+seg_layers = [f'decoders.segmentation.decoder.blocks.{i}' for i in range(3)] + \
+             ['decoders.segmentation.decoder.final_block']
+disp_layers = [f'decoders.disparity.decoder.blocks.{i}' for i in range(3)] + \
+              ['decoders.disparity.decoder.final_block']
+
+groups = [
+    ("Encoder", encoder_layers, 1, 1),
+    ("Segmentation", seg_layers, 2, 1),
+    ("Disparity", disp_layers, 2, 2)
+]
+
+for metric, base_row in [('_erank_ratio', 0), ('_norm_entropy', 2)]:
+    for group_name, group_layers, r_offset, c in groups:
+        row = base_row + r_offset
+        for cfg in target_configs:
+            cfg_df = df_entropy_filtered[df_entropy_filtered['config_mapped'] == cfg]
+            
+            medians = []
+            mins = []
+            maxs = []
+            valid_formatted_layers = []
+            
+            for layer in group_layers:
+                col_name = f"{layer}{metric}"
+                if col_name in cfg_df.columns:
+                    vals = cfg_df[col_name].dropna()
+                    if not vals.empty:
+                        medians.append(vals.median())
+                        mins.append(vals.min())
+                        maxs.append(vals.max())
+                        valid_formatted_layers.append(format_layer_name(layer))
+            
+            if valid_formatted_layers:
+                # Show legend only once per config (in the first encoder subplot)
+                showlegend = True if (base_row == 0 and r_offset == 1) else False
+                
+                # Add vertical line between Block 2 and Final Block for decoders
+                if group_name in ["Segmentation", "Disparity"]:
+                    fig_line.add_vline(
+                        x=2.5, 
+                        line_width=1, 
+                        line_dash="dash", 
+                        line_color="grey",
+                        row=row, col=c
+                    )
+                    # Add "KD" annotation slightly below the top of the plot
+                    fig_line.add_annotation(
+                        x=2.75, y=0.9,
+                        text="KD",
+                        showarrow=False,
+                        yshift=10,
+                        font=dict(color="grey", size=10),
+                        row=row, col=c
+                    )
+
+                # Ribbon (Min-Max)
+                fig_line.add_trace(go.Scatter(
+                    x=valid_formatted_layers + valid_formatted_layers[::-1],
+                    y=maxs + mins[::-1],
+                    fill='toself',
+                    fillcolor=colors[cfg]['fill'],
+                    line=dict(color='rgba(255,255,255,0)'),
+                    showlegend=False,
+                    hoverinfo='skip',
+                    legendgroup=cfg
+                ), row=row, col=c)
+                
+                # Median Line
+                fig_line.add_trace(go.Scatter(
+                    x=valid_formatted_layers, y=medians,
+                    mode='lines+markers',
+                    line=dict(color=colors[cfg]['val'], width=2),
+                    name=colors[cfg]['name'],
+                    legendgroup=cfg,
+                    showlegend=showlegend
+                ), row=row, col=c)
+
+fig_line.update_layout(
+    # template='plotly_white',
+    height=1200,
+    width=1100,
+    legend=dict(
+        orientation="h", 
+        yanchor="top", 
+        y=-0.05, 
+        xanchor="center", 
+        x=0.5, 
+        title_text="Experiment 01 Config"
+    )
 )
 
-# Axis titles
-fig_heat_abl.update_xaxes(title_text="Config")
-fig_heat_abl.update_yaxes(title_text="Experiment", autorange="reversed", row=1, col=1)
+fig_line.update_yaxes(
+    range=[0, 1],
+    tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    ticktext=["0", "20", "40", "60", "80", "100"]
+)
+fig_line.update_yaxes(title_text="SERR [%]", row=1, col=1)
+fig_line.update_yaxes(title_text="SERR [%]", row=2, col=1)
+fig_line.update_yaxes(title_text="NLE [%]", row=3, col=1)
+fig_line.update_yaxes(title_text="NLE [%]", row=4, col=1)
 
-# Reverse y-axis to put Exp 01 at the top and hide tick labels on right plot
-fig_heat_abl.update_yaxes(showticklabels=False, autorange="reversed", row=1, col=2)
+fig_line.update_xaxes(title_text="Layer")
 
-save_figure(fig_heat_abl, name='H01F05', lrtb_margin=(40, 20, 20, 20), folder='results', skip_sync=skip_sync)
+apply_chart_config(fig_line, 'H01F04', CHART_CONFIG)
+save_figure(fig_line, height=1200, name='H01F04', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+
+# %% H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
+# H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
+
+target_exps = ['exp01']
+df_f05 = df_entropy[df_entropy['experiment'].isin(target_exps)].copy()
+
+fig5 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation Projection Head", "Disparity Projection Head"), horizontal_spacing=0.05, shared_yaxes=True)
+
+colors_dict = {
+    'ST': px.colors.qualitative.Plotly[0],
+    'MT': px.colors.qualitative.Plotly[1],
+    'MT-KD': px.colors.qualitative.Plotly[2]
+}
+
+stages = ['ST', 'MT', 'MT-KD']
+
+for col, task in enumerate(['segmentation', 'disparity'], start=1):
+    col_name = f'decoders.{task}.intercept_head_mean_confidence'
+    
+    for config in stages:
+        if config == 'ST':
+            target_cfg = 'SEG' if task == 'segmentation' else 'DISP'
+            data = df_f05[df_f05['config'] == target_cfg][col_name].dropna() * 100
+        else:
+            data = df_f05[df_f05['config'] == config][col_name].dropna() * 100
+            
+        showlegend = False
+        
+        fig5.add_trace(go.Box(
+            y=data,
+            x=[config] * len(data),
+            orientation='v',
+            name=config,
+            marker_color=colors_dict[config],
+            boxpoints='all',
+            jitter=0.25,
+            pointpos=-1.8,
+            showlegend=showlegend,
+            legendgroup=config
+        ), row=1, col=col)
+
+    fig5.add_hline(y=70, line_dash="dash", line_color="grey", row=1, col=col)
+    fig5.add_annotation(
+        y=70, x=0.01,
+        text="KD",
+        showarrow=False,
+        xshift=-50,
+        yshift=10,
+        font=dict(color="grey", size=10),
+        row=1, col=col
+    )
+
+fig5.update_layout(
+    height=400,
+    width=850,
+    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Experiment 01 Config")
+)
+
+fig5.update_yaxes(title_text="Raw Confidence [%]", row=1, col=1)
+fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=1)
+fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=2)
+
+apply_chart_config(fig5, 'H01F05', CHART_CONFIG)
+save_figure(fig5, height=400, name='H01F05', lrtb_margin=(40, 20, 40, 40), folder='results', skip_sync=skip_sync)
 
 # %%

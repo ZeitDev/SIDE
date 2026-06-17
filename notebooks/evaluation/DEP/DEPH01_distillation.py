@@ -210,7 +210,7 @@ for config in ['ST', 'MT', 'MT-KD']:
     ), row=1, col=2)
 
 fig_box.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=400,
 )
 fig_box.update_yaxes(title_text=f"{seg_meta['label']} ({seg_meta['arrow']})", row=1, col=1)
@@ -293,7 +293,7 @@ for config in ['ST', 'MT', 'MT-KD']:
     ), row=1, col=2)
 
 fig_dumb.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=850,
     legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
@@ -361,7 +361,7 @@ fig_heat.add_trace(go.Heatmap(
 ), row=1, col=2)
 
 fig_heat.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=850
 )

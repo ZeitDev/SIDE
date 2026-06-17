@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -26,6 +26,20 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 skip_sync = False
+
+CHART_CONFIG = {
+    'H05F01': {
+        'x1': dict(range=[30, 60], dtick=5),
+        'x2': dict(range=[40, 0], dtick=5),
+    },
+    'H05F02': {
+        'x': dict(range=[95, 97], dtick=0.2),
+    },
+    'H05F03': {
+        'x1': dict(range=[55, 0], dtick=10),
+        'x2': dict(range=[105, 0], dtick=20),
+    }
+}
 
 # %% Data preperation
 # Data preperation
@@ -99,7 +113,7 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
             ), row=1, col=col)
 
 fig.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=850,
     boxmode='group',
@@ -117,6 +131,7 @@ fig.update_xaxes(
 fig.update_yaxes(title_text="Experiment (Model Size)", autorange="reversed", row=1, col=1)
 fig.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
+apply_chart_config(fig, 'H05F01', CHART_CONFIG)
 save_figure(fig, height=400, name='H05F01', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H05F02_Barplot_BinaryDistillationPerformance (Effect of Binary Distillation on Performance)
@@ -168,7 +183,7 @@ for config in display_configs:
     ))
 
 fig.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=300,
     width=600
 )
@@ -176,6 +191,7 @@ fig.update_layout(
 fig.update_xaxes(title_text=metric_desc['label'])
 fig.update_yaxes(title_text="Experiment 10 Config", autorange="reversed")
 
+apply_chart_config(fig, 'H05F02', CHART_CONFIG)
 save_figure(fig, height=300, name='H05F02', standoff=15, lrtb_margin=(60, 20, 10, 0), folder='results', skip_sync=skip_sync)
 
 # %% H05F03_Barplot_ComplexityShift (Effect of Binary Distillation on Performance)
@@ -273,7 +289,7 @@ for col, m_key in enumerate(['absrel', 'bad3'], start=1):
             ), row=1, col=col)
 
 fig.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=550,
     width=850,
     boxmode='group',
@@ -288,6 +304,7 @@ fig.update_xaxes(title_text=metrics['bad3']['label'], autorange=metrics['bad3'][
 fig.update_yaxes(title_text="Experiment", autorange="reversed", row=1, col=1)
 fig.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
+apply_chart_config(fig, 'H05F03', CHART_CONFIG)
 save_figure(fig, height=500, name='H05F03', lrtb_margin=(40, 20, 10, 0), folder='results', skip_sync=skip_sync)
 
 

@@ -87,7 +87,7 @@ for config in ['ST', 'MT', 'MT-KD']:
     ))
 
 fig_scatter2.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=550,
     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title="Experiment 01 Config")
@@ -113,7 +113,7 @@ for config in ['ST', 'MT', 'MT-KD']:
     ))
 
 fig_scatter.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=450,
     width=550,
     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title="Experiment 01 Config")

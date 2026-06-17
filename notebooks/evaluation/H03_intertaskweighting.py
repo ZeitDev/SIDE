@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -26,6 +26,21 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 skip_sync = False
+
+CHART_CONFIG = {
+    'H03F01': {
+        'x1': dict(range=[30, 60], dtick=5),
+        'x2': dict(range=[35, 0], dtick=5),
+    },
+    'H03F02': {
+        'x1': dict(range=[0, 55], dtick=10),
+        'x2': dict(range=[0, 55], dtick=10),
+    },
+    'H03F03': {
+        'y1': dict(range=[40, 5], dtick=10),
+        'y2': dict(range=[0, 1.05], dtick=0.2),
+    }
+}
 
 # %% Data preperation
 # Data preperation
@@ -89,7 +104,7 @@ for config in configs:
             ), row=1, col=col)
 
 fig_bar.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=500,
     width=850,
     boxmode='group',
@@ -107,6 +122,7 @@ fig_bar.update_xaxes(
 fig_bar.update_yaxes(title_text="Experiment (Inter-Task Weighting Method)", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
+apply_chart_config(fig_bar, 'H03F01', CHART_CONFIG)
 save_figure(fig_bar, height=450, name='H03F01', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H03F02_Boxplot_BestEpochs (Best Epochs Comparison for ST/MT/MT-KD Configurations)
@@ -165,7 +181,7 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
             ), row=1, col=col)
 
 fig_epochs.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=500,
     width=850,
     boxmode='group',
@@ -179,106 +195,107 @@ fig_epochs.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(
 fig_epochs.update_yaxes(title_text="Experiment (Inter-Task Weighting Method)", autorange="reversed", row=1, col=1)
 fig_epochs.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
+apply_chart_config(fig_epochs, 'H03F02', CHART_CONFIG)
 save_figure(fig_epochs, height=450, name='H03F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 
 # %% H03F03_Scatter_PerformanceVsEpoch (Seed Performance vs. Best Validation Epoch)
 # H03F03_Scatter_PerformanceVsEpoch (Seed Performance vs. Best Validation Epoch)
 
-target_exps = ['exp01', 'exp06']
-target_configs = ['MT', 'MT-KD', 'SEG', 'DISP']
+# target_exps = ['exp01', 'exp06']
+# target_configs = ['MT', 'MT-KD', 'SEG', 'DISP']
 
-df_scatter = df_final[
-    (df_final['experiment'].isin(target_exps)) & 
-    (df_final['config'].isin(target_configs))
-].copy()
+# df_scatter = df_final[
+#     (df_final['experiment'].isin(target_exps)) & 
+#     (df_final['config'].isin(target_configs))
+# ].copy()
 
-# Add mapping for experiment labels
-df_scatter['regime'] = df_scatter['experiment'].map({'exp01': '01 (DTP)', 'exp06': '06 (1:1)'})
-# Map SEG/DISP to ST
-df_scatter['config_mapped'] = df_scatter['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
+# # Add mapping for experiment labels
+# df_scatter['regime'] = df_scatter['experiment'].map({'exp01': '01 (DTP)', 'exp06': '06 (1:1)'})
+# # Map SEG/DISP to ST
+# df_scatter['config_mapped'] = df_scatter['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
 
-# Extract the base run name to match test and train runs
-df_scatter['base_run_name'] = df_scatter['run_name'].str.replace('/test', '', regex=False).str.replace('/train', '', regex=False)
+# # Extract the base run name to match test and train runs
+# df_scatter['base_run_name'] = df_scatter['run_name'].str.replace('/test', '', regex=False).str.replace('/train', '', regex=False)
 
-train_df = df_scatter[df_scatter['run_name'].str.endswith('/train')].copy()
-train_df['epoch_seg_val'] = train_df['metric.best/combined/epoch'].fillna(train_df['metric.best/segmentation/epoch'])
-train_df['epoch_disp_val'] = train_df['metric.best/combined/epoch'].fillna(train_df['metric.best/disparity/epoch'])
+# train_df = df_scatter[df_scatter['run_name'].str.endswith('/train')].copy()
+# train_df['epoch_seg_val'] = train_df['metric.best/combined/epoch'].fillna(train_df['metric.best/segmentation/epoch'])
+# train_df['epoch_disp_val'] = train_df['metric.best/combined/epoch'].fillna(train_df['metric.best/disparity/epoch'])
 
-# Aggregate performance and epoch metrics using fallback logic
-for metric in ['DICE_score', 'AbsRel_rate']:
-    meta = METRIC_META[metric]
-    task = meta['task']
-    col = f"metric.best_combined/performance/testing/{task}/{metric}{meta['suffix']}"
-    fallback = f"metric.best_{task}/performance/testing/{task}/{metric}{meta['suffix']}"
-    df_scatter[metric] = df_scatter[col].fillna(df_scatter[fallback])
+# # Aggregate performance and epoch metrics using fallback logic
+# for metric in ['DICE_score', 'AbsRel_rate']:
+#     meta = METRIC_META[metric]
+#     task = meta['task']
+#     col = f"metric.best_combined/performance/testing/{task}/{metric}{meta['suffix']}"
+#     fallback = f"metric.best_{task}/performance/testing/{task}/{metric}{meta['suffix']}"
+#     df_scatter[metric] = df_scatter[col].fillna(df_scatter[fallback])
 
-# Map the epochs from the train runs to all rows
-df_scatter['best_epoch_seg'] = df_scatter['base_run_name'].map(train_df.set_index('base_run_name')['epoch_seg_val'])
-df_scatter['best_epoch_disp'] = df_scatter['base_run_name'].map(train_df.set_index('base_run_name')['epoch_disp_val'])
+# # Map the epochs from the train runs to all rows
+# df_scatter['best_epoch_seg'] = df_scatter['base_run_name'].map(train_df.set_index('base_run_name')['epoch_seg_val'])
+# df_scatter['best_epoch_disp'] = df_scatter['base_run_name'].map(train_df.set_index('base_run_name')['epoch_disp_val'])
 
-# Keep only the test runs, which now have both performance metrics and mapped epochs
-df_scatter = df_scatter[df_scatter['run_name'].str.endswith('/test')]
+# # Keep only the test runs, which now have both performance metrics and mapped epochs
+# df_scatter = df_scatter[df_scatter['run_name'].str.endswith('/test')]
 
-fig_scatter = make_subplots(
-    rows=2, cols=2, 
-    subplot_titles=("01 (DTP)", "06 (1:1)", "", ""),
-    horizontal_spacing=0.02,
-    vertical_spacing=0.08,
-    shared_xaxes=True,
-    shared_yaxes=True
-)
+# fig_scatter = make_subplots(
+#     rows=2, cols=2, 
+#     subplot_titles=("01 (DTP)", "06 (1:1)", "", ""),
+#     horizontal_spacing=0.02,
+#     vertical_spacing=0.08,
+#     shared_xaxes=True,
+#     shared_yaxes=True
+# )
 
-for row, task in enumerate(['segmentation', 'disparity'], start=1):
-    for col, regime in enumerate(['01 (DTP)', '06 (1:1)'], start=1):
-        perf_metric = 'DICE_score' if task == 'segmentation' else 'AbsRel_rate'
-        epoch_metric = 'best_epoch_seg' if task == 'segmentation' else 'best_epoch_disp'
+# for row, task in enumerate(['segmentation', 'disparity'], start=1):
+#     for col, regime in enumerate(['01 (DTP)', '06 (1:1)'], start=1):
+#         perf_metric = 'DICE_score' if task == 'segmentation' else 'AbsRel_rate'
+#         epoch_metric = 'best_epoch_seg' if task == 'segmentation' else 'best_epoch_disp'
         
-        for config in ['MT', 'MT-KD']:
-            mask = (df_scatter['regime'] == regime) & (df_scatter['config_mapped'] == config)
+#         for config in ['MT', 'MT-KD']:
+#             mask = (df_scatter['regime'] == regime) & (df_scatter['config_mapped'] == config)
             
-            x_val = df_scatter[mask][epoch_metric]
-            y_val = df_scatter[mask][perf_metric]
+#             x_val = df_scatter[mask][epoch_metric]
+#             y_val = df_scatter[mask][perf_metric]
             
-            # Show legend only once per config
-            showlegend = True if (row == 1 and col == 1) else False
+#             # Show legend only once per config
+#             showlegend = True if (row == 1 and col == 1) else False
             
-            # Use marker edge color to make sure shapes are visible even if overlapping
-            fig_scatter.add_trace(go.Scatter(
-                x=x_val,
-                y=y_val,
-                mode='markers',
-                name=config,
-                marker=dict(
-                    color=colors_epochs[config],
-                    size=10,
-                    opacity=0.7,
-                    line=dict(width=1, color='DarkSlateGrey')
-                ),
-                legendgroup=config,
-                showlegend=showlegend
-            ), row=row, col=col)
+#             # Use marker edge color to make sure shapes are visible even if overlapping
+#             fig_scatter.add_trace(go.Scatter(
+#                 x=x_val,
+#                 y=y_val,
+#                 mode='markers',
+#                 name=config,
+#                 marker=dict(
+#                     color=colors_epochs[config],
+#                     size=10,
+#                     opacity=0.7,
+#                     line=dict(width=1, color='DarkSlateGrey')
+#                 ),
+#                 legendgroup=config,
+#                 showlegend=showlegend
+#             ), row=row, col=col)
 
-fig_scatter.update_layout(
-    template='plotly_white',
-    height=700,
-    width=950,
-    legend=dict(orientation="h", yanchor="top", y=-0.07, xanchor="center", x=0.5, title_text="Config")
-)
+# fig_scatter.update_layout(
+#     # template='plotly_white',
+#     height=700,
+#     width=950,
+#     legend=dict(orientation="h", yanchor="top", y=-0.07, xanchor="center", x=0.5, title_text="Config")
+# )
 
-# Axis Configuration
-# Row 1 (Top): Hide x-axis labels/titles
-fig_scatter.update_xaxes(showticklabels=False, title_text="", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=1)
-# Row 2 (Bottom): Show x-axis labels/titles
-fig_scatter.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=2)
+# # Axis Configuration
+# # Row 1 (Top): Hide x-axis labels/titles
+# fig_scatter.update_xaxes(showticklabels=False, title_text="", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=1)
+# # Row 2 (Bottom): Show x-axis labels/titles
+# fig_scatter.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=2)
 
-# Col 1 (Left): Show y-axis labels/titles
-fig_scatter.update_yaxes(title_text="Test DICE Score [% ↑]", row=1, col=1)
-fig_scatter.update_yaxes(title_text="Test AbsRel Rate [% ↓]", autorange="reversed", row=2, col=1)
+# # Col 1 (Left): Show y-axis labels/titles
+# fig_scatter.update_yaxes(title_text="Test DICE Score [% ↑]", row=1, col=1)
+# fig_scatter.update_yaxes(title_text="Test AbsRel Rate [% ↓]", autorange="reversed", row=2, col=1)
 
-# Col 2 (Right): Hide y-axis labels/titles
-fig_scatter.update_yaxes(showticklabels=False, title_text="", row=1, col=2)
-fig_scatter.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=2, col=2)
+# # Col 2 (Right): Hide y-axis labels/titles
+# fig_scatter.update_yaxes(showticklabels=False, title_text="", row=1, col=2)
+# fig_scatter.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=2, col=2)
 
 # ! omitted
 # save_figure(fig_scatter, height=700, name='H03F03', lrtb_margin=(40, 20, 30, 80), folder='results', skip_sync=skip_sync)
@@ -419,7 +436,7 @@ for col, experiment in enumerate(target_exps, start=1):
             ), row=2, col=col)
 
 fig_line.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=800,
     width=950,
     legend=dict(
@@ -433,16 +450,17 @@ fig_line.update_layout(
 )
 
 # Axis Configuration
-fig_line.update_yaxes(title_text="Validation AbsRel Rate [Log % ↓]", range=[40, 6], row=1, col=1)#, type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
+fig_line.update_yaxes(title_text="Validation AbsRel Rate [Log % ↓]", range=[40, 0], row=1, col=1)#, type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
 #fig_line.update_yaxes(type="log", range=[np.log10(30), np.log10(6)], showticklabels=False, row=1, col=2)
-fig_line.update_yaxes(range=[40, 6], showticklabels=False, row=1, col=2)
+fig_line.update_yaxes(range=[40, 0], showticklabels=False, row=1, col=2)
 fig_line.update_yaxes(title_text="Disparity Weight", range=[0, 1.1], title_standoff=5, row=2, col=1)
 fig_line.update_yaxes(range=[0, 1.1], showticklabels=False, row=2, col=2)
 
 fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=1)
 fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Epoch", row=2, col=2)
 
-save_figure(fig_line, height=600, name='H03F03', lrtb_margin=(40, 40, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+apply_chart_config(fig_line, 'H03F03', CHART_CONFIG)
+save_figure(fig_line, height=600, name='H03F03', lrtb_margin=(40, 40, 60, 80), standoff=10, folder='results', skip_sync=skip_sync)
 
 # %%
 

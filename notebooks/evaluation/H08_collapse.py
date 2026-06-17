@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -26,6 +26,13 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 skip_sync = False
+
+CHART_CONFIG = {
+    'H08F01': {
+        'x': dict(range=[60, 0], dtick=10),
+        'y': dict(range=[20, 60], dtick=10)
+    }
+}
 
 # %% Data preperation
 # Data preperation
@@ -72,7 +79,7 @@ for exp in ['exp01', 'exp08', 'exp09']:
     ))
 
 fig_scatter.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=500,
     width=600,
     xaxis_title='AbsRel Rate [% ↓]',
@@ -90,6 +97,7 @@ fig_scatter.update_layout(
 # Reversing x-axis so that smaller AbsRel is on the right, making 'up/right' the better direction
 fig_scatter.update_xaxes(autorange="reversed")
 
+apply_chart_config(fig_scatter, 'H08F01', CHART_CONFIG)
 save_figure(fig_scatter, height=500, name='H08F01', lrtb_margin=(40, 20, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %%

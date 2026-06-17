@@ -14,6 +14,7 @@ import mlflow.artifacts
 from utils import helpers
 from data.transforms import build_transforms
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -22,6 +23,34 @@ setup_environment()
 os.environ['CUDA_VISIBLE_DEVICES'] = '1' # Restrict to GPU 1 for this notebook
 
 # %% Helpers
+def entropy_confidence(logits, c_min=0, c_max=1, prob_dim=1):
+    probs = F.softmax(logits, dim=prob_dim) # get probability distribution
+    entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim) # Shannon Entropy using log base 2 
+    num_bins = logits.shape[prob_dim]
+    max_entropy = math.log2(num_bins) 
+    normalized_entropy = entropy / max_entropy # make entropy log independent and scale to [0, 1]
+    base_confidence = 1.0 - normalized_entropy
+    
+    denominator = max(c_max - c_min, 1e-6) # stretch confidence to [c_min, c_max]
+    
+    scaled_conf = (base_confidence - c_min) / denominator
+    final_confidence = torch.clamp(scaled_conf, min=0.0, max=1.0)
+    
+    return final_confidence
+
+class LayerConfidenceTracker:
+    def __init__(self):
+        self.sum_confidence = 0.0
+        self.count = 0
+        
+    @torch.no_grad()
+    def update(self, features: torch.Tensor):
+        conf = entropy_confidence(features, prob_dim=1)
+        self.sum_confidence += conf.sum().item()
+        self.count += conf.numel()
+        
+    def compute_confidence(self):
+        return (self.sum_confidence / self.count) if self.count > 0 else 0.0 # comparable to temperature's mean of means because resolution is constant
 
 class LayerEntropyTracker:
     def __init__(self, channels: int, device='cuda'):
@@ -61,42 +90,56 @@ class LayerEntropyTracker:
         return normalized_entropy, effective_rank_ratio
 
 # Helper to dynamically define which trackers we need based on config
-def get_trackers_for_config(config_name):
+def get_trackers_for_config(config_name, experiment):
+    if experiment == 'exp04':
+        dims = (80, 160, 320, 640)
+    else:
+        dims = (96, 192, 384, 768)
+        
+    if experiment == 'exp10':
+        intercept_head = 2
+    else:
+        intercept_head = 8
+
     trackers = {
-        'encoder.stages_0': LayerEntropyTracker(channels=96),
-        'encoder.stages_1': LayerEntropyTracker(channels=192),
-        'encoder.stages_2': LayerEntropyTracker(channels=384),
-        'encoder.stages_3': LayerEntropyTracker(channels=768),
+        'encoder.stages_0': LayerEntropyTracker(channels=dims[0]),
+        'encoder.stages_1': LayerEntropyTracker(channels=dims[1]),
+        'encoder.stages_2': LayerEntropyTracker(channels=dims[2]),
+        'encoder.stages_3': LayerEntropyTracker(channels=dims[3]),
     }
+    
+    confidence_trackers = {}
     
     if config_name in ['SEG', 'MT', 'MT-KD']:
         trackers.update({
-            'decoders.segmentation.decoder.blocks.0': LayerEntropyTracker(channels=384),
-            'decoders.segmentation.decoder.blocks.1': LayerEntropyTracker(channels=192),
-            'decoders.segmentation.decoder.blocks.2': LayerEntropyTracker(channels=96),
-            'decoders.segmentation.decoder.final_block': LayerEntropyTracker(channels=96),
-            'decoders.segmentation.intercept_head': LayerEntropyTracker(channels=8),
-            'decoders.segmentation.head': LayerEntropyTracker(channels=8),
+            'decoders.segmentation.decoder.blocks.0': LayerEntropyTracker(channels=dims[2]),
+            'decoders.segmentation.decoder.blocks.1': LayerEntropyTracker(channels=dims[1]),
+            'decoders.segmentation.decoder.blocks.2': LayerEntropyTracker(channels=dims[0]),
+            'decoders.segmentation.decoder.final_block': LayerEntropyTracker(channels=dims[0]),
+            'decoders.segmentation.intercept_head': LayerEntropyTracker(channels=intercept_head),
+            #'decoders.segmentation.head': LayerEntropyTracker(channels=8),
         })
+        confidence_trackers['decoders.segmentation.intercept_head'] = LayerConfidenceTracker()
         
     if config_name in ['DISP', 'MT', 'MT-KD']:
         trackers.update({
-            'decoders.disparity.decoder.blocks.0': LayerEntropyTracker(channels=384),
-            'decoders.disparity.decoder.blocks.1': LayerEntropyTracker(channels=192),
-            'decoders.disparity.decoder.blocks.2': LayerEntropyTracker(channels=96),
-            'decoders.disparity.decoder.final_block': LayerEntropyTracker(channels=96),
+            'decoders.disparity.decoder.blocks.0': LayerEntropyTracker(channels=dims[2]),
+            'decoders.disparity.decoder.blocks.1': LayerEntropyTracker(channels=dims[1]),
+            'decoders.disparity.decoder.blocks.2': LayerEntropyTracker(channels=dims[0]),
+            'decoders.disparity.decoder.final_block': LayerEntropyTracker(channels=dims[0]),
             'decoders.disparity.intercept_head': LayerEntropyTracker(channels=128),
             #'decoders.disparity.head': LayerEntropyTracker(channels=1),
         })
+        confidence_trackers['decoders.disparity.intercept_head'] = LayerConfidenceTracker()
         
-    return trackers
+    return trackers, confidence_trackers
 
 
 # %% Automation Setup
 
 # 1. Just define the experiments and configs you want to process.
 #    The script will automatically discover all 120+ runs inside them.
-experiments_to_run = ['exp01'] # Add 'exp02', etc. when ready
+experiments_to_run = ['exp01', 'exp02', 'exp03', 'exp04', 'exp05', 'exp06', 'exp07', 'exp08', 'exp09', 'exp10'] # Add 'exp02', etc. when ready
 configs_to_run = ['SEG', 'DISP', 'MT', 'MT-KD']
 
 # Ensure temp directory exists for MLflow artifacts
@@ -156,12 +199,15 @@ for experiment in experiments_to_run:
             # Get the parent run to download configs (base.yaml, etc.)
             mlflow_parent_run = df_runs[df_runs['tags.mlflow.runName'] == run_date].iloc[0]
 
-            base_config_filepath = mlflow.artifacts.download_artifacts(
-                run_id=mlflow_parent_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp'
-            )
-            experiment_config_filepath = mlflow.artifacts.download_artifacts(
-                run_id=mlflow_parent_run.run_id, artifact_path=f'configs/{experiment}/{config_name}.yaml', dst_path='../.temp'
-            )
+            # base_config_filepath = mlflow.artifacts.download_artifacts(
+            #     run_id=mlflow_parent_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp'
+            # )
+            # experiment_config_filepath = mlflow.artifacts.download_artifacts(
+            #     run_id=mlflow_parent_run.run_id, artifact_path=f'configs/{experiment}/{config_name}.yaml', dst_path='../.temp'
+            # )
+            
+            base_config_filepath = './configs/base.yaml'
+            experiment_config_filepath = f'./configs/{experiment}/{config_name}.yaml'
 
             with open(base_config_filepath, 'r') as f: base_config = yaml.safe_load(f)
             with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)
@@ -199,17 +245,22 @@ for experiment in experiments_to_run:
             # ---------------------------
             # 4. Attach Trackers & Hooks
             # ---------------------------
-            trackers = get_trackers_for_config(config_name)
+            trackers, confidence_trackers = get_trackers_for_config(config_name, experiment)
             hook_handles = []
 
             def get_hook(layer_name):
                 def hook_fn(module, input, output):
                     features = output[0] if isinstance(output, tuple) else output
-                    trackers[layer_name].update(features)
+                    if layer_name in trackers:
+                        trackers[layer_name].update(features)
+                    if layer_name in confidence_trackers:
+                        confidence_trackers[layer_name].update(features)
                 return hook_fn
 
+            all_tracker_names = set(trackers.keys()) | set(confidence_trackers.keys())
+
             for name, module in model.named_modules():
-                if name in trackers:
+                if name in all_tracker_names:
                     handle = module.register_forward_hook(get_hook(name))
                     hook_handles.append(handle)
 
@@ -238,6 +289,10 @@ for experiment in experiments_to_run:
                 run_metrics[f'{layer_name}_norm_entropy'] = norm_entropy
                 run_metrics[f'{layer_name}_erank_ratio'] = e_rank
 
+            for layer_name, tracker in confidence_trackers.items():
+                conf = tracker.compute_confidence()
+                run_metrics[f'{layer_name}_mean_confidence'] = conf
+
             all_results.append(run_metrics)
 
             # ---------------------------
@@ -246,7 +301,7 @@ for experiment in experiments_to_run:
             for handle in hook_handles:
                 handle.remove()
             
-            del model, dataset, dataloader, trackers
+            del model, dataset, dataloader, trackers, confidence_trackers
             gc.collect()
             torch.cuda.empty_cache()
 

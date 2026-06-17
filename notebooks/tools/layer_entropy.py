@@ -14,6 +14,7 @@ from utils import helpers
 from data.transforms import build_transforms
 
 from torch.utils.data import DataLoader, Dataset
+import torch.nn.functional as F
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
@@ -46,7 +47,21 @@ def get_layer_entropy(features: torch.Tensor):
     # Normalized Entropy: How balanced is the workload between effective channels?
     # Effective Rank Ratio: How many effective channels are being used relative to total channels?
     return normalized_entropy, effective_rank_ratio
+
+def entropy_confidence(logits, c_min=0, c_max=1, prob_dim=1):
+    probs = F.softmax(logits, dim=prob_dim) # get probability distribution
+    entropy = -torch.sum(probs * torch.log2(probs + 1e-9), dim=prob_dim) # Shannon Entropy using log base 2 
+    num_bins = logits.shape[prob_dim]
+    max_entropy = math.log2(num_bins) 
+    normalized_entropy = entropy / max_entropy # make entropy log independent and scale to [0, 1]
+    base_confidence = 1.0 - normalized_entropy
     
+    denominator = max(c_max - c_min, 1e-6) # stretch confidence to [c_min, c_max]
+    
+    scaled_conf = (base_confidence - c_min) / denominator
+    final_confidence = torch.clamp(scaled_conf, min=0.0, max=1.0)
+    
+    return final_confidence
 
 class LayerEntropyTracker:
     def __init__(self, channels: int, device='cuda'):
@@ -85,7 +100,21 @@ class LayerEntropyTracker:
         effective_rank_ratio = effective_rank / self.C # normalize by number of channels
         
         return normalized_entropy, effective_rank_ratio
-    
+ 
+class LayerConfidenceTracker:
+    def __init__(self):
+        self.sum_confidence = 0.0
+        self.count = 0
+        
+    @torch.no_grad()
+    def update(self, features: torch.Tensor):
+        conf = entropy_confidence(features, prob_dim=1)
+        self.sum_confidence += conf.sum().item()
+        self.count += conf.numel()
+        
+    def compute_confidence(self):
+        return (self.sum_confidence / self.count) if self.count > 0 else 0.0 # comparable to temperature's mean of means because resolution is constant
+   
 # %% Test 1: Pure Chaos with Tracker
 B, C, H, W = 2, 768, 16, 16
 
@@ -166,9 +195,9 @@ print(f"Tracker Effective Rank Ratio: {erank_ratio_3_tracker:.2%}\n")
 #     print(f"{layer_name} -> Entropy: {norm_entropy:.2%}, Effective Rank: {e_rank:.2f}")
 
 # %% Settings
-experiment = 'exp01'
-config = 'MT'
-run_name = '260518:2102/train'
+experiment = 'exp10' # 'exp01'
+config = 'MT-KD' # 'DISP', 'SEG', 'MT', 'MT-KD'
+run_name = '260510:1505/train'
 task_mode = 'combined' # 'disparity', 'segmentation', 'combined'
 
 # 'MT-KD': '260520:0455/train'
@@ -180,8 +209,13 @@ mlflow_experiment = mlflow.get_experiment_by_name(config)
 run_date = run_name.split('/')[0]
 mlflow_run = mlflow.search_runs(experiment_ids=[mlflow_experiment.experiment_id], filter_string=f'run_name = "{run_date}"').iloc[0]
 
-base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp')
-experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{experiment}/{config}.yaml', dst_path='../.temp')
+# try:
+#     base_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path='configs/base.yaml', dst_path='../.temp')
+#     experiment_config_filepath = mlflow.artifacts.download_artifacts(run_id=mlflow_run.run_id, artifact_path=f'configs/{experiment}/{config}.yaml', dst_path='../.temp')
+# except Exception as e:
+#     print(f"Error downloading artifacts: {e}")
+base_config_filepath = './configs/base.yaml'
+experiment_config_filepath = f'./configs/{experiment}/{config}.yaml'
 
 with open(base_config_filepath, 'r') as f: base_config = yaml.safe_load(f)
 with open(experiment_config_filepath, 'r') as f: experiment_config = yaml.safe_load(f)
@@ -218,36 +252,69 @@ dataloader = DataLoader(
 helpers.check_dataleakage('test', dataset)
 
 # %%
-trackers = {
-    'encoder.stages_0': LayerEntropyTracker(channels=96),
-    'encoder.stages_1': LayerEntropyTracker(channels=192),
-    'encoder.stages_2': LayerEntropyTracker(channels=384),
-    'encoder.stages_3': LayerEntropyTracker(channels=768),
+def get_trackers_for_config(config_name, experiment):
+    if experiment == 'exp04':
+        dims = (80, 160, 320, 640)
+    else:
+        dims = (96, 192, 384, 768)
+
+    if experiment == 'exp10':
+        intercept_head = 2
+    else:
+        intercept_head = 8
     
-    'decoders.segmentation.decoder.blocks.0': LayerEntropyTracker(channels=384),
-    'decoders.segmentation.decoder.blocks.1': LayerEntropyTracker(channels=192),
-    'decoders.segmentation.decoder.blocks.2': LayerEntropyTracker(channels=96),
-    'decoders.segmentation.decoder.final_block': LayerEntropyTracker(channels=96),
-    'decoders.segmentation.intercept_head': LayerEntropyTracker(channels=8),
-    'decoders.segmentation.head': LayerEntropyTracker(channels=8),
+    trackers = {
+        'encoder.stages_0': LayerEntropyTracker(channels=dims[0]),
+        'encoder.stages_1': LayerEntropyTracker(channels=dims[1]),
+        'encoder.stages_2': LayerEntropyTracker(channels=dims[2]),
+        'encoder.stages_3': LayerEntropyTracker(channels=dims[3]),
+    }
     
-    'decoders.disparity.decoder.blocks.0': LayerEntropyTracker(channels=384),
-    'decoders.disparity.decoder.blocks.1': LayerEntropyTracker(channels=192),
-    'decoders.disparity.decoder.blocks.2': LayerEntropyTracker(channels=96),
-    'decoders.disparity.decoder.final_block': LayerEntropyTracker(channels=96),
-    'decoders.disparity.intercept_head': LayerEntropyTracker(channels=128),
-    #'decoders.disparity.head': LayerEntropyTracker(channels=1),
-}
+    confidence_trackers = {}
+    
+    if config_name in ['SEG', 'MT', 'MT-KD']:
+        trackers.update({
+            'decoders.segmentation.decoder.blocks.0': LayerEntropyTracker(channels=dims[2]),
+            'decoders.segmentation.decoder.blocks.1': LayerEntropyTracker(channels=dims[1]),
+            'decoders.segmentation.decoder.blocks.2': LayerEntropyTracker(channels=dims[0]),
+            'decoders.segmentation.decoder.final_block': LayerEntropyTracker(channels=dims[0]),
+            'decoders.segmentation.intercept_head': LayerEntropyTracker(channels=intercept_head),
+            #'decoders.segmentation.head': LayerEntropyTracker(channels=8),
+        })
+        confidence_trackers['decoders.segmentation.intercept_head'] = LayerConfidenceTracker()
+        
+    if config_name in ['DISP', 'MT', 'MT-KD']:
+        trackers.update({
+            'decoders.disparity.decoder.blocks.0': LayerEntropyTracker(channels=dims[2]),
+            'decoders.disparity.decoder.blocks.1': LayerEntropyTracker(channels=dims[1]),
+            'decoders.disparity.decoder.blocks.2': LayerEntropyTracker(channels=dims[0]),
+            'decoders.disparity.decoder.final_block': LayerEntropyTracker(channels=dims[0]),
+            'decoders.disparity.intercept_head': LayerEntropyTracker(channels=128),
+            #'decoders.disparity.head': LayerEntropyTracker(channels=1),
+        })
+        confidence_trackers['decoders.disparity.intercept_head'] = LayerConfidenceTracker()
+        
+    return trackers, confidence_trackers
+
+trackers, confidence_trackers = get_trackers_for_config(config, experiment)
+hook_handles = []
 
 def get_hook(layer_name):
     def hook_fn(module, input, output):
         features = output[0] if isinstance(output, tuple) else output
-        trackers[layer_name].update(features)
+        if layer_name in trackers:
+            trackers[layer_name].update(features)
+        if layer_name in confidence_trackers:
+            confidence_trackers[layer_name].update(features)
     return hook_fn
 
+all_tracker_names = set(trackers.keys()) | set(confidence_trackers.keys())
+
 for name, module in model.named_modules():
-    if name in trackers:
-        module.register_forward_hook(get_hook(name))
+    if name in all_tracker_names:
+        handle = module.register_forward_hook(get_hook(name))
+        hook_handles.append(handle)
+
 
 # %% Run Dataloader
 

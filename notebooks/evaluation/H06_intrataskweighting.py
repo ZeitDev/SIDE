@@ -14,7 +14,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from notebooks.figures.helpers import save_figure
+from notebooks.figures.helpers import save_figure, apply_chart_config
 
 with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
     data = pickle.load(f)
@@ -26,6 +26,19 @@ with open('./notebooks/evaluation/storage/dataframes.pkl', 'rb') as f:
 # %% Settings
 # Settings
 skip_sync = False
+
+CHART_CONFIG = {
+    'H06F01': {
+        'x1': dict(range=[20, 60], dtick=5),
+        'x2': dict(range=[50, 0], dtick=5),
+    },
+    'H06F02': {
+        'x': dict(range=[2, 50], tickvals=[2, 10, 20, 30, 40, 50]),
+        'y1c1': dict(range=[0, 60], dtick=5),
+        'y1c2': dict(range=[65, 5], dtick=5),
+        'y2': dict(range=[0, 2], dtick=0.5)
+    }
+}
 
 # %% Data preperation
 # Data preperation
@@ -111,7 +124,7 @@ for config in configs:
             ), row=1, col=col)
 
 fig_bar.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=500,
     width=850,
     boxmode='group',
@@ -129,7 +142,8 @@ fig_bar.update_xaxes(
 fig_bar.update_yaxes(title_text="Experiment (Intra-Task Weighting)", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-save_figure(fig_bar, height=600, name='H06F01', lrtb_margin=(40, 20, 30, 0), folder='results', skip_sync=skip_sync)
+apply_chart_config(fig_bar, 'H06F01', CHART_CONFIG)
+save_figure(fig_bar, height=400, name='H06F01', lrtb_margin=(100, 0, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)
 # H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)
@@ -271,7 +285,7 @@ for col, (task, val) in enumerate(teacher_metrics.items(), start=1):
     ), row=1, col=col)
 
 fig_line.update_layout(
-    template='plotly_white',
+    # template='plotly_white',
     height=800,
     width=1100,
     legend=dict(
@@ -285,14 +299,15 @@ fig_line.update_layout(
 )
 
 # Axis Configuration
-fig_line.update_yaxes(title_text="Projection Head DICE [% ↑]", range=[5, 55], row=1, col=1)
-fig_line.update_yaxes(title_text="Projection Head AbsRel [% ↓]", range=[35, 6], row=1, col=2)
+fig_line.update_yaxes(title_text="Projection Head DICE [% ↑]", row=1, col=1)
+fig_line.update_yaxes(title_text="Projection Head AbsRel [% ↓]", row=1, col=2)
 fig_line.update_yaxes(title_text="Distillation Weight", title_standoff=5, row=2, col=1)
 fig_line.update_yaxes(title_text="Distillation Weight", title_standoff=5, row=2, col=2)
 
-fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Validation Epoch", row=2, col=1)
-fig_line.update_xaxes(tickvals=[10, 20, 30, 40, 50], title_text="Validation Epoch", row=2, col=2)
+fig_line.update_xaxes(title_text="Validation Epoch", row=2, col=1)
+fig_line.update_xaxes(title_text="Validation Epoch", row=2, col=2)
 
+apply_chart_config(fig_line, 'H06F02', CHART_CONFIG)
 save_figure(fig_line, height=600, name='H06F02', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
 # %%
