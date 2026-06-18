@@ -12,8 +12,8 @@ class FoundationStereoWrapper(nn.Module):
         cfg = OmegaConf.load(os.path.join(state_path, 'cfg.yaml'))
         self.args = OmegaConf.create(cfg)
         self.model = FoundationStereo(self.args)
-        ckpt = torch.load(os.path.join(state_path, 'model_best_bp2.pth'), weights_only=False)
-        self.model = self.model.cuda().eval()
+        ckpt = torch.load(os.path.join(state_path, 'model_best_bp2.pth'), map_location='cpu', weights_only=False)
+        self.model.eval()
         self.model.load_state_dict(ckpt['model'])
         
     def get_disparity(self, left_images, right_images):

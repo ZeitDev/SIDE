@@ -20,7 +20,7 @@ os.chdir('/data/Zeitler/code/SIDE')
 setup_environment(skip_cuda=True)
 
 # %%
-EXPERIMENT = 'exp10/MT-KD' # 
+EXPERIMENT = 'exp05/MT-KD' # 
 mode = 'test' # 'val
 
 # %%

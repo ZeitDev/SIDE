@@ -50,7 +50,7 @@ mlflow.pytorch.autolog()
 
 # %%
 # Dataloader
-config_name = 'segmentation_teacher_binary'
+config_name = 'segmentation_teacher_multi'
 print(f'Running with config: {config_name}')
 
 with open(os.path.join('configs', 'base.yaml'), 'r') as f: base_config = yaml.safe_load(f)
@@ -429,5 +429,65 @@ with mlflow.start_run(run_name=run_datetime) as run:
         print(json.dumps(test_metrics, indent=4))
         print()
         
+
+# %% Model Speed and VRAM Evaluation
+from thop import profile
+
+print('\n--- Model Speed and VRAM Testing ---')
+num_warmup = 50
+num_iterations = 1000
+
+print('Warm Up')
+torch.backends.cudnn.benchmark = True
+
+# Get a sample image
+image_sample = next(iter(dataloader_test))['image'][0:1].to(device)
+image_sample = F.interpolate(image_sample, size=(512, 512), mode='bilinear', align_corners=False)
+
+with torch.no_grad():
+    for _ in range(num_warmup):
+        _ = model(pixel_values=image_sample)
+        
+print('Benchmarking')
+torch.cuda.empty_cache()
+torch.cuda.reset_peak_memory_stats(device)
+
+start_event = torch.cuda.Event(enable_timing=True)
+end_event = torch.cuda.Event(enable_timing=True)
+
+with torch.no_grad():
+    torch.cuda.synchronize()
+    start_event.record()
+
+    for _ in range(num_iterations):
+        _ = model(pixel_values=image_sample)
+
+    end_event.record()
+    torch.cuda.synchronize()
+    
+total_time_ms = start_event.elapsed_time(end_event)
+total_time_seconds = total_time_ms / 1000.0
+
+fps = num_iterations / total_time_seconds
+
+print('\n--- Results ---')
+print(f'Total time for {num_iterations} images: {total_time_seconds:.4f} seconds')
+print(f'Inference Speed: {fps:.2f} FPS')
+print(f'Time per image: {(total_time_ms / num_iterations):.2f} ms')
+peak_vram = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+print(f'Peak VRAM Usage: {peak_vram:.2f} MB')
+print(f'VRAM Usage in GB: {peak_vram / 1024:.2f} GB')
+
+print('\n--- Model Complexity ---')
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print(f'Total Parameters: {total_params / 1e6:.2f} M')
+print(f'Trainable Parameters: {trainable_params / 1e6:.2f} M')
+
+inputs = (image_sample,)
+macs, _ = profile(model, inputs=inputs, verbose=False)
+
+print(f'MACs: {macs / 1e9:.2f} G (Giga-MACs)')
 
 # %%

@@ -1,5 +1,6 @@
 # %%
 import os, sys
+os.environ['CUDA_VISIBLE_DEVICES'] = '1' # Restrict to GPU 1 for this notebook
 sys.path.append(os.path.dirname('/data/Zeitler/code/SIDE/'))
 
 import yaml
@@ -20,7 +21,7 @@ from tqdm import tqdm
 
 from utils.setup import setup_environment
 os.chdir('/data/Zeitler/code/SIDE')
-setup_environment()
+setup_environment(skip_cuda=True, cuda_device=1)
 
 # %%
 resolution = (512, 512)
@@ -121,7 +122,7 @@ if False:
             cv2.imwrite(save_path, disp_scaled)
 
 # %% Save Disparity Teacher Logits
-if True:
+if False:
     mode = 'test'
     
     transform_mode = 'train' if mode == 'train' else 'test'
@@ -218,6 +219,8 @@ if False:
             cv2.imwrite(save_path, disp_scaled)
             
 # %% Speed Evaluation
+from thop import profile
+
 transforms_speed = build_transforms(config, mode='test')
 
 dataset_speed = EndoVisTeacherDataset(mode='train', transforms=transforms_speed)
@@ -225,15 +228,24 @@ dataset_speed = EndoVisTeacherDataset(mode='train', transforms=transforms_speed)
 left_image = dataset_speed[0]['image'].unsqueeze(0).to('cuda')
 right_image = dataset_speed[0]['right_image'].unsqueeze(0).to('cuda')
 
+left_image = F.interpolate(left_image, size=(512, 512), mode='bilinear', align_corners=False)
+right_image = F.interpolate(right_image, size=(512, 512), mode='bilinear', align_corners=False)
+
 num_warmup = 50
 num_iterations = 1000
 
+print('\n--- Model Speed and VRAM Testing ---')
 print('Warm Up')
+torch.backends.cudnn.benchmark = True
+
 with torch.autocast('cuda'), torch.no_grad():
     for _ in range(num_warmup):
         _ = model.get_disparity(left_image, right_image)
 
 print('Benchmarking')
+torch.cuda.empty_cache()
+torch.cuda.reset_peak_memory_stats()
+
 start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 
@@ -258,5 +270,20 @@ print(f'Inference Speed: {fps:.2f} FPS')
 print(f'Time per image: {(total_time_ms / num_iterations):.2f} ms')
 peak_vram = torch.cuda.max_memory_allocated() / (1024 ** 2) # Convert Bytes to Megabytes
 print(f'Peak VRAM Usage: {peak_vram:.2f} MB')
+print(f'VRAM Usage in GB: {peak_vram / 1024:.2f} GB')
+
+print('\n--- Model Complexity ---')
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print(f'Total Parameters: {total_params / 1e6:.2f} M')
+print(f'Trainable Parameters: {trainable_params / 1e6:.2f} M')
+
+inputs = (left_image, right_image)
+try:
+    macs, _ = profile(model, inputs=inputs, verbose=False)
+    print(f'MACs: {macs / 1e9:.2f} G (Giga-MACs)')
+except Exception as e:
+    print(f'Failed to compute MACs (might need a standard forward method): {e}')
 
 # %%

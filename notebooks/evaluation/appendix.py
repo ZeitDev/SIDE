@@ -122,4 +122,113 @@ latex_raw = df_raw.to_latex(
 latex_raw = "\\begin{landscape}\n" + latex_raw + "\\end{landscape}\n"
 print(latex_raw)
 
+# %% Appendix Table 3 - Raw SERR and NLE for all experiments and configs in landscape table
+
+with open('./notebooks/evaluation/storage/entropy_metrics.pkl', 'rb') as f:
+    df_entropy = pickle.load(f)
+
+df_app_ent = df_entropy.copy()
+if 'mode' in df_app_ent.columns:
+    df_app_ent = df_app_ent[df_app_ent['mode'] != 'train'].copy()
+
+df_app_ent['Date:Time'] = df_app_ent['run_name'].apply(lambda x: str(x).split('/')[0] if '/' in str(x) else x)
+
+rename_dict = {}
+modules = [
+    ('Enc', 'encoder.stages_', 4),
+    ('Seg', 'decoders.segmentation.decoder.blocks.', 3),
+    ('Seg', 'decoders.segmentation.decoder.final_block', 1),
+    ('Disp', 'decoders.disparity.decoder.blocks.', 3),
+    ('Disp', 'decoders.disparity.decoder.final_block', 1)
+]
+
+layer_cols = []
+for m_name, m_prefix, count in modules:
+    if 'final_block' in m_prefix:
+        layers = [("", 4)]
+    else:
+        layers = [(str(i), i+1) for i in range(count)]
+        
+    for suff, num in layers:
+        base = m_prefix + suff
+        col_nle = base + '_norm_entropy'
+        col_serr = base + '_erank_ratio'
+        
+        layer_col = f"{m_name}{num}"
+        
+        def combine(row, cnle=col_nle, cserr=col_serr):
+            vnle = row.get(cnle, float('nan'))
+            vserr = row.get(cserr, float('nan'))
+            if pd.isna(vnle) and pd.isna(vserr):
+                return '-'
+            snle = f"{vnle*100:.2f}" if not pd.isna(vnle) else "-"
+            sserr = f"{vserr*100:.2f}" if not pd.isna(vserr) else "-"
+            return f"{sserr} / {snle}"
+
+        df_app_ent[layer_col] = df_app_ent.apply(combine, axis=1)
+
+df_app_ent['experiment'] = df_app_ent['experiment'].str.extract(r'(\d+)')[0]
+df_app_ent = df_app_ent.rename(columns={'experiment': 'ID', 'config': 'Config'})
+
+config_sort_order = {'SEG': 0, 'DISP': 1, 'MT': 2, 'MT-KD': 3}
+df_app_ent['config_sort'] = df_app_ent['Config'].map(config_sort_order)
+df_app_ent['ID_numeric'] = pd.to_numeric(df_app_ent['ID'])
+
+df_app_ent = df_app_ent.sort_values(['ID_numeric', 'config_sort', 'Date:Time']).drop(columns=['config_sort', 'ID_numeric'])
+
+new_rows = []
+for _, row in df_app_ent.iterrows():
+    cfg = row['Config']
+    
+    seg_row = {
+        'ID': row['ID'], 'Config': row['Config'], 'Date:Time': row['Date:Time'],
+        'Enc1': row['Enc1'], 'Enc2': row['Enc2'], 'Enc3': row['Enc3'], 'Enc4': row['Enc4'],
+        'Dec.': 'SEG',
+        'Dec1': row['Seg1'], 'Dec2': row['Seg2'], 'Dec3': row['Seg3'], 'Dec4': row['Seg4']
+    }
+    
+    disp_row = {
+        'ID': row['ID'], 'Config': row['Config'], 'Date:Time': row['Date:Time'],
+        'Enc1': row['Enc1'], 'Enc2': row['Enc2'], 'Enc3': row['Enc3'], 'Enc4': row['Enc4'],
+        'Dec.': 'DISP',
+        'Dec1': row['Disp1'], 'Dec2': row['Disp2'], 'Dec3': row['Disp3'], 'Dec4': row['Disp4']
+    }
+    
+    if cfg == 'SEG':
+        new_rows.append(seg_row)
+    elif cfg == 'DISP':
+        new_rows.append(disp_row)
+    else:  # MT or MT-KD
+        disp_row['ID'] = ''
+        disp_row['Config'] = ''
+        disp_row['Date:Time'] = ''
+        disp_row['Enc1'] = ''
+        disp_row['Enc2'] = ''
+        disp_row['Enc3'] = ''
+        disp_row['Enc4'] = ''
+        new_rows.append(seg_row)
+        new_rows.append(disp_row)
+
+df_stacked = pd.DataFrame(new_rows)
+
+new_columns = []
+for col in df_stacked.columns:
+    if col in ['ID', 'Config', 'Date:Time', 'Dec.']:
+        new_columns.append(('', col))
+    else:
+        new_columns.append(('SERR / NLE [\\%]', col))
+
+df_stacked.columns = pd.MultiIndex.from_tuples(new_columns)
+
+latex_raw_ent = df_stacked.to_latex(
+    index=False, 
+    longtable=True, 
+    escape=False,
+    na_rep="-",
+    multicolumn=True,
+    multicolumn_format='c'
+)
+latex_raw_ent = "\\begin{landscape}\n\\scriptsize\n" + latex_raw_ent + "\\normalsize\n\\end{landscape}\n"
+print(latex_raw_ent)
+
 # %%
