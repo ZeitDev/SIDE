@@ -698,9 +698,8 @@ setups_exp10 = {
 
 evaluation_results_exp10 = {
     'MT-KD_EXP10': {
-        'best': {
-            'index': 81, 'score': 0.9769
-            }
+        'best': {'index': 140, 'score': 0.980620634050318},
+        'median': {'index': 572, 'score': 0.9629335596936737}
         }
 }
 
@@ -768,12 +767,18 @@ if 'evaluation_results_exp10' not in globals():
             if idx % 100 == 0:
                 print(f"  exp10 Processed {idx}/{len(dataloader_test_exp10)} samples")
                 
-    best_exp10_sample = sorted(sample_metrics_exp10, key=lambda x: x['score'])[-1]
-    evaluation_results_exp10['MT-KD_EXP10'] = {'best': best_exp10_sample}
+    sorted_samples_exp10 = sorted(sample_metrics_exp10, key=lambda x: x['score'])
+    best_exp10_sample = sorted_samples_exp10[-1]
+    median_exp10_sample = sorted_samples_exp10[len(sorted_samples_exp10) // 2]
+    evaluation_results_exp10['MT-KD_EXP10'] = {
+        'best': best_exp10_sample,
+        'median': median_exp10_sample
+    }
     print(f"exp10 Best MT-KD Sample Index: {best_exp10_sample['index']}")
+    print(f"exp10 Median MT-KD Sample Index: {median_exp10_sample['index']}")
 
 
-# 2. Extract and Plot H10F04 using the best exp10 index
+# 2. Extract and Plot H10F04 using the median exp10 index
 if 'evaluation_results_exp10' in globals():
     from notebooks.figures import helpers as temp_helpers
     import importlib
@@ -797,6 +802,7 @@ if 'evaluation_results_exp10' in globals():
     
     print("Generating Figure H10F04...")
     
+    # best_idx_exp10 = evaluation_results_exp10['MT-KD_EXP10']['best']['index']
     best_idx_exp10 = evaluation_results_exp10['MT-KD_EXP10']['best']['index']
     
     # Needs 4 rows: Raw Images (1), ST (2), MT (3), MT-KD (4)
@@ -928,7 +934,7 @@ if 'evaluation_results_exp10' in globals():
     
     save_figure(fig_best_exp10, height=1250, lrtb_margin=(20, 10, 0, 40), name='H10F04', folder='results', skip_sync=False)
 
-# Uses best seed for each config of experiment 10
+# Uses best seed for each config of experiment 10 according to mean 
 # because ST run had no disparity trained, the best disp seed across all experiments is used
 
 # %%

@@ -183,7 +183,7 @@ for config in ['ST', 'MT', 'MT-KD']:
         boxpoints='all',
         jitter=0.25,
         pointpos=-1.8,
-        showlegend=True,
+        showlegend=False,
         legendgroup=config
     ), row=1, col=1)
     
@@ -483,8 +483,8 @@ latex_output_t01 = df_t01.to_latex(
 )
 print(f"\\renewcommand{{\\arraystretch}}{{1.4}}\n{latex_output_t01}")
 
-# %% H01F04_Lineplot_NLEandSERR
-# H01F04_Lineplot_NLEandSERR
+# %% H01F04_Lineplot_SERR
+# H01F04_Lineplot_SERR (SERR only)
 
 # * 0% SERR means representational collapse (underfitting)
 # * 50% SERR means balancing compression with Expression (keeping enough dimensions to explain)
@@ -507,25 +507,6 @@ df_entropy_filtered['config_mapped'] = df_entropy_filtered['config']
 target_configs = ['MT', 'MT-KD'] #['SEG', 'DISP', 'MT', 'MT-KD']
 
 df_entropy_filtered = df_entropy_filtered[df_entropy_filtered['config_mapped'].isin(target_configs)]
-
-fig_line = make_subplots(
-    rows=4, cols=2, 
-    specs=[
-        [{"colspan": 2}, None],
-        [{}, {}],
-        [{"colspan": 2}, None],
-        [{}, {}]
-    ],
-    vertical_spacing=0.08,
-    horizontal_spacing=0.05,
-    shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder",
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
-)
 
 def hex_to_rgba(hex_color, alpha=1.0):
     if hex_color.startswith('#'):
@@ -556,9 +537,6 @@ def format_layer_name(col):
         return '4'
     return col
 
-layer_names = [c for c in df_entropy.columns if c.endswith('_norm_entropy')]
-layers = [c.replace('_norm_entropy', '') for c in layer_names]
-
 encoder_layers = [f'encoder.stages_{i}' for i in range(4)]
 seg_layers = [f'decoders.segmentation.decoder.blocks.{i}' for i in range(3)] + \
              ['decoders.segmentation.decoder.final_block']
@@ -571,100 +549,218 @@ groups = [
     ("Disparity", disp_layers, 2, 2)
 ]
 
-for metric, base_row in [('_erank_ratio', 0), ('_norm_entropy', 2)]:
-    for group_name, group_layers, r_offset, c in groups:
-        row = base_row + r_offset
-        for cfg in target_configs:
-            cfg_df = df_entropy_filtered[df_entropy_filtered['config_mapped'] == cfg]
-            
-            medians = []
-            mins = []
-            maxs = []
-            valid_formatted_layers = []
-            
-            for layer in group_layers:
-                col_name = f"{layer}{metric}"
-                if col_name in cfg_df.columns:
-                    vals = cfg_df[col_name].dropna()
-                    if not vals.empty:
-                        medians.append(vals.median())
-                        mins.append(vals.min())
-                        maxs.append(vals.max())
-                        valid_formatted_layers.append(format_layer_name(layer))
-            
-            if valid_formatted_layers:
-                # Show legend only once per config (in the first encoder subplot)
-                showlegend = True if (base_row == 0 and r_offset == 1) else False
-                
-                # Add vertical line between Block 2 and Final Block for decoders
-                if group_name in ["Segmentation", "Disparity"]:
-                    fig_line.add_vline(
-                        x=2.5, 
-                        line_width=1, 
-                        line_dash="dash", 
-                        line_color="grey",
-                        row=row, col=c
-                    )
-                    # Add "KD" annotation slightly below the top of the plot
-                    fig_line.add_annotation(
-                        x=2.75, y=0.9,
-                        text="KD",
-                        showarrow=False,
-                        yshift=10,
-                        font=dict(color="grey", size=10),
-                        row=row, col=c
-                    )
+fig_line_serr = make_subplots(
+    rows=2, cols=2, 
+    specs=[
+        [{"colspan": 2}, None],
+        [{}, {}]
+    ],
+    vertical_spacing=0.1,
+    horizontal_spacing=0.05,
+    shared_yaxes='rows',
+    subplot_titles=(
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder"
+    )
+)
 
-                # Ribbon (Min-Max)
-                fig_line.add_trace(go.Scatter(
-                    x=valid_formatted_layers + valid_formatted_layers[::-1],
-                    y=maxs + mins[::-1],
-                    fill='toself',
-                    fillcolor=colors[cfg]['fill'],
-                    line=dict(color='rgba(255,255,255,0)'),
-                    showlegend=False,
-                    hoverinfo='skip',
-                    legendgroup=cfg
-                ), row=row, col=c)
-                
-                # Median Line
-                fig_line.add_trace(go.Scatter(
-                    x=valid_formatted_layers, y=medians,
-                    mode='lines+markers',
-                    line=dict(color=colors[cfg]['val'], width=2),
-                    name=colors[cfg]['name'],
-                    legendgroup=cfg,
-                    showlegend=showlegend
-                ), row=row, col=c)
+for group_name, group_layers, r_offset, c in groups:
+    row = r_offset
+    for cfg in target_configs:
+        cfg_df = df_entropy_filtered[df_entropy_filtered['config_mapped'] == cfg]
+        
+        medians = []
+        mins = []
+        maxs = []
+        valid_formatted_layers = []
+        
+        for layer in group_layers:
+            col_name = f"{layer}_erank_ratio"
+            if col_name in cfg_df.columns:
+                vals = cfg_df[col_name].dropna()
+                if not vals.empty:
+                    medians.append(vals.median())
+                    mins.append(vals.min())
+                    maxs.append(vals.max())
+                    valid_formatted_layers.append(format_layer_name(layer))
+        
+        if valid_formatted_layers:
+            # Show legend only once per config (in the first encoder subplot)
+            showlegend = True if r_offset == 1 else False
+            
+            # Add vertical line between Block 2 and Final Block for decoders
+            if group_name in ["Segmentation", "Disparity"]:
+                fig_line_serr.add_vline(
+                    x=2.5, 
+                    line_width=1, 
+                    line_dash="dash", 
+                    line_color="grey",
+                    row=row, col=c
+                )
+                # Add "KD" annotation slightly below the top of the plot
+                fig_line_serr.add_annotation(
+                    x=2.75, y=0.9,
+                    text="KD",
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(color="grey", size=10),
+                    row=row, col=c
+                )
 
-fig_line.update_layout(
-    # template='plotly_white',
-    height=1200,
+            # Ribbon (Min-Max)
+            fig_line_serr.add_trace(go.Scatter(
+                x=valid_formatted_layers + valid_formatted_layers[::-1],
+                y=maxs + mins[::-1],
+                fill='toself',
+                fillcolor=colors[cfg]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=cfg
+            ), row=row, col=c)
+            
+            # Median Line
+            fig_line_serr.add_trace(go.Scatter(
+                x=valid_formatted_layers, y=medians,
+                mode='lines+markers',
+                line=dict(color=colors[cfg]['val'], width=2),
+                name=colors[cfg]['name'],
+                legendgroup=cfg,
+                showlegend=showlegend
+            ), row=row, col=c)
+
+fig_line_serr.update_layout(
+    height=600,
     width=1100,
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=-0.05, 
+        y=-0.15, 
         xanchor="center", 
         x=0.5, 
         title_text="Experiment 01 Config"
     )
 )
 
-fig_line.update_yaxes(
+fig_line_serr.update_yaxes(
     range=[0, 1],
     tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
     ticktext=["0", "20", "40", "60", "80", "100"]
 )
-fig_line.update_yaxes(title_text="SERR [%]", row=1, col=1)
-fig_line.update_yaxes(title_text="SERR [%]", row=2, col=1)
-fig_line.update_yaxes(title_text="NLE [%]", row=3, col=1)
-fig_line.update_yaxes(title_text="NLE [%]", row=4, col=1)
+fig_line_serr.update_yaxes(title_text="SERR [%]", row=1, col=1)
+fig_line_serr.update_yaxes(title_text="SERR [%]", row=2, col=1)
+fig_line_serr.update_xaxes(title_text="Layer")
 
-fig_line.update_xaxes(title_text="Layer")
+apply_chart_config(fig_line_serr, 'H01F04', CHART_CONFIG)
+save_figure(fig_line_serr, height=600, name='H01F04', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
-apply_chart_config(fig_line, 'H01F04', CHART_CONFIG)
-save_figure(fig_line, height=1200, name='H01F04', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+# %% H01F04_NLE_Lineplot_NLE
+# H01F04_NLE_Lineplot_NLE (NLE only)
+
+fig_line_nle = make_subplots(
+    rows=2, cols=2, 
+    specs=[
+        [{"colspan": 2}, None],
+        [{}, {}]
+    ],
+    vertical_spacing=0.1,
+    horizontal_spacing=0.05,
+    shared_yaxes='rows',
+    subplot_titles=(
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder"
+    )
+)
+
+for group_name, group_layers, r_offset, c in groups:
+    row = r_offset
+    for cfg in target_configs:
+        cfg_df = df_entropy_filtered[df_entropy_filtered['config_mapped'] == cfg]
+        
+        medians = []
+        mins = []
+        maxs = []
+        valid_formatted_layers = []
+        
+        for layer in group_layers:
+            col_name = f"{layer}_norm_entropy"
+            if col_name in cfg_df.columns:
+                vals = cfg_df[col_name].dropna()
+                if not vals.empty:
+                    medians.append(vals.median())
+                    mins.append(vals.min())
+                    maxs.append(vals.max())
+                    valid_formatted_layers.append(format_layer_name(layer))
+        
+        if valid_formatted_layers:
+            # Show legend only once per config (in the first encoder subplot)
+            showlegend = True if r_offset == 1 else False
+            
+            # Add vertical line between Block 2 and Final Block for decoders
+            if group_name in ["Segmentation", "Disparity"]:
+                fig_line_nle.add_vline(
+                    x=2.5, 
+                    line_width=1, 
+                    line_dash="dash", 
+                    line_color="grey",
+                    row=row, col=c
+                )
+                # Add "KD" annotation slightly below the top of the plot
+                fig_line_nle.add_annotation(
+                    x=2.75, y=0.9,
+                    text="KD",
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(color="grey", size=10),
+                    row=row, col=c
+                )
+
+            # Ribbon (Min-Max)
+            fig_line_nle.add_trace(go.Scatter(
+                x=valid_formatted_layers + valid_formatted_layers[::-1],
+                y=maxs + mins[::-1],
+                fill='toself',
+                fillcolor=colors[cfg]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=cfg
+            ), row=row, col=c)
+            
+            # Median Line
+            fig_line_nle.add_trace(go.Scatter(
+                x=valid_formatted_layers, y=medians,
+                mode='lines+markers',
+                line=dict(color=colors[cfg]['val'], width=2),
+                name=colors[cfg]['name'],
+                legendgroup=cfg,
+                showlegend=showlegend
+            ), row=row, col=c)
+
+fig_line_nle.update_layout(
+    height=600,
+    width=1100,
+    legend=dict(
+        orientation="h", 
+        yanchor="top", 
+        y=-0.15, 
+        xanchor="center", 
+        x=0.5, 
+        title_text="Experiment 01 Config"
+    )
+)
+
+fig_line_nle.update_yaxes(
+    range=[0, 1],
+    tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    ticktext=["0", "20", "40", "60", "80", "100"]
+)
+fig_line_nle.update_yaxes(title_text="NLE [%]", row=1, col=1)
+fig_line_nle.update_yaxes(title_text="NLE [%]", row=2, col=1)
+fig_line_nle.update_xaxes(title_text="Layer")
+
+apply_chart_config(fig_line_nle, 'H01F04', CHART_CONFIG)
+save_figure(fig_line_nle, height=600, name='H01F05', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
 # %% H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
 # H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
@@ -729,6 +825,6 @@ fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=1)
 fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=2)
 
 apply_chart_config(fig5, 'H01F05', CHART_CONFIG)
-save_figure(fig5, height=400, name='H01F05', lrtb_margin=(40, 20, 40, 40), folder='results', skip_sync=skip_sync)
+save_figure(fig5, height=400, name='H01F06', lrtb_margin=(40, 20, 40, 40), folder='results', skip_sync=skip_sync)
 
 # %%

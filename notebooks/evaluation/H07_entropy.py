@@ -43,9 +43,9 @@ CHART_CONFIG = {
 # Unified experiment labels and ordering
 EXP_MAP = {
     'exp01': '01 (Base)', 
-    'exp02': '02<br>(No Disparity Gate)',
+    'exp02': '02 (No<br>Disparity Gate)',
     'exp03': '03 (No Spatial<br>Distillation Loss<br>Scaling)',
-    'exp09': '09 (Temperature = 4)',
+    'exp09': '09<br>(Temperature = 4)',
     #'exp04': 'debug'
 }
 
@@ -90,7 +90,7 @@ for config in configs:
             data = df_bench[(df_bench['regime'] == regime) & (df_bench['config'] == config)][metric]
             
             # Show legend only once per config
-            showlegend = True if row == 1 and regime == regimes[0] else False
+            showlegend = False #True if row == 1 and regime == regimes[0] else False
             
             fig_bar.add_trace(go.Box(
                 y=data,
@@ -112,7 +112,7 @@ fig_bar.update_layout(
     boxmode='group',
     boxgroupgap=0.6,
     boxgap=0.3,
-    legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="center", x=0.5, title_text="Config")
+    #legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="center", x=0.5, title_text="Config")
 )
 
 fig_bar.update_yaxes(title_text=f"{seg_meta['label']} [{seg_meta['arrow']}]", row=1, col=1)
@@ -121,7 +121,7 @@ fig_bar.update_yaxes(
     autorange="reversed" if disp_meta['arrow'] == '% ↓' else None,
     row=2, col=1
 )
-fig_bar.update_xaxes(title_text="Experiment (Entropy/Confidence)", row=2, col=1)
+fig_bar.update_xaxes(title_text="MT-KD Experiment (Confidence)", tickangle=0, row=2, col=1)
 
 apply_chart_config(fig_bar, 'H07F01', CHART_CONFIG)
 save_figure(fig_bar, height=800, name='H07F01', folder='results', standoff=12, lrtb_margin=(40, 20, 30, 20), skip_sync=skip_sync)
@@ -197,35 +197,16 @@ latex_output_t01 = df_t01.to_latex(
 )
 print(f"\\renewcommand{{\\arraystretch}}{{1.4}}\n{latex_output_t01}")
 
-# %% H07F02_Lineplot_SERRandNLE (01 vs. 02 vs. 03 vs. 09)
-# H07F02_Lineplot_SERRandNLE (01 vs. 02 vs. 03 vs. 09)
+# %% H07F02_Lineplot_SERR (01 vs. 09)
+# H07F02_Lineplot_SERR (SERR only)
 
-target_exps = ['exp01', 'exp09']#['exp01', 'exp02', 'exp03', 'exp09']
+target_exps = ['exp01', 'exp09']
 
 # Filter data
 df_entropy_filtered = df_entropy[
     (df_entropy['experiment'].isin(target_exps)) &
     (df_entropy['config'] == 'MT-KD')
 ].copy()
-
-fig_line = make_subplots(
-    rows=4, cols=2, 
-    specs=[
-        [{"colspan": 2}, None],
-        [{}, {}],
-        [{"colspan": 2}, None],
-        [{}, {}]
-    ],
-    vertical_spacing=0.08,
-    horizontal_spacing=0.05,
-    shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder",
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
-)
 
 def hex_to_rgba(hex_color, alpha=1.0):
     if hex_color.startswith('#'):
@@ -256,9 +237,6 @@ def format_layer_name(col):
         return '4'
     return col
 
-layer_names = [c for c in df_entropy.columns if c.endswith('_norm_entropy')]
-layers = [c.replace('_norm_entropy', '') for c in layer_names]
-
 encoder_layers = [f'encoder.stages_{i}' for i in range(4)]
 seg_layers = [f'decoders.segmentation.decoder.blocks.{i}' for i in range(3)] + \
              ['decoders.segmentation.decoder.final_block']
@@ -271,99 +249,218 @@ groups = [
     ("Disparity", disp_layers, 2, 2)
 ]
 
-for metric, base_row in [('_erank_ratio', 0), ('_norm_entropy', 2)]:
-    for group_name, group_layers, r_offset, c in groups:
-        row = base_row + r_offset
-        for exp in target_exps:
-            exp_df = df_entropy_filtered[df_entropy_filtered['experiment'] == exp]
-            
-            medians = []
-            mins = []
-            maxs = []
-            valid_formatted_layers = []
-            
-            for layer in group_layers:
-                col_name = f"{layer}{metric}"
-                if col_name in exp_df.columns:
-                    vals = exp_df[col_name].dropna()
-                    if not vals.empty:
-                        medians.append(vals.median())
-                        mins.append(vals.min())
-                        maxs.append(vals.max())
-                        valid_formatted_layers.append(format_layer_name(layer))
-            
-            if valid_formatted_layers:
-                # Show legend only once per config (in the first encoder subplot)
-                showlegend = True if (base_row == 0 and r_offset == 1) else False
-                
-                # Ribbon (Min-Max)
-                fig_line.add_trace(go.Scatter(
-                    x=valid_formatted_layers + valid_formatted_layers[::-1],
-                    y=maxs + mins[::-1],
-                    fill='toself',
-                    fillcolor=colors[exp]['fill'],
-                    line=dict(color='rgba(255,255,255,0)'),
-                    showlegend=False,
-                    hoverinfo='skip',
-                    legendgroup=exp
-                ), row=row, col=c)
-                
-                # Median Line
-                fig_line.add_trace(go.Scatter(
-                    x=valid_formatted_layers, y=medians,
-                    mode='lines+markers',
-                    line=dict(color=colors[exp]['val'], width=2),
-                    name=colors[exp]['name'],
-                    legendgroup=exp,
-                    showlegend=showlegend
-                ), row=row, col=c)
+fig_line_serr = make_subplots(
+    rows=2, cols=2, 
+    specs=[
+        [{"colspan": 2}, None],
+        [{}, {}]
+    ],
+    vertical_spacing=0.1,
+    horizontal_spacing=0.05,
+    shared_yaxes='rows',
+    subplot_titles=(
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder"
+    )
+)
 
-                # Add vertical line between Block 2 and Final Block for decoders
-                if group_name in ["Segmentation", "Disparity"] and exp == target_exps[0]:
-                    fig_line.add_vline(
-                        x=2.5, 
-                        line_width=1, 
-                        line_dash="dash", 
-                        line_color="grey",
-                        row=row, col=c
-                    )
-                    # Add "KD" annotation slightly below the top of the plot
-                    fig_line.add_annotation(
-                        x=2.75, y=0.9,
-                        text="KD",
-                        showarrow=False,
-                        yshift=10,
-                        font=dict(color="grey", size=10),
-                        row=row, col=c
-                    )
+for group_name, group_layers, r_offset, c in groups:
+    row = r_offset
+    for exp in target_exps:
+        exp_df = df_entropy_filtered[df_entropy_filtered['experiment'] == exp]
+        
+        medians = []
+        mins = []
+        maxs = []
+        valid_formatted_layers = []
+        
+        for layer in group_layers:
+            col_name = f"{layer}_erank_ratio"
+            if col_name in exp_df.columns:
+                vals = exp_df[col_name].dropna()
+                if not vals.empty:
+                    medians.append(vals.median())
+                    mins.append(vals.min())
+                    maxs.append(vals.max())
+                    valid_formatted_layers.append(format_layer_name(layer))
+        
+        if valid_formatted_layers:
+            # Show legend only once per config (in the first encoder subplot)
+            showlegend = True if r_offset == 1 else False
+            
+            # Ribbon (Min-Max)
+            fig_line_serr.add_trace(go.Scatter(
+                x=valid_formatted_layers + valid_formatted_layers[::-1],
+                y=maxs + mins[::-1],
+                fill='toself',
+                fillcolor=colors[exp]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=exp
+            ), row=row, col=c)
+            
+            # Median Line
+            fig_line_serr.add_trace(go.Scatter(
+                x=valid_formatted_layers, y=medians,
+                mode='lines+markers',
+                line=dict(color=colors[exp]['val'], width=2),
+                name=colors[exp]['name'],
+                legendgroup=exp,
+                showlegend=showlegend
+            ), row=row, col=c)
 
-fig_line.update_layout(
-    height=1200,
+            # Add vertical line between Block 2 and Final Block for decoders
+            if group_name in ["Segmentation", "Disparity"] and exp == target_exps[0]:
+                fig_line_serr.add_vline(
+                    x=2.5, 
+                    line_width=1, 
+                    line_dash="dash", 
+                    line_color="grey",
+                    row=row, col=c
+                )
+                # Add "KD" annotation slightly below the top of the plot
+                fig_line_serr.add_annotation(
+                    x=2.75, y=0.9,
+                    text="KD",
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(color="grey", size=10),
+                    row=row, col=c
+                )
+
+fig_line_serr.update_layout(
+    height=600,
     width=1100,
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=0, 
+        y=-0.15, 
         xanchor="center", 
         x=0.5, 
-        title_text="Experiment (Entropy/Confidence)"
+        title_text="MT-KD Experiment (Confidence)"
     )
 )
 
-fig_line.update_yaxes(
+fig_line_serr.update_yaxes(
     range=[0, 1],
     tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
     ticktext=["0", "20", "40", "60", "80", "100"]
 )
-fig_line.update_yaxes(title_text="SERR [%]", row=1, col=1)
-fig_line.update_yaxes(title_text="SERR [%]", row=2, col=1)
-fig_line.update_yaxes(title_text="NLE [%]", row=3, col=1)
-fig_line.update_yaxes(title_text="NLE [%]", row=4, col=1)
+fig_line_serr.update_yaxes(title_text="SERR [%]", row=1, col=1)
+fig_line_serr.update_yaxes(title_text="SERR [%]", row=2, col=1)
+fig_line_serr.update_xaxes(title_text="Layer")
 
-fig_line.update_xaxes(title_text="Layer")
+apply_chart_config(fig_line_serr, 'H07F02', CHART_CONFIG)
+save_figure(fig_line_serr, height=600, name='H07F02', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
-apply_chart_config(fig_line, 'H07F02', CHART_CONFIG)
-save_figure(fig_line, height=1200, name='H07F02', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+# %% H07F02_NLE_Lineplot_NLE
+# H07F02_NLE_Lineplot_NLE (NLE only)
+
+fig_line_nle = make_subplots(
+    rows=2, cols=2, 
+    specs=[
+        [{"colspan": 2}, None],
+        [{}, {}]
+    ],
+    vertical_spacing=0.1,
+    horizontal_spacing=0.05,
+    shared_yaxes='rows',
+    subplot_titles=(
+        "Encoder", 
+        "Segmentation Decoder", "Disparity Decoder"
+    )
+)
+
+for group_name, group_layers, r_offset, c in groups:
+    row = r_offset
+    for exp in target_exps:
+        exp_df = df_entropy_filtered[df_entropy_filtered['experiment'] == exp]
+        
+        medians = []
+        mins = []
+        maxs = []
+        valid_formatted_layers = []
+        
+        for layer in group_layers:
+            col_name = f"{layer}_norm_entropy"
+            if col_name in exp_df.columns:
+                vals = exp_df[col_name].dropna()
+                if not vals.empty:
+                    medians.append(vals.median())
+                    mins.append(vals.min())
+                    maxs.append(vals.max())
+                    valid_formatted_layers.append(format_layer_name(layer))
+        
+        if valid_formatted_layers:
+            # Show legend only once per config (in the first encoder subplot)
+            showlegend = True if r_offset == 1 else False
+            
+            # Ribbon (Min-Max)
+            fig_line_nle.add_trace(go.Scatter(
+                x=valid_formatted_layers + valid_formatted_layers[::-1],
+                y=maxs + mins[::-1],
+                fill='toself',
+                fillcolor=colors[exp]['fill'],
+                line=dict(color='rgba(255,255,255,0)'),
+                showlegend=False,
+                hoverinfo='skip',
+                legendgroup=exp
+            ), row=row, col=c)
+            
+            # Median Line
+            fig_line_nle.add_trace(go.Scatter(
+                x=valid_formatted_layers, y=medians,
+                mode='lines+markers',
+                line=dict(color=colors[exp]['val'], width=2),
+                name=colors[exp]['name'],
+                legendgroup=exp,
+                showlegend=showlegend
+            ), row=row, col=c)
+
+            # Add vertical line between Block 2 and Final Block for decoders
+            if group_name in ["Segmentation", "Disparity"] and exp == target_exps[0]:
+                fig_line_nle.add_vline(
+                    x=2.5, 
+                    line_width=1, 
+                    line_dash="dash", 
+                    line_color="grey",
+                    row=row, col=c
+                )
+                # Add "KD" annotation slightly below the top of the plot
+                fig_line_nle.add_annotation(
+                    x=2.75, y=0.9,
+                    text="KD",
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(color="grey", size=10),
+                    row=row, col=c
+                )
+
+fig_line_nle.update_layout(
+    height=600,
+    width=1100,
+    legend=dict(
+        orientation="h", 
+        yanchor="top", 
+        y=-0.15, 
+        xanchor="center", 
+        x=0.5, 
+        title_text="MT-KD Experiment (Confidence)"
+    )
+)
+
+fig_line_nle.update_yaxes(
+    range=[0, 1],
+    tickvals=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    ticktext=["0", "20", "40", "60", "80", "100"]
+)
+fig_line_nle.update_yaxes(title_text="NLE [%]", row=1, col=1)
+fig_line_nle.update_yaxes(title_text="NLE [%]", row=2, col=1)
+fig_line_nle.update_xaxes(title_text="Layer")
+
+apply_chart_config(fig_line_nle, 'H07F02', CHART_CONFIG)
+save_figure(fig_line_nle, height=600, name='H07F03', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
 
 
 
