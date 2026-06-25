@@ -37,7 +37,7 @@ CHART_CONFIG = {
         'x2': dict(range=[0, 55], dtick=10),
     },
     'H03F03': {
-        'y1': dict(range=[40, 5], dtick=10),
+        'y1': dict(range=[40, 5], dtick=5),
         'y2': dict(range=[0, 1.05], dtick=0.2),
     }
 }
@@ -140,7 +140,7 @@ df_epochs = df_final[
 df_epochs['config_mapped'] = df_epochs['config'].replace({'SEG': 'ST', 'DISP': 'ST'})
 df_epochs['regime'] = df_epochs['experiment'].map({'exp01': '01 (DTP)', 'exp06': '06 (1:1)'})
 
-fig_epochs = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
+fig_epochs = make_subplots(rows=1, cols=1, horizontal_spacing=0.05)
 
 best_epoch_col = 'metric.best/combined/epoch'
 
@@ -151,9 +151,9 @@ colors_epochs = {
 }
 
 regimes = ['01 (DTP)', '06 (1:1)']
-display_configs = ['ST', 'MT', 'MT-KD']
+display_configs = ['MT', 'MT-KD']
 
-for col, task in enumerate(['segmentation', 'disparity'], start=1):
+for col, task in enumerate(['segmentation']): #, 'disparity'], start=1):
     for config in display_configs:
         for regime in regimes:
             # Select the correct column based on config
@@ -178,7 +178,7 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
                 showlegend=showlegend,
                 legendgroup=config,
                 offsetgroup=config
-            ), row=1, col=col)
+            ), row=1, col=1)
 
 fig_epochs.update_layout(
     # template='plotly_white',
@@ -191,9 +191,9 @@ fig_epochs.update_layout(
 )
 
 fig_epochs.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=1, col=1)
-fig_epochs.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=1, col=2)
+#fig_epochs.update_xaxes(title_text="Best Epoch", showgrid=True, gridcolor='rgba(0,0,0,0.1)', row=1, col=2)
 fig_epochs.update_yaxes(title_text="Experiment (Inter-Task Weighting Method)", autorange="reversed", row=1, col=1)
-fig_epochs.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
+#fig_epochs.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
 apply_chart_config(fig_epochs, 'H03F02', CHART_CONFIG)
 save_figure(fig_epochs, height=450, name='H03F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
@@ -450,7 +450,7 @@ fig_line.update_layout(
 )
 
 # Axis Configuration
-fig_line.update_yaxes(title_text="Validation AbsRel Rate [Log % ↓]", range=[40, 0], row=1, col=1)#, type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
+fig_line.update_yaxes(title_text="Validation AbsRel Rate [% ↓]", range=[40, 0], row=1, col=1)#, type="log", range=[np.log10(30), np.log10(6)], title_standoff=10, row=1, col=1)
 #fig_line.update_yaxes(type="log", range=[np.log10(30), np.log10(6)], showticklabels=False, row=1, col=2)
 fig_line.update_yaxes(range=[40, 0], showticklabels=False, row=1, col=2)
 fig_line.update_yaxes(title_text="Disparity Weight", range=[0, 1.1], title_standoff=5, row=2, col=1)

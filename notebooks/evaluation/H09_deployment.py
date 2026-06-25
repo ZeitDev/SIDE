@@ -66,9 +66,9 @@ data = [
     ('Teacher SEG', '04 (Nano)', 56.89, np.nan, 7.14, 2.07),
     ('Teacher SEG', '05 (Low-Res)', 53.01, np.nan, 33.3, 0.76),
 
-    ('Teacher DISP', '01 (Base)', np.nan, 2.14, 0.49, 6.96),
-    ('Teacher DISP', '04 (Nano)', np.nan, 2.14, 0.49, 6.96),
-    ('Teacher DISP', '05 (Low-Res)', np.nan, 2.09, 2.0, 2.85),
+    ('Teacher DISP', '01 (Base)', np.nan, np.nan, 0.49, 6.96),
+    ('Teacher DISP', '04 (Nano)', np.nan, np.nan, 0.49, 6.96),
+    ('Teacher DISP', '05 (Low-Res)', np.nan, np.nan, 2.0, 2.85),
 
     ('ST SEG', '01 (Base)', 43.93, np.nan, 20.08, 1.36),
     ('ST SEG', '04 (Nano)', 42.46, np.nan, 32.25, 1.09),

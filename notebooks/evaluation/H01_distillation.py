@@ -34,7 +34,7 @@ fallback_opacity = 0.5
 
 CHART_CONFIG = {
     'H01F01': {
-        'x1': dict(range=[30, 55], dtick=5),
+        'x1': dict(range=[30, 56], dtick=5),
         'x2': dict(range=[35, 0], dtick=5),
     },
     'H01F02': {
@@ -202,6 +202,8 @@ for config in ['ST', 'MT', 'MT-KD']:
 
 fig_bar.update_yaxes(title_text="Experiment 01 Config", autorange="reversed", row=1, col=1)
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2) # Hide tick labels and title
+fig_bar.update_xaxes(title_text=seg_meta['label'] + f" [{seg_meta['arrow']}]", row=1, col=1)
+fig_bar.update_xaxes(title_text=disp_meta['label'] + f" [{disp_meta['arrow']}]", row=1, col=2)
 
 apply_chart_config(fig_bar, 'H01F01', CHART_CONFIG)
 save_figure(fig_bar, name='H01F01', lrtb_margin=(40, 40, 20, 40), folder='results', skip_sync=skip_sync)
@@ -209,83 +211,83 @@ save_figure(fig_bar, name='H01F01', lrtb_margin=(40, 40, 20, 40), folder='result
 # %% H01F02_Barplot_ConfigValidationInterceptPerformance (Inter-Head Performance Comparison for Prediction vs. Projection)
 # H01F02_Barplot_ConfigValidationInterceptPerformance (Inter-Head Performance Comparison for Prediction vs. Projection)
 
-target_exp = 'exp01'
-target_configs = ['MT', 'MT-KD']
+# target_exp = 'exp01'
+# target_configs = ['MT', 'MT-KD']
 
-df_f02 = df_final[
-    (df_final['experiment'] == target_exp) & 
-    (df_final['config'].isin(target_configs))
-].copy()
+# df_f02 = df_final[
+#     (df_final['experiment'] == target_exp) & 
+#     (df_final['config'].isin(target_configs))
+# ].copy()
 
-# Metrics configuration
-metrics_meta = {
-    'segmentation': {
-        'prediction': 'metric.best/combined/performance_validation_segmentation_DICE_score_instrument_mean',
-        'projection': 'metric.best/combined/performance_validation_misc_interceptDICE_score',
-        'label': 'DICE Score [% ↑]',
-        'autorange': None
-    },
-    'disparity': {
-        'prediction': 'metric.best/combined/performance_validation_disparity_AbsRel_rate',
-        'projection': 'metric.best/combined/performance_validation_misc_interceptAbsRel_rate',
-        'label': 'AbsRel Rate [% ↓]',
-        'autorange': 'reversed'
-    }
-}
+# # Metrics configuration
+# metrics_meta = {
+#     'segmentation': {
+#         'prediction': 'metric.best/combined/performance_validation_segmentation_DICE_score_instrument_mean',
+#         'projection': 'metric.best/combined/performance_validation_misc_interceptDICE_score',
+#         'label': 'DICE Score [% ↑]',
+#         'autorange': None
+#     },
+#     'disparity': {
+#         'prediction': 'metric.best/combined/performance_validation_disparity_AbsRel_rate',
+#         'projection': 'metric.best/combined/performance_validation_misc_interceptAbsRel_rate',
+#         'label': 'AbsRel Rate [% ↓]',
+#         'autorange': 'reversed'
+#     }
+# }
 
-fig2 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
+# fig2 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
 
-stages = ['Prediction', 'Projection']
-colors_dict = {
-    'MT': px.colors.qualitative.Plotly[1],
-    'MT-KD': px.colors.qualitative.Plotly[2]
-}
+# stages = ['Prediction', 'Projection']
+# colors_dict = {
+#     'MT': px.colors.qualitative.Plotly[1],
+#     'MT-KD': px.colors.qualitative.Plotly[2]
+# }
 
-for col, task in enumerate(['segmentation', 'disparity'], start=1):
-    meta = metrics_meta[task]
-    for config in target_configs:
-        for stage in stages:
-            col_name = meta['projection'] if stage == 'Projection' else meta['prediction']
-            data = df_f02[df_f02['config'] == config][col_name].dropna()
+# for col, task in enumerate(['segmentation', 'disparity'], start=1):
+#     meta = metrics_meta[task]
+#     for config in target_configs:
+#         for stage in stages:
+#             col_name = meta['projection'] if stage == 'Projection' else meta['prediction']
+#             data = df_f02[df_f02['config'] == config][col_name].dropna()
             
-            showlegend = True if col == 1 and stage == stages[0] else False
+#             showlegend = True if col == 1 and stage == stages[0] else False
             
-            fig2.add_trace(go.Box(
-                x=data,
-                y=[stage] * len(data),
-                orientation='h',
-                name=config,
-                marker_color=colors_dict[config],
-                boxpoints='all',
-                jitter=0.5,
-                pointpos=-2.0,
-                showlegend=showlegend,
-                legendgroup=config,
-                offsetgroup=config
-            ), row=1, col=col)
+#             fig2.add_trace(go.Box(
+#                 x=data,
+#                 y=[stage] * len(data),
+#                 orientation='h',
+#                 name=config,
+#                 marker_color=colors_dict[config],
+#                 boxpoints='all',
+#                 jitter=0.5,
+#                 pointpos=-2.0,
+#                 showlegend=showlegend,
+#                 legendgroup=config,
+#                 offsetgroup=config
+#             ), row=1, col=col)
 
-fig2.update_layout(
-    # template='plotly_white',
-    height=450,
-    width=850,
-    boxmode='group',
-    boxgroupgap=0.6,
-    boxgap=0.3,
-    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Experiment 01 Config")
-)
+# fig2.update_layout(
+#     # template='plotly_white',
+#     height=450,
+#     width=850,
+#     boxmode='group',
+#     boxgroupgap=0.6,
+#     boxgap=0.3,
+#     legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Experiment 01 Config")
+# )
 
-fig2.update_xaxes(title_text=metrics_meta['segmentation']['label'], row=1, col=1)
-fig2.update_xaxes(
-    title_text=metrics_meta['disparity']['label'], 
-    autorange=metrics_meta['disparity']['autorange'],
-    row=1, col=2
-)
-fig2.update_yaxes(title_text="Decoder Head", autorange="reversed", row=1, col=1)
-fig2.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
+# fig2.update_xaxes(title_text=metrics_meta['segmentation']['label'], row=1, col=1)
+# fig2.update_xaxes(
+#     title_text=metrics_meta['disparity']['label'], 
+#     autorange=metrics_meta['disparity']['autorange'],
+#     row=1, col=2
+# )
+# fig2.update_yaxes(title_text="Decoder Head", autorange="reversed", row=1, col=1)
+# fig2.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
-apply_chart_config(fig2, 'H01F02', CHART_CONFIG)
-save_figure(fig2, height=400, name='H01F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
-
+# apply_chart_config(fig2, 'H01F02', CHART_CONFIG)
+# save_figure(fig2, height=400, name='H01F02', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+# ! omitted
 
 # %% H01F03_Lineplot_ConfigValidationPerformance (Train vs. Val Metrics over Epochs for MT vs. MT-KD)
 # H01F03_Lineplot_ConfigValidationPerformance (Train vs. Val Metrics over Epochs for MT vs. MT-KD)
@@ -555,13 +557,13 @@ fig_line_serr = make_subplots(
         [{"colspan": 2}, None],
         [{}, {}]
     ],
-    vertical_spacing=0.1,
+    vertical_spacing=0.115,
     horizontal_spacing=0.05,
     shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
+    # subplot_titles=(
+    #     "Encoder", 
+    #     "Segmentation Decoder", "Disparity Decoder"
+    # )
 )
 
 for group_name, group_layers, r_offset, c in groups:
@@ -635,7 +637,7 @@ fig_line_serr.update_layout(
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=-0.15, 
+        y=-0.125, 
         xanchor="center", 
         x=0.5, 
         title_text="Experiment 01 Config"
@@ -649,10 +651,12 @@ fig_line_serr.update_yaxes(
 )
 fig_line_serr.update_yaxes(title_text="SERR [%]", row=1, col=1)
 fig_line_serr.update_yaxes(title_text="SERR [%]", row=2, col=1)
-fig_line_serr.update_xaxes(title_text="Layer")
+fig_line_serr.update_xaxes(title_text="Shared Encoder Layer", row=1, col=1)
+fig_line_serr.update_xaxes(title_text="Segmentation Decoder Layer", row=2, col=1)
+fig_line_serr.update_xaxes(title_text="Disparity Decoder Layer", row=2, col=2)
 
 apply_chart_config(fig_line_serr, 'H01F04', CHART_CONFIG)
-save_figure(fig_line_serr, height=600, name='H01F04', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+save_figure(fig_line_serr, height=600, name='H01F04', lrtb_margin=(20, 10, 10, 10), standoff=5, folder='results', skip_sync=skip_sync)
 
 # %% H01F04_NLE_Lineplot_NLE
 # H01F04_NLE_Lineplot_NLE (NLE only)
@@ -663,13 +667,13 @@ fig_line_nle = make_subplots(
         [{"colspan": 2}, None],
         [{}, {}]
     ],
-    vertical_spacing=0.1,
+    vertical_spacing=0.115,
     horizontal_spacing=0.05,
     shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
+    # subplot_titles=(
+    #     "Encoder", 
+    #     "Segmentation Decoder", "Disparity Decoder"
+    # )
 )
 
 for group_name, group_layers, r_offset, c in groups:
@@ -743,7 +747,7 @@ fig_line_nle.update_layout(
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=-0.15, 
+        y=-0.125, 
         xanchor="center", 
         x=0.5, 
         title_text="Experiment 01 Config"
@@ -757,74 +761,11 @@ fig_line_nle.update_yaxes(
 )
 fig_line_nle.update_yaxes(title_text="NLE [%]", row=1, col=1)
 fig_line_nle.update_yaxes(title_text="NLE [%]", row=2, col=1)
-fig_line_nle.update_xaxes(title_text="Layer")
+fig_line_nle.update_xaxes(title_text="Shared Encoder Layer", row=1, col=1)
+fig_line_nle.update_xaxes(title_text="Segmentation Decoder Layer", row=2, col=1)
+fig_line_nle.update_xaxes(title_text="Disparity Decoder Layer", row=2, col=2)
 
 apply_chart_config(fig_line_nle, 'H01F04', CHART_CONFIG)
-save_figure(fig_line_nle, height=600, name='H01F05', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
-
-# %% H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
-# H01F05_Boxplot_ConfidenceProjectionHead (ST vs. MT vs. MT-KD)
-
-target_exps = ['exp01']
-df_f05 = df_entropy[df_entropy['experiment'].isin(target_exps)].copy()
-
-fig5 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation Projection Head", "Disparity Projection Head"), horizontal_spacing=0.05, shared_yaxes=True)
-
-colors_dict = {
-    'ST': px.colors.qualitative.Plotly[0],
-    'MT': px.colors.qualitative.Plotly[1],
-    'MT-KD': px.colors.qualitative.Plotly[2]
-}
-
-stages = ['ST', 'MT', 'MT-KD']
-
-for col, task in enumerate(['segmentation', 'disparity'], start=1):
-    col_name = f'decoders.{task}.intercept_head_mean_confidence'
-    
-    for config in stages:
-        if config == 'ST':
-            target_cfg = 'SEG' if task == 'segmentation' else 'DISP'
-            data = df_f05[df_f05['config'] == target_cfg][col_name].dropna() * 100
-        else:
-            data = df_f05[df_f05['config'] == config][col_name].dropna() * 100
-            
-        showlegend = False
-        
-        fig5.add_trace(go.Box(
-            y=data,
-            x=[config] * len(data),
-            orientation='v',
-            name=config,
-            marker_color=colors_dict[config],
-            boxpoints='all',
-            jitter=0.25,
-            pointpos=-1.8,
-            showlegend=showlegend,
-            legendgroup=config
-        ), row=1, col=col)
-
-    fig5.add_hline(y=70, line_dash="dash", line_color="grey", row=1, col=col)
-    fig5.add_annotation(
-        y=70, x=0.01,
-        text="KD",
-        showarrow=False,
-        xshift=-50,
-        yshift=10,
-        font=dict(color="grey", size=10),
-        row=1, col=col
-    )
-
-fig5.update_layout(
-    height=400,
-    width=850,
-    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Experiment 01 Config")
-)
-
-fig5.update_yaxes(title_text="Raw Confidence [%]", row=1, col=1)
-fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=1)
-fig5.update_xaxes(title_text="Experiment 01 Config", row=1, col=2)
-
-apply_chart_config(fig5, 'H01F05', CHART_CONFIG)
-save_figure(fig5, height=400, name='H01F06', lrtb_margin=(40, 20, 40, 40), folder='results', skip_sync=skip_sync)
+save_figure(fig_line_nle, height=600, name='H01F05', lrtb_margin=(20, 10, 10, 10), standoff=5, folder='results', skip_sync=skip_sync)
 
 # %%

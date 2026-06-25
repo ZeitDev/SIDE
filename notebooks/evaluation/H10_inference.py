@@ -71,46 +71,46 @@ df_exp10['SCORE'] = (2 * dice_norm_10 * absrel_clamped_10) / (dice_norm_10 + abs
 best_runs = {}
 best_runs_exp10 = {}
 
-# Best ST SEG (Max DICE)
-df_seg = df_bench[df_bench['config'] == 'SEG']
-best_runs['ST-SEG'] = df_seg.loc[df_seg['DICE'].idxmax()]
+# Best ST SEG (Median DICE)
+df_seg = df_bench[(df_bench['config'] == 'SEG') & (df_bench['DICE'].notna())].sort_values('DICE')
+best_runs['ST-SEG'] = df_seg.iloc[(len(df_seg) - 1) // 2]
 
-df_seg_10 = df_exp10[df_exp10['config'] == 'SEG']
-best_runs_exp10['ST-SEG'] = df_seg_10.loc[df_seg_10['DICE'].idxmax()]
+df_seg_10 = df_exp10[(df_exp10['config'] == 'SEG') & (df_exp10['DICE'].notna())].sort_values('DICE')
+best_runs_exp10['ST-SEG'] = df_seg_10.iloc[(len(df_seg_10) - 1) // 2]
 
-# Best ST DISP (Min AbsRel)
-df_disp = df_bench[df_bench['config'] == 'DISP']
-best_runs['ST-DISP'] = df_disp.loc[df_disp['AbsRel'].idxmin()]
+# Best ST DISP (Median AbsRel)
+df_disp = df_bench[(df_bench['config'] == 'DISP') & (df_bench['AbsRel'].notna())].sort_values('AbsRel')
+best_runs['ST-DISP'] = df_disp.iloc[(len(df_disp) - 1) // 2]
 
-df_disp_10 = df_exp10[df_exp10['config'] == 'DISP']
+df_disp_10 = df_exp10[(df_exp10['config'] == 'DISP') & (df_exp10['AbsRel'].notna())].sort_values('AbsRel')
 # If exp10 doesn't have a DISP run (which is true based on the configs), fallback to the globally best ST-DISP
 if not df_disp_10.empty:
-    best_runs_exp10['ST-DISP'] = df_disp_10.loc[df_disp_10['AbsRel'].idxmin()]
+    best_runs_exp10['ST-DISP'] = df_disp_10.iloc[(len(df_disp_10) - 1) // 2]
 else:
     best_runs_exp10['ST-DISP'] = best_runs['ST-DISP']
 
 # Calculate ST combined SCORE
 st_dice_norm = best_runs['ST-SEG']['DICE'] / 100.0
 st_absrel_clamped = max(0, 1.0 - (best_runs['ST-DISP']['AbsRel'] / 100.0))
-st_combined_score = (2 * st_dice_norm * st_absrel_clamped) / (st_dice_norm + st_absrel_clamped) * 100.0
+st_combined_score = 0.0 if (st_dice_norm + st_absrel_clamped) == 0 else (2 * st_dice_norm * st_absrel_clamped) / (st_dice_norm + st_absrel_clamped) * 100.0
 
 st_dice_norm_10 = best_runs_exp10['ST-SEG']['DICE'] / 100.0
 st_absrel_clamped_10 = max(0, 1.0 - (best_runs_exp10['ST-DISP']['AbsRel'] / 100.0))
-st_combined_score_10 = (2 * st_dice_norm_10 * st_absrel_clamped_10) / (st_dice_norm_10 + st_absrel_clamped_10) * 100.0
+st_combined_score_10 = 0.0 if (st_dice_norm_10 + st_absrel_clamped_10) == 0 else (2 * st_dice_norm_10 * st_absrel_clamped_10) / (st_dice_norm_10 + st_absrel_clamped_10) * 100.0
 
-# Best MT (Max SCORE)
-df_mt = df_bench[df_bench['config'] == 'MT']
-best_runs['MT'] = df_mt.loc[df_mt['SCORE'].idxmax()]
+# Best MT (Median SCORE)
+df_mt = df_bench[(df_bench['config'] == 'MT') & (df_bench['SCORE'].notna())].sort_values('SCORE')
+best_runs['MT'] = df_mt.iloc[(len(df_mt) - 1) // 2]
 
-df_mt_10 = df_exp10[df_exp10['config'] == 'MT']
-best_runs_exp10['MT'] = df_mt_10.loc[df_mt_10['SCORE'].idxmax()]
+df_mt_10 = df_exp10[(df_exp10['config'] == 'MT') & (df_exp10['SCORE'].notna())].sort_values('SCORE')
+best_runs_exp10['MT'] = df_mt_10.iloc[(len(df_mt_10) - 1) // 2]
 
-# Best MT-KD (Max SCORE)
-df_mt_kd = df_bench[df_bench['config'] == 'MT-KD']
-best_runs['MT-KD'] = df_mt_kd.loc[df_mt_kd['SCORE'].idxmax()]
+# Best MT-KD (Median SCORE)
+df_mt_kd = df_bench[(df_bench['config'] == 'MT-KD') & (df_bench['SCORE'].notna())].sort_values('SCORE')
+best_runs['MT-KD'] = df_mt_kd.iloc[(len(df_mt_kd) - 1) // 2]
 
-df_mt_kd_10 = df_exp10[df_exp10['config'] == 'MT-KD']
-best_runs_exp10['MT-KD'] = df_mt_kd_10.loc[df_mt_kd_10['SCORE'].idxmax()]
+df_mt_kd_10 = df_exp10[(df_exp10['config'] == 'MT-KD') & (df_exp10['SCORE'].notna())].sort_values('SCORE')
+best_runs_exp10['MT-KD'] = df_mt_kd_10.iloc[(len(df_mt_kd_10) - 1) // 2]
 
 print("--- Best ST Pipeline (ST-SEG + ST-DISP) ---")
 print(f"ST-SEG Run Name: {best_runs['ST-SEG'].get('run_name', 'N/A')} (Exp: {best_runs['ST-SEG'].get('experiment', 'N/A')})")
@@ -174,7 +174,7 @@ setups = {
 # Dictionary to hold the sample-level evaluations for each setup
 evaluation_results = {}
 
-testing_setups = ['MT-KD']#['ST-PIPELINE', 'MT', 'MT-KD']
+testing_setups = ['ST-PIPELINE', 'MT', 'MT-KD']
 
 if False:
     # Load MT config once to use its dataloader for ST-PIPELINE (since it provides both GTs)
@@ -270,13 +270,20 @@ if False:
                 val_heuristic = 0.0
                 val_mean = 0.0
                 if setup_key in ['ST-PIPELINE', 'MT', 'MT-KD']:
-                    absrel_clamped = max(0.0, min(1.0, 1.0 - absrel_val))
+                    import math
+                    if math.isnan(absrel_val):
+                        absrel_clamped = 0.0
+                    else:
+                        absrel_clamped = max(0.0, min(1.0, 1.0 - absrel_val))
+                        
                     denominator = val_dice + absrel_clamped
                     val_heuristic = 0.0 if denominator == 0 else (2 * val_dice * absrel_clamped) / denominator
                     val_mean = (val_dice + absrel_clamped) / 2.0
                 
-                # Exclude samples that have 0.0 DICE (meaning no instrument is present to be evaluated)
-                if val_dice > 0.0:
+                # Exclude samples that inherently lack the ground truth for an instrument
+                has_instrument = (targets_seg > 0).sum() > 0 if targets_seg is not None else False
+                
+                if has_instrument:
                     sample_metrics.append({
                         'index': idx,
                         'dice': val_dice,
@@ -293,7 +300,7 @@ if False:
         sorted_samples = sorted(sample_metrics, key=lambda x: x['score'])
         worst = sorted_samples[0]
         best = sorted_samples[-1]
-        median = sorted_samples[len(sorted_samples) // 2]
+        median = sorted_samples[(len(sorted_samples) - 1) // 2]
         
         evaluation_results[setup_key] = {
             'all_metrics': sample_metrics,
@@ -309,6 +316,7 @@ if False:
 
 # %%
 # * Results
+# Best model
 # ST-PIPELINE!
 # Best : Index 268 | DICE: 98.92 | AbsRel: 2.93 | Score (Mean): 97.99
 # Worst: Index 536 | DICE: 3.03 | AbsRel: 27.52 | Score (Mean): 37.75
@@ -329,21 +337,41 @@ if False:
 # Worst: Index 162 | DICE: 0.17 | AbsRel: 3.19 | Score (HM): 0.35
 # Median: Index 429 | DICE: 75.17 | AbsRel: 6.82 | Score (HM): 84.18
 
+
+# Median Model
+# ST-PIPELINE!
+# Best  : Index 35 | DICE: 98.49 | AbsRel: 47.66 | Score (HM): 68.36
+# Median: Index 403 | DICE: 62.51 | AbsRel: 51.20 | Score (HM): 55.66
+# Worst : Index 447 | DICE: 0.45 | AbsRel: 53.10 | Score (HM): 23.67
+
+# MT!
+# Best  : Index 32 | DICE: 98.43 | AbsRel: 5.74 | Score (HM): 96.30
+# Median: Index 368 | DICE: 55.02 | AbsRel: 16.85 | Score (HM): 69.08
+# Worst : Index 550 | DICE: 0.22 | AbsRel: 17.15 | Score (HM): 41.54
+
+# MT-KD!
+# Best  : Index 81 | DICE: 98.73 | AbsRel: 2.73 | Score (HM): 97.99
+# Median: Index 449 | DICE: 67.17 | AbsRel: 7.26 | Score (HM): 79.96
+# Worst : Index 311 | DICE: 0.21 | AbsRel: 6.14 | Score (HM): 47.04
+
+
 # Hardcode the metrics so we don't have to rerun the long loop every time while developing plotting
 if not evaluation_results:
     evaluation_results = {
         'ST-PIPELINE': {
-            'best': {'index': 268, 'dice': 98.92, 'absrel': 2.93, 'score': 97.99},
-            'worst': {'index': 536, 'dice': 3.03, 'absrel': 27.52, 'score': 37.75}
+            'best': {'index': 35, 'dice': 98.49, 'absrel': 47.66, 'score': 68.36},
+            'worst': {'index': 447, 'dice': 0.45, 'absrel': 53.10, 'score': 23.67},
+            'median': {'index': 403, 'dice': 62.51, 'absrel': 51.20, 'score': 55.66}
         },
         'MT': {
-            'best': {'index': 178, 'dice': 97.93, 'absrel': 3.57, 'score': 97.17},
-            'worst': {'index': 536, 'dice': 21.61, 'absrel': 35.70, 'score': 42.95}
+            'best': {'index': 32, 'dice': 98.43, 'absrel': 5.74, 'score': 96.30},
+            'worst': {'index': 550, 'dice': 0.22, 'absrel': 17.15, 'score': 41.54},
+            'median': {'index': 368, 'dice': 55.02, 'absrel': 16.85, 'score': 69.08}
         },
         'MT-KD': {
-            'best': {'index': 81, 'dice': 98.50, 'absrel': 3.11, 'score': 97.69},
-            'worst': {'index': 352, 'dice': 14.64, 'absrel': 34.80, 'score': 39.92},
-            'median': {'index': 429, 'dice': 75.17, 'absrel': 6.82, 'score': 84.18}
+            'best': {'index': 81, 'dice': 98.73, 'absrel': 2.73, 'score': 97.99},
+            'worst': {'index': 311, 'dice': 0.21, 'absrel': 6.14, 'score': 47.04},
+            'median': {'index': 449, 'dice': 67.17, 'absrel': 7.26, 'score': 79.96}
         }
     }
 
@@ -502,23 +530,25 @@ for setup_key in ['ST-PIPELINE', 'MT', 'MT-KD']:
     all_plot_data[setup_key] = plot_data
 
 # %% Format and Render Plots
-if False:
+if True:
     for setup_key, plot_data in all_plot_data.items():
         print(f"Generating plot for {setup_key}...")
         
         # 2. Setup the Plotly Figure
         fig = make_subplots(
-            rows=4, cols=3, column_widths=[1, 1, 1],
+            rows=6, cols=3, column_widths=[1, 1, 1],
             vertical_spacing=0.01, horizontal_spacing=0.0001,
-            subplot_titles=("<b>Prediction</b>", "<b>Target</b>", "<b>Error</b>",
+            subplot_titles=("<b>Prediction</b>", "<b>Target</b>", "<b>Error Map</b>",
+                            "", "", "",
+                            "", "", "",
                             "", "", "",
                             "", "", "",
                             "", "", "")
         )
         
         # 3. Render loop equivalent to `inference_figure.py`
-        for sample_idx in [0, 1]: # 0=Best, 1=Worst
-            row_offset = 1 if sample_idx == 0 else 3
+        for plot_row_idx, sample_idx in enumerate([0, 2, 1]): # 0=Best, 2=Median, 1=Worst
+            row_offset = 1 + (plot_row_idx * 2) # Maps to rows 1, 3, 5
             sample = plot_data[sample_idx]
             rgb_img = prepare_rgb(sample['left_image'])
             f = sample['focal_length']
@@ -565,16 +595,16 @@ if False:
             pred_depth[pred_disp <= 0] = np.nan
             target_depth[target_disp <= 0] = np.nan
             
-            absrel_err = np.abs(pred_depth - target_depth) / np.where(target_depth > 0, target_depth, 1e-8)
-            absrel_err[np.isnan(absrel_err)] = 0.0
+            # Absolute Depth Error (Consistent Error limits)
+            depth_err_abs = np.zeros_like(target_depth)
+            valid_depth = target_depth > 0
+            depth_err_abs[valid_depth] = np.abs(pred_depth[valid_depth] - target_depth[valid_depth])
+            depth_err_abs[np.isnan(depth_err_abs)] = 0.0
             
             # Scale the error visualization so small errors are visible
-            # An error of 15% (0.15) or greater will be fully red
-            vmax = 1.0
-            absrel_err = np.clip(absrel_err / vmax, 0, 1.0)
+            depth_err_scaled = np.clip(depth_err_abs / max_depth_viz, 0, 1.0)
             
-            depth_err_color = error_colormap(absrel_err)
-            valid_depth = target_depth > 0
+            depth_err_color = error_colormap(depth_err_scaled)
             blended_depth_err = np.full_like(rgb_img, 255)
             blended_depth_err[valid_depth] = (rgb_img[valid_depth] * (1 - error_alpha) + depth_err_color[valid_depth] * error_alpha).astype(np.uint8)
             
@@ -617,7 +647,7 @@ if False:
             
         fig.update_xaxes(showticklabels=False, visible=False)
         fig.update_yaxes(showticklabels=False, visible=False)
-        for i in range(1, 13): 
+        for i in range(1, 19): 
             axis_suffix = "" if i == 1 else str(i)
             fig.layout[f"yaxis{axis_suffix}"].update(scaleanchor=f"x{axis_suffix}", scaleratio=1)
             
@@ -648,16 +678,20 @@ if False:
         # Thesis formatting
         fig.add_annotation(
             text=f"<span style='font-size: 14px'><b>Best Sample</b> (DICE: {plot_data[0]['metrics_dice']:.2f}%, AbsRel: {plot_data[0]['metrics_absrel']:.2f}%)</span>",
-            xref="paper", yref="paper", x=-0.04, y=0.98, textangle=-90, showarrow=False, font=dict(size=16)
+            xref="paper", yref="paper", x=-0.045, y=1.01, textangle=-90, showarrow=False, font=dict(size=16)
+        )
+        fig.add_annotation(
+            text=f"<span style='font-size: 14px'><b>Median Sample</b> (DICE: {plot_data[2]['metrics_dice']:.2f}%, AbsRel: {plot_data[2]['metrics_absrel']:.2f}%)</span>",
+            xref="paper", yref="paper", x=-0.045, y=0.5, textangle=-90, showarrow=False, font=dict(size=16)
         )
         fig.add_annotation(
             text=f"<span style='font-size: 14px'><b>Worst Sample</b> (DICE: {plot_data[1]['metrics_dice']:.2f}%, AbsRel: {plot_data[1]['metrics_absrel']:.2f}%)</span>",
-            xref="paper", yref="paper", x=-0.04, y=0.02, textangle=-90, showarrow=False, font=dict(size=16)
+            xref="paper", yref="paper", x=-0.045, y=-0.01, textangle=-90, showarrow=False, font=dict(size=16)
         )
 
         fig.update_layout(
             width=1000, 
-            height=1150, 
+            height=1725, 
             margin=dict(l=60, r=120, t=50, b=50),
             plot_bgcolor='white', 
             paper_bgcolor='white',
@@ -676,9 +710,9 @@ if False:
         
         apply_chart_config(fig, f'H10_{setup_key}', CHART_CONFIG)
         setup_f = {'ST-PIPELINE': 'F01', 'MT': 'F02', 'MT-KD': 'F03'}[setup_key]
-        save_figure(fig, height=750, name=f'H10{setup_f}', lrtb_margin=(20, 0, 20, 10), folder='results', skip_sync=False)
+        save_figure(fig, height=1050, name=f'H10{setup_f}', lrtb_margin=(20, 0, 20, 10), folder='results', skip_sync=False)
         # fig.show()
-        #break
+        # break
 
 # %% H10F04 - Best MT-KD Sample of exp10 across ST, MT and MT-KD 
 # Top row, the raw sample median pair (left image, right image)
@@ -698,8 +732,8 @@ setups_exp10 = {
 
 evaluation_results_exp10 = {
     'MT-KD_EXP10': {
-        'best': {'index': 140, 'score': 0.980620634050318},
-        'median': {'index': 572, 'score': 0.9629335596936737}
+        'best': {'index': 12, 'score': 0.9809183767948502},
+        'median': {'index': 506, 'score': 0.9610790237927049}
         }
 }
 
@@ -757,11 +791,20 @@ if 'evaluation_results_exp10' not in globals():
                 absrel_metric.update(outputs['disparity'], targets_disp, baseline, focal_length)
                 absrel_val = absrel_metric.compute()['AbsRel_rate']
             
-            absrel_clamped = max(0.0, min(1.0, 1.0 - absrel_val))
+            import math
+            if math.isnan(absrel_val):
+                absrel_clamped = 0.0
+            else:
+                absrel_clamped = max(0.0, min(1.0, 1.0 - absrel_val))
+                
             denominator = val_dice + absrel_clamped
             val_heuristic = 0.0 if denominator == 0 else (2 * val_dice * absrel_clamped) / denominator
             
-            if val_dice > 0.0:
+            # Honestly check if ground truth is valid, rather than filtering by network score > 0
+            has_instrument = (targets_seg > 0).sum() > 0 if targets_seg is not None else False
+            
+            # Keep sample if it inherently has instruments
+            if has_instrument:
                 sample_metrics_exp10.append({'index': idx, 'score': val_heuristic})
             
             if idx % 100 == 0:
@@ -769,7 +812,7 @@ if 'evaluation_results_exp10' not in globals():
                 
     sorted_samples_exp10 = sorted(sample_metrics_exp10, key=lambda x: x['score'])
     best_exp10_sample = sorted_samples_exp10[-1]
-    median_exp10_sample = sorted_samples_exp10[len(sorted_samples_exp10) // 2]
+    median_exp10_sample = sorted_samples_exp10[(len(sorted_samples_exp10) - 1) // 2]
     evaluation_results_exp10['MT-KD_EXP10'] = {
         'best': best_exp10_sample,
         'median': median_exp10_sample
@@ -802,8 +845,8 @@ if 'evaluation_results_exp10' in globals():
     
     print("Generating Figure H10F04...")
     
-    # best_idx_exp10 = evaluation_results_exp10['MT-KD_EXP10']['best']['index']
-    best_idx_exp10 = evaluation_results_exp10['MT-KD_EXP10']['best']['index']
+    # We explicitly take the Median Sample from the Best Model
+    target_idx_exp10 = evaluation_results_exp10['MT-KD_EXP10']['median']['index']
     
     # Needs 4 rows: Raw Images (1), ST (2), MT (3), MT-KD (4)
     fig_best_exp10 = make_subplots(
@@ -821,18 +864,18 @@ if 'evaluation_results_exp10' in globals():
     test_transforms_exp10 = build_transforms(cfg_exp10, mode='test')
     dataset_test_exp10 = dataset_class_exp10(mode='test', config=cfg_exp10, transforms=test_transforms_exp10)
     
-    best_sample_data = dataset_test_exp10[best_idx_exp10]
-    left_img = prepare_rgb(best_sample_data['image'].numpy())
-    raw_right = best_sample_data.get('right_image')
+    target_sample_data = dataset_test_exp10[target_idx_exp10]
+    left_img = prepare_rgb(target_sample_data['image'].numpy())
+    raw_right = target_sample_data.get('right_image')
     
     # We will compute inference dynamically for this one sample instead of caching all
-    f = best_sample_data.get('focal_length', torch.tensor([1.0])).item()
-    B = best_sample_data.get('baseline', torch.tensor([1.0])).item()
-    left_tensor = best_sample_data['image'].unsqueeze(0).to(device)
+    f = target_sample_data.get('focal_length', torch.tensor([1.0])).item()
+    B = target_sample_data.get('baseline', torch.tensor([1.0])).item()
+    left_tensor = target_sample_data['image'].unsqueeze(0).to(device)
     right_tensor = raw_right.unsqueeze(0).to(device) if raw_right is not None else None
 
-    target_seg = best_sample_data.get('segmentation').squeeze().numpy()
-    target_disp = best_sample_data.get('disparity').squeeze().numpy() * max_disparity
+    target_seg = target_sample_data.get('segmentation').squeeze().numpy()
+    target_disp = target_sample_data.get('disparity').squeeze().numpy() * max_disparity
     
     target_depth = np.divide(f * B, target_disp, out=np.zeros_like(target_disp), where=(target_disp > 0))
     target_depth[target_disp <= 0] = np.nan
@@ -897,19 +940,19 @@ if 'evaluation_results_exp10' in globals():
         fig_best_exp10.add_trace(go.Image(z=pc_img), row=row_idx, col=2)
         
     fig_best_exp10.add_annotation(
-        text="<b>Ground Truth</b>", xref="paper", yref="paper", x=-0.04, y=0.92,
+        text="<b>Ground Truth</b>", xref="paper", yref="paper", x=-0.055, y=0.92,
         textangle=-90, showarrow=False, font=dict(size=22)
     )
     fig_best_exp10.add_annotation(
-        text="<b>ST</b>", xref="paper", yref="paper", x=-0.04, y=0.625,
+        text="<b>ST</b>", xref="paper", yref="paper", x=-0.055, y=0.625,
         textangle=-90, showarrow=False, font=dict(size=22)
     )
     fig_best_exp10.add_annotation(
-        text="<b>MT</b>", xref="paper", yref="paper", x=-0.04, y=0.37,
+        text="<b>MT</b>", xref="paper", yref="paper", x=-0.055, y=0.37,
         textangle=-90, showarrow=False, font=dict(size=22)
     )
     fig_best_exp10.add_annotation(
-        text="<b>MT-KD</b>", xref="paper", yref="paper", x=-0.04, y=0.095,
+        text="<b>MT-KD</b>", xref="paper", yref="paper", x=-0.055, y=0.095,
         textangle=-90, showarrow=False, font=dict(size=22)
     )
     
@@ -932,7 +975,7 @@ if 'evaluation_results_exp10' in globals():
     fig_best_exp10.update_xaxes(showticklabels=False, visible=False)
     fig_best_exp10.update_yaxes(showticklabels=False, visible=False)
     
-    save_figure(fig_best_exp10, height=1250, lrtb_margin=(20, 10, 0, 40), name='H10F04', folder='results', skip_sync=False)
+    save_figure(fig_best_exp10, height=1250, lrtb_margin=(30, 10, 0, 40), name='H10F04', folder='results', skip_sync=False)
 
 # Uses best seed for each config of experiment 10 according to mean 
 # because ST run had no disparity trained, the best disp seed across all experiments is used

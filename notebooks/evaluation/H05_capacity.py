@@ -29,8 +29,9 @@ skip_sync = False
 
 CHART_CONFIG = {
     'H05F01': {
-        'x1': dict(range=[30, 60], dtick=5),
-        'x2': dict(range=[40, 0], dtick=5),
+        'y1': dict(range=[30, 60], dtick=5),
+        'y2': dict(range=[40, 0], dtick=5),
+        'y3': dict(range=[105, 20], dtick=10),
     },
     'H05F02': {
         'x': dict(range=[95, 97], dtick=0.2),
@@ -60,25 +61,16 @@ df_f01['regime'] = df_f01['experiment'].map({'exp01': '01 (Tiny)', 'exp04': '04 
 
 # Metrics configuration
 metrics = {
-    'segmentation': {
-        'name': 'DICE_score',
-        'suffix': '/instrument_mean',
-        'label': 'DICE Score [% ↑]',
-        'autorange': None
-    },
-    'disparity': {
-        'name': 'AbsRel_rate',
-        'suffix': '',
-        'label': 'AbsRel Rate [% ↓]',
-        'autorange': 'reversed'
-    }
+    'AbsRel': ('disparity', 'AbsRel_rate'),
+    'Bad3': ('disparity', 'Bad3_rate'),
+    'DICE': ('segmentation', 'DICE_score/instrument_mean')
 }
 
 # Process metrics with fallback logic
-for task, m_info in metrics.items():
-    col = f"metric.best_combined/performance/testing/{task}/{m_info['name']}{m_info['suffix']}"
-    fallback = f"metric.best_{task}/performance/testing/{task}/{m_info['name']}{m_info['suffix']}"
-    df_f01[task] = df_f01[col].fillna(df_f01[fallback])
+for m_name, (m_task, m_col) in metrics.items():
+    col = f"metric.best_combined/performance/testing/{m_task}/{m_col}"
+    fallback = f"metric.best_{m_task}/performance/testing/{m_task}/{m_col}"
+    df_f01[m_name] = df_f01[col].fillna(df_f01[fallback])
 
 # Styling
 colors_dict = {
@@ -89,19 +81,24 @@ colors_dict = {
 regimes = ['01 (Tiny)', '04 (Nano)']
 display_configs = ['ST', 'MT', 'MT-KD']
 
-fig = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation", "Disparity"), horizontal_spacing=0.05)
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05)
 
-for col, task in enumerate(['segmentation', 'disparity'], start=1):
+for row, task in enumerate(['DICE', 'AbsRel', 'Bad3'], start=1):
     for config in display_configs:
         for regime in regimes:
-            data = df_f01[(df_f01['regime'] == regime) & (df_f01['config_mapped'] == config)][task]
+            data = df_f01[(df_f01['regime'] == regime) & (df_f01['config_mapped'] == config)][task].dropna()
             
-            showlegend = True if col == 1 and regime == regimes[0] else False
+            is_inherited = False
+            if len(data) == 0 and regime != regimes[0]:
+                data = df_f01[(df_f01['regime'] == regimes[0]) & (df_f01['config_mapped'] == config)][task].dropna()
+                is_inherited = True
+            
+            showlegend = True if row == 1 and regime == regimes[0] else False
             
             fig.add_trace(go.Box(
-                x=data,
-                y=[regime] * len(data),
-                orientation='h',
+                y=data,
+                x=[regime] * len(data),
+                orientation='v',
                 name=config,
                 marker_color=colors_dict[config],
                 boxpoints='all',
@@ -109,30 +106,29 @@ for col, task in enumerate(['segmentation', 'disparity'], start=1):
                 pointpos=-2.0,
                 showlegend=showlegend,
                 legendgroup=config,
-                offsetgroup=config
-            ), row=1, col=col)
+                offsetgroup=config,
+                opacity=0.5 if is_inherited else 1.0
+            ), row=row, col=1)
 
 fig.update_layout(
     # template='plotly_white',
-    height=450,
-    width=850,
+    height=800,
+    width=500,
     boxmode='group',
     boxgroupgap=0.6,
     boxgap=0.3,
-    legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5, title_text="Config")
+    legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, title_text="Config")
 )
 
-fig.update_xaxes(title_text=metrics['segmentation']['label'], row=1, col=1)
-fig.update_xaxes(
-    title_text=metrics['disparity']['label'], 
-    autorange=metrics['disparity']['autorange'],
-    row=1, col=2
-)
-fig.update_yaxes(title_text="Experiment (Model Size)", autorange="reversed", row=1, col=1)
-fig.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
+fig.update_yaxes(title_text="DICE Score [% ↑]", title_standoff=20, row=1, col=1)
+fig.update_yaxes(title_text="AbsRel Rate [% ↓]", title_standoff=20, autorange="reversed", row=2, col=1)
+fig.update_yaxes(title_text="Bad3 Rate [% ↓]", title_standoff=20, autorange="reversed", row=3, col=1)
+fig.update_xaxes(title_text="", showticklabels=False, row=1, col=1)
+fig.update_xaxes(title_text="", showticklabels=False, row=2, col=1)
+fig.update_xaxes(title_text="Experiment (Model Size)", row=3, col=1)
 
 apply_chart_config(fig, 'H05F01', CHART_CONFIG)
-save_figure(fig, height=400, name='H05F01', lrtb_margin=(100, 20, 30, 0), folder='results', skip_sync=skip_sync)
+save_figure(fig, height=800, name='H05F01', lrtb_margin=(40, 20, 0, 0), standoff=10, folder='results', skip_sync=skip_sync)
 
 # %% H05F02_Barplot_BinaryDistillationPerformance (Effect of Binary Distillation on Performance)
 

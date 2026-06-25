@@ -126,6 +126,67 @@ fig_bar.update_xaxes(title_text="MT-KD Experiment (Confidence)", tickangle=0, ro
 apply_chart_config(fig_bar, 'H07F01', CHART_CONFIG)
 save_figure(fig_bar, height=800, name='H07F01', folder='results', standoff=12, lrtb_margin=(40, 20, 30, 20), skip_sync=skip_sync)
 
+# %% H07F02_Boxplot_ConfidenceProjectionHead
+# H07F02_Boxplot_ConfidenceProjectionHead
+
+EXP_MAP_F02 = {
+    'exp01': '01 (Confidence-<br>derived T)',
+    'exp09': '09 (T = 4)'
+}
+
+target_exps_f02 = list(EXP_MAP_F02.keys())
+df_f02 = df_entropy[(df_entropy['experiment'].isin(target_exps_f02)) & (df_entropy['config'] == 'MT-KD')].copy()
+df_f02['regime'] = df_f02['experiment'].map(EXP_MAP_F02)
+regimes_f02 = list(EXP_MAP_F02.values())
+
+fig2 = make_subplots(rows=1, cols=2, subplot_titles=("Segmentation Projection Head", "Disparity Projection Head"), horizontal_spacing=0.05, shared_yaxes=True)
+
+for col, task in enumerate(['segmentation', 'disparity'], start=1):
+    col_name = f'decoders.{task}.intercept_head_mean_confidence'
+    
+    for regime in regimes_f02:
+        data = df_f02[df_f02['regime'] == regime][col_name].dropna() * 100
+        
+        fig2.add_trace(go.Box(
+            y=data,
+            x=[regime] * len(data),
+            name='MT-KD',
+            marker_color=colors_dict['MT-KD'],
+            boxpoints='all',
+            jitter=0.5,
+            pointpos=-2.0,
+            showlegend=False,
+            legendgroup='MT-KD',
+            offsetgroup='MT-KD'
+        ), row=1, col=col)
+
+    fig2.add_hline(y=70, line_dash="dash", line_color="grey", row=1, col=col)
+    fig2.add_annotation(
+        y=65, x=0.01,
+        text="01 Target",
+        showarrow=False,
+        xshift=-50,
+        yshift=10,
+        font=dict(color="grey", size=10),
+        row=1, col=col
+    )
+
+fig2.update_layout(
+    height=450,
+    width=850,
+    boxmode='group',
+    boxgroupgap=0.6,
+    boxgap=0.3
+)
+
+fig2.update_yaxes(title_text="Raw Confidence [%]", row=1, col=1)
+fig2.update_xaxes(title_text="Experiment", tickangle=0, categoryorder='array', categoryarray=regimes_f02, row=1, col=1)
+fig2.update_xaxes(title_text="Experiment", tickangle=0, categoryorder='array', categoryarray=regimes_f02, row=1, col=2)
+
+apply_chart_config(fig2, 'H07F02', CHART_CONFIG)
+save_figure(fig2, height=450, name='H07F02', lrtb_margin=(40, 20, 40, 40), folder='results', skip_sync=skip_sync)
+
+
 # %% H07T01_SERRandNLE (SERR and NLE median +- min-max for MT-KD of exp 01, 02, 03, 09 on x-axis with stages on y-axis)
 # H07T01_SERRandNLE (SERR and NLE median +- min-max for MT-KD of exp 01, 02, 03, 09 on x-axis with stages on y-axis)
 
@@ -255,13 +316,13 @@ fig_line_serr = make_subplots(
         [{"colspan": 2}, None],
         [{}, {}]
     ],
-    vertical_spacing=0.1,
+    vertical_spacing=0.115,
     horizontal_spacing=0.05,
     shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
+    # subplot_titles=(
+    #     "Encoder", 
+    #     "Segmentation Decoder", "Disparity Decoder"
+    # )
 )
 
 for group_name, group_layers, r_offset, c in groups:
@@ -335,7 +396,7 @@ fig_line_serr.update_layout(
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=-0.15, 
+        y=-0.125, 
         xanchor="center", 
         x=0.5, 
         title_text="MT-KD Experiment (Confidence)"
@@ -349,10 +410,12 @@ fig_line_serr.update_yaxes(
 )
 fig_line_serr.update_yaxes(title_text="SERR [%]", row=1, col=1)
 fig_line_serr.update_yaxes(title_text="SERR [%]", row=2, col=1)
-fig_line_serr.update_xaxes(title_text="Layer")
+fig_line_serr.update_xaxes(title_text="Shared Encoder Layer", row=1, col=1)
+fig_line_serr.update_xaxes(title_text="Segmentation Decoder Layer", row=2, col=1)
+fig_line_serr.update_xaxes(title_text="Disparity Decoder Layer", row=2, col=2)
 
-apply_chart_config(fig_line_serr, 'H07F02', CHART_CONFIG)
-save_figure(fig_line_serr, height=600, name='H07F02', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+apply_chart_config(fig_line_serr, 'H07F03', CHART_CONFIG)
+save_figure(fig_line_serr, height=600, name='H07F03', lrtb_margin=(20, 10, 10, 10), standoff=5, folder='results', skip_sync=skip_sync)
 
 # %% H07F02_NLE_Lineplot_NLE
 # H07F02_NLE_Lineplot_NLE (NLE only)
@@ -363,13 +426,13 @@ fig_line_nle = make_subplots(
         [{"colspan": 2}, None],
         [{}, {}]
     ],
-    vertical_spacing=0.1,
+    vertical_spacing=0.115,
     horizontal_spacing=0.05,
     shared_yaxes='rows',
-    subplot_titles=(
-        "Encoder", 
-        "Segmentation Decoder", "Disparity Decoder"
-    )
+    # subplot_titles=(
+    #     "Encoder", 
+    #     "Segmentation Decoder", "Disparity Decoder"
+    # )
 )
 
 for group_name, group_layers, r_offset, c in groups:
@@ -443,7 +506,7 @@ fig_line_nle.update_layout(
     legend=dict(
         orientation="h", 
         yanchor="top", 
-        y=-0.15, 
+        y=-0.125, 
         xanchor="center", 
         x=0.5, 
         title_text="MT-KD Experiment (Confidence)"
@@ -457,10 +520,12 @@ fig_line_nle.update_yaxes(
 )
 fig_line_nle.update_yaxes(title_text="NLE [%]", row=1, col=1)
 fig_line_nle.update_yaxes(title_text="NLE [%]", row=2, col=1)
-fig_line_nle.update_xaxes(title_text="Layer")
+fig_line_nle.update_xaxes(title_text="Shared Encoder Layer", row=1, col=1)
+fig_line_nle.update_xaxes(title_text="Segmentation Decoder Layer", row=2, col=1)
+fig_line_nle.update_xaxes(title_text="Disparity Decoder Layer", row=2, col=2)
 
-apply_chart_config(fig_line_nle, 'H07F02', CHART_CONFIG)
-save_figure(fig_line_nle, height=600, name='H07F03', lrtb_margin=(40, 10, 60, 80), standoff=None, folder='results', skip_sync=skip_sync)
+apply_chart_config(fig_line_nle, 'H07F04', CHART_CONFIG)
+save_figure(fig_line_nle, height=600, name='H07F04', lrtb_margin=(20, 10, 10, 10), standoff=5, folder='results', skip_sync=skip_sync)
 
 
 

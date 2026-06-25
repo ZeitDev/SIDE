@@ -143,7 +143,7 @@ fig_bar.update_yaxes(title_text="Experiment (Intra-Task Weighting)", autorange="
 fig_bar.update_yaxes(showticklabels=False, title_text="", autorange="reversed", row=1, col=2)
 
 apply_chart_config(fig_bar, 'H06F01', CHART_CONFIG)
-save_figure(fig_bar, height=400, name='H06F01', lrtb_margin=(100, 0, 30, 0), folder='results', skip_sync=skip_sync)
+save_figure(fig_bar, height=400, name='H06F01', lrtb_margin=(120, 0, 30, 0), folder='results', skip_sync=skip_sync)
 
 # %% H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)
 # H06F02_Lineplot_IntraTaskWeighting (Intra-Task Weighting Progression for MT-KD Configurations of 01, 07, 08)

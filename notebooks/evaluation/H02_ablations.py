@@ -61,7 +61,6 @@ df_bench = df_final.copy()
 # Filter experiments
 excluded_experiments = ['exp10']
 df_bench = df_bench[df_bench['experiment'].str.startswith('exp', na=False)]
-df_bench = df_bench[~df_bench['experiment'].isin(excluded_experiments)]
 
 # Prepare metrics with fallbacks
 for metric in metrics:
